@@ -1,0 +1,30 @@
+# Two containers, both bound to localhost only. Caddy on the VPS terminates TLS
+# and reverse-proxies to them:
+#
+#   jewellery.adityagajmer.com.np -> localhost:8080  (web)
+#   api.adityagajmer.com.np      -> localhost:5000  (api)
+#
+#   docker compose up -d --build
+
+services:
+  api:
+    build: ./backend
+    env_file: ./backend/.env
+    # 127.0.0.1 so the API is reachable only from the VPS itself, never directly
+    # from the internet. Caddy is the only way in.
+    ports:
+      - "127.0.0.1:5000:5000"
+    volumes:
+      - ./backend/uploads:/app/uploads
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        # Baked into the bundle at build time. Change it and you must rebuild,
+        # not just restart.
+        VITE_API_URL: https://api.adityagajmer.com.np
+    ports:
+      - "127.0.0.1:8080:80"
+    restart: unless-stopped

@@ -1,0 +1,12 @@
+import api from "./api";
+export const getPawnLoans = (params) => api.get("/pawn", { params });
+export const getPawnLoan = (id) => api.get(`/pawn/${id}`);
+export const createPawnLoan = (data) => api.post("/pawn", data);
+export const updatePawnLoan = (id, data) => api.put(`/pawn/${id}`, data);
+export const deletePawnLoan = (id) => api.delete(`/pawn/${id}`);
+export const makePayment = (id, data) => api.post(`/pawn/${id}/payment`, data);
+export const addPrincipalTranche = (id, data) => api.post(`/pawn/${id}/principal`, data);
+export const renewLoan = (id, data) => api.post(`/pawn/${id}/renew`, data);
+export const forfeitLoan = (id) => api.post(`/pawn/${id}/forfeit`);
+export const redeemLoan = (id, data) => api.post(`/pawn/${id}/redeem`, data);
+export const getPawnReport = (params) => api.get("/pawn/report", { params });

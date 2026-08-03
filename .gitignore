@@ -1,0 +1,12 @@
+# Secrets — never commit. Each environment writes its own from .env.example.
+.env
+backend/.env
+frontend/.env
+*.env.local
+
+node_modules/
+dist/
+
+backend/uploads/
+*.tmp.js
+*.log

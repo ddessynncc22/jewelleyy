@@ -1,0 +1,9 @@
+# Committed to git but installed on Windows — npm ci rebuilds it for Linux.
+node_modules
+
+# Provided at runtime via env_file / bind mount.
+.env
+uploads
+
+*.tmp.js
+.git

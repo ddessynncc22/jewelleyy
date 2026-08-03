@@ -1,0 +1,29 @@
+const express = require('express');
+const router = express.Router();
+
+router.use('/public', require('./publicRoutes'));
+router.use('/auth', require('./authRoutes'));
+router.use('/items', require('./itemRoutes'));
+router.use('/stock', require('./stockRoutes'));
+router.use('/karigars', require('./karigarRoutes'));
+router.use('/custom-orders', require('./customOrderRoutes'));
+router.use('/pawn', require('./pawnRoutes'));
+router.use('/pos', require('./posRoutes'));
+router.use('/customers', require('./customerRoutes'));
+router.use('/rates', require('./rateRoutes'));
+router.use('/reports', require('./reportRoutes'));
+router.use('/audit', require('./auditRoutes'));
+router.use('/dashboard', require('./dashboardRoutes'));
+router.use('/search', require('./searchRoutes'));
+router.use('/alerts', require('./alertRoutes'));
+router.use('/customer-ledger', require('./customerLedger'));
+router.use('/sales', require('./sales'));
+router.use('/activity-logs', require('./activityLogs'));
+router.use('/settings', require('./settings'));
+router.use('/users', require('./users'));
+router.use('/categories', require('./categoryRoutes'));
+router.use('/tenants', require('./tenantRoutes'));
+router.use('/admin', require('./adminRoutes'));
+router.use('/notifications', require('./notificationRoutes'));
+
+module.exports = router;

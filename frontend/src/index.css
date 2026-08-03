@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --color-gold: #d4a853;
+  --color-gold-light: #f0dfb8;
+  --color-gold-dark: #b8923a;
+  --color-amber: #f59e0b;
+}
+
+:root {
+  --color-primary: #d4a853;
+  --color-primary-hover: #c49a3f;
+  --color-primary-light: #fdf6e3;
+  --color-primary-bg: #fffbeb;
+  --color-surface: #ffffff;
+  --color-elevated: #f8f8f8;
+  --color-border: #ebebeb;
+  --color-text: #1a1a1a;
+  --color-text-secondary: #7a7a7a;
+  --color-bg: #f5f5f0;
+  --color-card: #ffffff;
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.03), 0 1px 2px -1px rgb(0 0 0 / 0.02);
+  --shadow-md: 0 4px 16px -4px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.03);
+  --shadow-lg: 0 12px 32px -8px rgb(0 0 0 / 0.06), 0 4px 8px -4px rgb(0 0 0 / 0.03);
+  --shadow-xl: 0 24px 48px -12px rgb(0 0 0 / 0.08);
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+::selection {
+  background-color: var(--color-primary-light);
+  color: var(--color-primary-hover);
+}
+
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d4d4d4; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #b0b0b0; }
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slide-in {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.gold-border { border-color: var(--color-primary) !important; }
+.gold-bg { background-color: var(--color-primary-bg) !important; }
+.gold-text { color: var(--color-primary) !important; }
