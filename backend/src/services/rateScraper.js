@@ -3,6 +3,35 @@ const cheerio = require('cheerio');
 const Rate = require('../models/Rate');
 
 const SOURCE_URL = 'https://www.hamropatro.com/gold';
+const NEPAL_TIMEZONE = 'Asia/Kathmandu';
+
+// Midnight of the *Nepal* calendar day, as an absolute instant. The VPS usually
+// runs in UTC, so a naive new Date(); setHours(0,0,0,0) can mis-bucket the day
+// (Nepal is UTC+5:45, no DST). Returns a Date equal to 00:00 +05:45.
+function getNepalToday() {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: NEPAL_TIMEZONE,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(new Date());
+    const map = {};
+    for (const p of parts) if (p.type !== 'literal') map[p.type] = p.value;
+    return new Date(`${map.year}-${map.month}-${map.day}T00:00:00+05:45`);
+  } catch (err) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  }
+}
+
+// True when at least one rate is already stored for the current Nepal day.
+async function hasRatesForToday() {
+  const today = getNepalToday();
+  const end = new Date(today.getTime() + 86400000);
+  return Rate.exists({ date: { $gte: today, $lt: end } });
+}
 
 function parseNpr(text) {
   const cleaned = (text || '').replace(/[^0-9,.]/g, '').replace(/,/g, '');
@@ -90,8 +119,8 @@ async function scrapeRates() {
 }
 
 async function saveRates(rates) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = getNepalToday();
+  const end = new Date(today.getTime() + 86400000);
 
   const entries = [];
 
@@ -131,32 +160,61 @@ async function saveRates(rates) {
     });
   }
 
+  // Upsert per (metalType, unit, day): hamropatro may not refresh its page until
+  // well after 11:30 NPT, so a later scrape must overwrite a stale early value
+  // rather than skip it ("already exists for today").
   for (const entry of entries) {
-    const exists = await Rate.findOne({
+    const existing = await Rate.findOne({
       metalType: entry.metalType,
       unit: entry.unit,
-      date: { $gte: today, $lt: new Date(today.getTime() + 86400000) },
+      date: { $gte: today, $lt: end },
     });
 
-    if (!exists) {
+    if (existing) {
+      if (existing.rate !== entry.rate) {
+        const oldRate = existing.rate;
+        existing.rate = entry.rate;
+        await existing.save();
+        console.log(`[RateScraper] Updated ${entry.metalType}/${entry.unit}: ${oldRate} → ${entry.rate}`);
+      } else {
+        console.log(`[RateScraper] Unchanged ${entry.metalType}/${entry.unit} — already up to date`);
+      }
+    } else {
       await Rate.create(entry);
       console.log(`[RateScraper] Stored ${entry.metalType}/${entry.unit}: ${entry.rate}`);
-    } else {
-      console.log(`[RateScraper] Skipped ${entry.metalType}/${entry.unit} — already exists for today`);
     }
   }
 }
 
 async function runScraper() {
-  try {
-    console.log('[RateScraper] Starting...');
-    const rates = await scrapeRates();
-    console.log('[RateScraper] Scraped:', rates);
-    await saveRates(rates);
-    console.log('[RateScraper] Done');
-  } catch (err) {
-    console.error('[RateScraper] Error:', err.message);
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      console.log(`[RateScraper] Starting... (attempt ${attempt}/${maxAttempts})`);
+      const rates = await scrapeRates();
+
+      const anyValue =
+        rates.goldPerTola || rates.goldPerGram || rates.silverPerTola || rates.silverPerGram;
+      if (!anyValue) {
+        throw new Error('scrape returned no values (all zero) — refusing to store');
+      }
+
+      console.log('[RateScraper] Scraped:', rates);
+      await saveRates(rates);
+      console.log('[RateScraper] Done');
+      return rates;
+    } catch (err) {
+      if (attempt < maxAttempts) {
+        const delayMs = 10000 * attempt;
+        console.error(
+          `[RateScraper] Attempt ${attempt} failed (${err.message}). Retrying in ${delayMs / 1000}s...`
+        );
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      } else {
+        console.error('[RateScraper] Error after all attempts:', err.message);
+      }
+    }
   }
 }
 
-module.exports = { runScraper, scrapeRates, saveRates };
+module.exports = { runScraper, scrapeRates, saveRates, getNepalToday, hasRatesForToday };

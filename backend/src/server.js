@@ -2,34 +2,35 @@ const config = require('./config');
 const connectDB = require('./config/database');
 const app = require('./app');
 const cron = require('node-cron');
-const Rate = require('./models/Rate');
-const { runScraper } = require('./services/rateScraper');
+const { runScraper, hasRatesForToday } = require('./services/rateScraper');
 
 connectDB();
 
-// Schedule daily gold/silver rate scrape at 11:30 AM Nepal time (UTC+5:45).
-// The timezone is pinned to Asia/Kathmandu because node-cron otherwise uses
-// the VPS's own local timezone (usually UTC), so a bare '45 5 * * *' would fire
-// at the wrong hour and is easily missed if the process restarts around then.
-cron.schedule(
-  '30 11 * * *',
-  () => {
-    console.log('[Cron] Running daily rate scraper (11:30 NPT)...');
-    runScraper();
-  },
-  { timezone: 'Asia/Kathmandu' }
-);
+// Daily rate scrape in Nepal time (UTC+5:45), pinned to Asia/Kathmandu because
+// node-cron otherwise uses the VPS's own local timezone (usually UTC). Ran a few
+// times per day: saveRates() is idempotent and overwrites stale early-morning
+// values, so this both survives a single failed run and picks up hamropatro's
+// rate the moment the page refreshes. The 11:30 NPT window is when hamropatro
+// usually publishes; the later runs are safety nets that make a restart
+// unnecessary when the first attempt fails.
+const SCRAPE_CRON_TIMES = ['30 11 * * *', '0 13 * * *', '0 15 * * *', '0 17 * * *'];
+for (const expr of SCRAPE_CRON_TIMES) {
+  cron.schedule(
+    expr,
+    () => {
+      console.log(`[Cron] Running rate scraper (${expr} NPT)...`);
+      runScraper();
+    },
+    { timezone: 'Asia/Kathmandu' }
+  );
+}
 
 // Catch-up scrape on boot: if no rate was stored for today yet (server was down
 // at 11:30 NPT, process restarted late, or the cron was missed), scrape now.
 // saveRates() is idempotent per day, so this cannot duplicate today's entry.
 async function runScraperIfMissing() {
   try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const exists = await Rate.exists({
-      date: { $gte: today, $lt: new Date(today.getTime() + 86400000) },
-    });
+    const exists = await hasRatesForToday();
     if (!exists) {
       console.log('[RateScraper] No rates stored for today yet — running catch-up scrape');
       await runScraper();
