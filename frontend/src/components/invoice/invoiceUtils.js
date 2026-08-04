@@ -42,7 +42,13 @@ export function buildInvoiceItems(entries) {
     const stonePrice = Number(entry.stonePrice || entry.stoneAmount || 0);
     const stoneAmount = stonePrice * qty;
     const totalAmount = (metalAmount + makingCharge + wastageAmount + stonePrice) * qty;
-    const isDiamond = item.metalType === 'diamond';
+    const isDiamond = item.metalType === 'diamond' || item.stoneType === 'diamond';
+    const diamondWt = isDiamond
+      ? (item.carat ? String(item.carat) : (Number(stoneWeight) > 0 ? fmtWt(stoneWeight) : ''))
+      : '';
+    const diamondAmount = isDiamond ? fmtMoney(stoneAmount) : '';
+    const stoneWt = !isDiamond && Number(stoneWeight) > 0 ? fmtWt(stoneWeight) : '';
+    const stoneAmountCell = !isDiamond && stoneAmount > 0 ? fmtMoney(stoneAmount) : '';
 
     return {
       sn: idx + 1,
@@ -58,10 +64,10 @@ export function buildInvoiceItems(entries) {
       rate: ratePerGram > 0 ? `${ratePerGram.toFixed(3)} (${tolaRate})` : '',
       makingCharge: fmtMoney(makingCharge),
       other: fmtMoney(0),
-      diamondWt: isDiamond ? (item.carat ? String(item.carat) : '') : '',
-      diamondAmount: isDiamond ? fmtMoney(0) : '',
-      stoneWt: Number(stoneWeight) > 0 ? fmtWt(stoneWeight) : '',
-      stoneAmount: stoneAmount > 0 ? fmtMoney(stoneAmount) : '',
+      diamondWt,
+      diamondAmount,
+      stoneWt,
+      stoneAmount: stoneAmountCell,
       totalAmount: fmtMoney(totalAmount),
       _total: totalAmount,
     };

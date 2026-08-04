@@ -7,6 +7,7 @@ export default function InvoiceSummary({
   discount,
   taxableAmount,
   totalTax,
+  taxLines,
   roundOff,
   grandTotal,
   paymentType,
@@ -116,10 +117,14 @@ export default function InvoiceSummary({
               <td className="border border-black px-1.5 py-0.5 text-left">शुल्क लाग्ने मूल्य (Taxable Value)</td>
               <td className="border border-black px-1.5 py-0.5 text-right">{fmt(taxableAmount)}</td>
             </tr>
-            <tr>
-              <td className="border border-black px-1.5 py-0.5 text-left">शिप प्र.शु. ०.५% (Fee @ 0.5%)</td>
-              <td className="border border-black px-1.5 py-0.5 text-right">{fmt(totalTax)}</td>
-            </tr>
+            {(taxLines && taxLines.length > 0 ? taxLines : [{ name: 'शिप प्र.शु. (Service Fee)', rate: 0.5, amount: totalTax }]).map((t, i) => (
+              <tr key={i}>
+                <td className="border border-black px-1.5 py-0.5 text-left">
+                  {t.name} ({t.rate}%)
+                </td>
+                <td className="border border-black px-1.5 py-0.5 text-right">{fmt(t.amount)}</td>
+              </tr>
+            ))}
             <tr>
               <td className="border border-black px-1.5 py-0.5 text-left">Round Off</td>
               <td className="border border-black px-1.5 py-0.5 text-right">{fmt(roundOff)}</td>

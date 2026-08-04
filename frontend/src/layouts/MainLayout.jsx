@@ -13,7 +13,7 @@ import Button from '../components/ui/Button'
 
 const breadcrumbMap = {
   '/': 'Dashboard', '/items': 'Items', '/stock': 'Stock Movement',
-  '/karigar': 'Karigar', '/karigar/pending-jobs': 'Pending Jobs', '/pawn': 'Bandaki', '/custom-orders': 'Custom Orders', '/pos': 'POS',
+  '/karigar': 'Karigar', '/karigar/pending-jobs': 'Pending Jobs', '/pawn': 'Bandaki', '/custom-orders': 'Custom Orders', '/pos': 'POS', '/pos/diamond': 'Diamond POS',
   '/customers': 'Customers', '/rates': 'Rates', '/reports': 'Reports',
   '/audit': 'Audit', '/settings': 'Settings',
   '/admin': 'Dashboard',

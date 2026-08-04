@@ -15,5 +15,6 @@ export const getCustomerLedgerStatementReport = (customerId, params) =>
   api.get(`/reports/customer-ledger/${customerId}/statement`, { params });
 export const getProfitSummary = (params) =>
   api.get("/reports/profit-summary", { params });
+export const getTaxReport = (params) => api.get("/reports/tax", { params });
 export const exportReport = (type, params) =>
   api.get(`/reports/export/${type}`, { params, responseType: "blob" });

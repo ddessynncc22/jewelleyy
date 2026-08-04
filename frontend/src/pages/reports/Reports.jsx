@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 
-import { BarChart3, ArrowLeftRight, DollarSign, Banknote, Wrench, Users, TrendingUp } from 'lucide-react'
+import { BarChart3, ArrowLeftRight, DollarSign, Banknote, Wrench, Users, TrendingUp, ReceiptText } from 'lucide-react'
 
 import PageHeader from '../../components/ui/PageHeader'
 
@@ -13,6 +13,7 @@ const reportTypes = [
   { type: 'karigar', title: 'Karigar Report', description: 'Karigar performance summary with issued and returned materials', icon: Wrench, color: 'cyan' },
   { type: 'customer-ledger', title: 'Customer Ledger', description: 'Customer balances, credits, and payment history', icon: Users, color: 'blue' },
   { type: 'profit-summary', title: 'Profit Summary', description: 'Basic profit calculation from sales data', icon: TrendingUp, color: 'indigo' },
+  { type: 'tax', title: 'Tax Report', description: 'Service fee and diamond VAT collected on sales', icon: ReceiptText, color: 'yellow' },
 ]
 
 const colorMap = {

@@ -6,17 +6,22 @@ import { useNavigate, Link } from "react-router-dom";
 
 import toast from "react-hot-toast";
 
-import { LogIn } from "lucide-react";
+import { LogIn, Mail, Lock, Eye, EyeOff, AlertTriangle } from "lucide-react";
 
 import { useAuth } from "../../hooks/useAuth";
 
 import { login as loginApi } from "../../services/authService";
 
 import Button from "../../components/ui/Button";
+
+const fieldClass =
+  "w-full rounded-xl border border-[var(--color-border)] bg-white py-2.5 pl-10 pr-4 text-sm text-gray-900 placeholder-gray-400 focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20 transition-all";
+
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   // Set when the account is valid but belongs to a different address, so we can
   // offer a link instead of a dead-end error.
   const [wrongHost, setWrongHost] = useState(null);
@@ -49,78 +54,115 @@ export default function Login() {
     }
   };
   return (
-    <div>
-      <h2 className="text-xl font-bold text-gray-900 mb-6">Welcome back</h2>
+    <div className="animate-fade-in">
+      <div className="mb-8 text-center">
+        <h2 className="text-2xl font-bold tracking-tight text-[var(--color-text)]">
+          Welcome back
+        </h2>
+        <p className="mt-1.5 text-sm text-[var(--color-text-secondary)]">
+          Sign in to access your shop dashboard
+        </p>
+      </div>
+
       {wrongHost && (
-        <div className="mb-5 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <p>{wrongHost.message}</p>
-          {wrongHost.redirectTo && (
-            <a
-              href={wrongHost.redirectTo}
-              className="mt-2 inline-block font-semibold text-[var(--color-primary-hover)] underline underline-offset-2"
-            >
-              Go to {wrongHost.shopName || wrongHost.redirectTo}
-            </a>
-          )}
+        <div className="mb-6 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+          <div>
+            <p>{wrongHost.message}</p>
+            {wrongHost.redirectTo && (
+              <a
+                href={wrongHost.redirectTo}
+                className="mt-1.5 inline-block font-semibold text-[var(--color-primary-hover)] underline underline-offset-2"
+              >
+                Go to {wrongHost.shopName || wrongHost.redirectTo}
+              </a>
+            )}
+          </div>
         </div>
       )}
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">
             Email
           </label>
-          <input
-            {...register("email", { required: "Email is required" })}
-            className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20 transition-all"
-            placeholder="Enter your email"
-          />
+          <div className="relative">
+            <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              type="email"
+              autoComplete="email"
+              {...register("email", { required: "Email is required" })}
+              className={fieldClass}
+              placeholder="you@shop.com"
+            />
+          </div>
           {errors.email && (
             <p className="text-red-500 text-xs mt-1">{errors.email.message}</p>
           )}
         </div>
+
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">
             Password
           </label>
-          <input
-            type="password"
-            {...register("password", {
-              required: "Password is required",
-              minLength: { value: 6, message: "Min 6 characters" },
-            })}
-            className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20 transition-all"
-            placeholder="Enter your password"
-          />
+          <div className="relative">
+            <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              type={showPassword ? "text" : "password"}
+              autoComplete="current-password"
+              {...register("password", {
+                required: "Password is required",
+                minLength: { value: 6, message: "Min 6 characters" },
+              })}
+              className={`${fieldClass} pr-10`}
+              placeholder="Enter your password"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((s) => !s)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 transition-colors hover:text-gray-600"
+              title={showPassword ? "Hide password" : "Show password"}
+            >
+              {showPassword ? (
+                <EyeOff className="h-4 w-4" />
+              ) : (
+                <Eye className="h-4 w-4" />
+              )}
+            </button>
+          </div>
           {errors.password && (
             <p className="text-red-500 text-xs mt-1">
               {errors.password.message}
             </p>
           )}
         </div>
+
         <div className="flex items-center justify-between">
-          <label className="flex items-center gap-2 text-sm text-gray-600">
+          <label className="flex cursor-pointer select-none items-center gap-2 text-sm text-gray-600">
             <input
               type="checkbox"
-              className="rounded border-gray-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)]"
+              className="h-4 w-4 rounded border-gray-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)]"
             />
             Remember me
           </label>
           <Link
             to="/forgot-password"
-            className="text-sm text-[var(--color-primary)] hover:text-[var(--color-primary-hover)]"
+            className="text-sm font-medium text-[var(--color-primary)] transition-colors hover:text-[var(--color-primary-hover)]"
           >
             Forgot password?
           </Link>
         </div>
+
         <Button type="submit" loading={loading} className="w-full" icon={LogIn}>
           Sign In
         </Button>
       </form>
-      <div className="mt-6 text-center text-sm text-gray-500">
-        No account?{" "}
+
+      <div className="mt-6 flex items-center justify-center gap-1.5 text-sm text-gray-500">
+        <span>No account?</span>
         <Link
           to="/register"
-          className="text-[var(--color-primary)] hover:text-[var(--color-primary-hover)] font-medium"
+          className="font-medium text-[var(--color-primary)] transition-colors hover:text-[var(--color-primary-hover)]"
         >
           Request an account
         </Link>

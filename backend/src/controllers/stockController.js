@@ -3,10 +3,11 @@ const { scopeAggregate } = require('../utils/tenant');
 const Item = require('../models/Item');
 const ActivityLog = require('../models/ActivityLog');
 const { successResponse, errorResponse, paginatedResponse } = require('../utils/response');
+const { escapeRegex } = require('../utils/helpers');
 
 exports.getStockMovements = async (req, res) => {
   try {
-    const { page = 1, limit = 20, type, category, startDate, endDate, item } = req.query;
+    const { page = 1, limit = 20, type, category, startDate, endDate, item, search } = req.query;
     const query = {};
     if (type) query.type = type;
     if (category) query.category = category;
@@ -16,12 +17,58 @@ exports.getStockMovements = async (req, res) => {
       if (startDate) query.movementDate.$gte = new Date(startDate);
       if (endDate) query.movementDate.$lte = new Date(endDate);
     }
+    if (search) {
+      const searchRegex = { $regex: escapeRegex(search), $options: 'i' };
+      const matchingItemIds = await Item.find({
+        $or: [
+          { SKU: searchRegex },
+          { itemName: searchRegex },
+          { barcode: searchRegex },
+          { designCode: searchRegex },
+        ],
+      }).distinct('_id');
+      query.$or = [
+        { reference: searchRegex },
+        { notes: searchRegex },
+        { category: searchRegex },
+        { item: { $in: matchingItemIds } },
+      ];
+    }
     const skip = (Number(page) - 1) * Number(limit);
     const [movements, total] = await Promise.all([
-      StockMovement.find(query).populate('item', 'SKU itemName category metalType purity').populate('performedBy', 'name email').sort({ movementDate: -1 }).skip(skip).limit(Number(limit)),
+      StockMovement.find(query).populate('item', 'SKU itemName category metalType purity images').populate('performedBy', 'name email').sort({ movementDate: -1 }).skip(skip).limit(Number(limit)),
       StockMovement.countDocuments(query),
     ]);
     return paginatedResponse(res, movements, total, Number(page), Number(limit));
+  } catch (error) {
+    return errorResponse(res, error.message, 500);
+  }
+};
+
+exports.getStockStats = async (req, res) => {
+  try {
+    const [inCount, outCount, weightInAgg, weightOutAgg] = await Promise.all([
+      StockMovement.countDocuments({ type: 'stockIn' }),
+      StockMovement.countDocuments({ type: 'stockOut' }),
+      StockMovement.aggregate(scopeAggregate([
+        { $match: { type: 'stockIn' } },
+        { $group: { _id: null, total: { $sum: '$weight' } } },
+      ])),
+      StockMovement.aggregate(scopeAggregate([
+        { $match: { type: 'stockOut' } },
+        { $group: { _id: null, total: { $sum: '$weight' } } },
+      ])),
+    ]);
+    const weightIn = weightInAgg[0]?.total || 0;
+    const weightOut = weightOutAgg[0]?.total || 0;
+    return successResponse(res, {
+      totalMovements: inCount + outCount,
+      stockIn: inCount,
+      stockOut: outCount,
+      weightIn,
+      weightOut,
+      netWeight: weightIn - weightOut,
+    });
   } catch (error) {
     return errorResponse(res, error.message, 500);
   }

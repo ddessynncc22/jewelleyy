@@ -1,26 +1,38 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
 
-import { Plus, Download } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+
+import {
+  Download,
+  ArrowUpFromLine,
+  ArrowDownToLine,
+  Activity,
+  PackagePlus,
+  PackageMinus,
+  Scale,
+  Gem,
+} from 'lucide-react'
 
 import toast from 'react-hot-toast'
 
-import { getStockMovements } from '../../services/stockService'
+import { getStockMovements, getStockStats } from '../../services/stockService'
 
 import DataTable from '../../components/ui/DataTable'
-
 import PageHeader from '../../components/ui/PageHeader'
-
 import SearchInput from '../../components/ui/SearchInput'
-
 import FilterPanel from '../../components/ui/FilterPanel'
-
 import Button from '../../components/ui/Button'
-
-import StatusBadge from '../../components/ui/StatusBadge'
-
+import Badge from '../../components/ui/Badge'
+import StatCard from '../../components/ui/StatCard'
+import EmptyState from '../../components/ui/EmptyState'
 import ErrorState from '../../components/ui/ErrorState'
 
-import { formatWeight, formatDate } from '../../utils/helpers'
+import {
+  formatWeight,
+  formatWeightTolaLaal,
+  formatDateTime,
+  getImageSrc,
+} from '../../utils/helpers'
 
 import StockForm from './StockForm'
 
@@ -47,59 +59,90 @@ const CATEGORY_OPTIONS = [
   { value: 'Adjustment', label: 'Adjustment' },
 ]
 
+const MovementBadge = ({ type }) => {
+  const isIn = type === 'stockIn'
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${
+        isIn
+          ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+          : 'border-red-200 bg-red-50 text-red-700'
+      }`}
+    >
+      {isIn ? <ArrowDownToLine className="h-3 w-3" /> : <ArrowUpFromLine className="h-3 w-3" />}
+      {isIn ? 'Stock In' : 'Stock Out'}
+    </span>
+  )
+}
+
+const FilterSelect = ({ label, value, onChange, options = [], placeholder }) => (
+  <div>
+    <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-secondary)]">
+      {label}
+    </label>
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-2 text-sm text-[var(--color-text)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20 transition-all"
+    >
+      <option value="">{placeholder}</option>
+      {options.map((opt) => (
+        <option key={opt.value} value={opt.value}>
+          {opt.label}
+        </option>
+      ))}
+    </select>
+  </div>
+)
+
+const DateInput = ({ label, value, onChange }) => (
+  <div>
+    <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-secondary)]">
+      {label}
+    </label>
+    <input
+      type="date"
+      value={value || ''}
+      onChange={(e) => onChange(e.target.value)}
+      className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-2 text-sm text-[var(--color-text)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20 transition-all"
+    />
+  </div>
+)
+
 const StockList = () => {
-  const [movements, setMovements] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const queryClient = useQueryClient()
+
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState({})
-  const [pagination, setPagination] = useState({
-    page: 1,
-    limit: 10,
-    total: 0,
-    totalPages: 1,
-  })
+  const [page, setPage] = useState(1)
+  const [limit, setLimit] = useState(10)
   const [showForm, setShowForm] = useState(false)
   const [formMode, setFormMode] = useState(null)
 
-  const fetchMovements = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const params = {
-        page: pagination.page,
-        limit: pagination.limit,
-        ...filters,
-      }
+  const movementsQuery = useQuery({
+    queryKey: ['stock-movements', page, limit, search, filters],
+    queryFn: () => {
+      const params = { page, limit, ...filters }
       if (search) params.search = search
-      if (filters.startDate) params.startDate = filters.startDate
-      if (filters.endDate) params.endDate = filters.endDate
+      return getStockMovements(params)
+    },
+  })
 
-      const res = await getStockMovements(params)
-      const data = res.data
-      setMovements(data.data || [])
-      if (data.pagination) {
-        setPagination((prev) => ({
-          ...prev,
-          total: data.pagination.total,
-          totalPages: data.pagination.totalPages,
-        }))
-      }
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to load stock movements')
-    } finally {
-      setLoading(false)
-    }
-  }, [search, filters, pagination.page, pagination.limit])
+  const body = movementsQuery.data?.data || {}
+  const movements = body.data || []
 
-  useEffect(() => {
-    fetchMovements()
-  }, [fetchMovements])
+  const { data: statsRes } = useQuery({
+    queryKey: ['stock-stats'],
+    queryFn: getStockStats,
+    staleTime: 60000,
+  })
+  const stats = statsRes?.data?.data || {}
 
   const handleFormSuccess = () => {
     setShowForm(false)
     setFormMode(null)
-    fetchMovements()
+    queryClient.invalidateQueries({ queryKey: ['stock-movements'] })
+    queryClient.invalidateQueries({ queryKey: ['stock-stats'] })
   }
 
   const handleAddStock = (mode) => {
@@ -107,122 +150,255 @@ const StockList = () => {
     setShowForm(true)
   }
 
-  const handleFilterChange = (key, value) => {
-    setFilters((prev) => ({ ...prev, [key]: value }))
-    setPagination((prev) => ({ ...prev, page: 1 }))
+  const handleSearch = (val) => {
+    setSearch(val)
+    setPage(1)
+  }
+
+  const handleFilterChange = (keyOrObj, value) => {
+    if (typeof keyOrObj === 'object' && keyOrObj !== null) {
+      setFilters(keyOrObj)
+    } else {
+      setFilters((prev) => ({ ...prev, [keyOrObj]: value }))
+    }
+    setPage(1)
   }
 
   const handleResetFilters = () => {
     setFilters({})
     setSearch('')
-    setPagination((prev) => ({ ...prev, page: 1 }))
+    setPage(1)
   }
 
-  const handlePageChange = (page) => {
-    setPagination((prev) => ({ ...prev, page }))
-  }
-
-  const handleLimitChange = (limit) => {
-    setPagination((prev) => ({ ...prev, limit, page: 1 }))
+  const handleExport = () => {
+    const headers = [
+      'Date', 'Type', 'Category', 'Item Name', 'SKU', 'Quantity', 'Weight (g)',
+      'Purity', 'Reference', 'Notes', 'Performed By',
+    ]
+    const rows = movements.map((m) => [
+      formatDateTime(m.movementDate),
+      m.type === 'stockIn' ? 'Stock In' : 'Stock Out',
+      m.category || '',
+      m.item?.itemName || '',
+      m.item?.SKU || '',
+      m.quantity ?? '',
+      m.weight ?? '',
+      m.purity ?? '',
+      m.reference || '',
+      m.notes || '',
+      typeof m.performedBy === 'object' ? m.performedBy?.name || '' : m.performedBy || '',
+    ])
+    const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', `stock_movements_${new Date().toISOString().slice(0, 10)}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    toast.success('Stock movements exported as CSV')
   }
 
   const columns = [
     {
       key: 'movementDate',
       label: 'Date',
-      render: (val) => formatDate(val),
+      render: (val) => (
+        <span className="whitespace-nowrap text-sm text-[var(--color-text-secondary)]">
+          {formatDateTime(val)}
+        </span>
+      ),
     },
     {
       key: 'item',
       label: 'Item',
       render: (_, row) => {
         const item = row.item
-        if (!item) return '-'
+        if (!item) {
+          return <span className="text-sm text-[var(--color-text-secondary)]">—</span>
+        }
+        const imgSrc = getImageSrc(item.images?.[0])
         return (
-          <div>
-            <p className="font-medium text-gray-900">
-              {item.itemName || 'Unknown'}
-            </p>
-            {item.SKU && <p className="text-xs text-gray-500">{item.SKU}</p>}
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-elevated)]">
+              {imgSrc ? (
+                <img
+                  src={imgSrc}
+                  alt={item.itemName || 'Item'}
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center">
+                  <Gem className="h-4 w-4 text-[var(--color-border)]" />
+                </div>
+              )}
+            </div>
+            <div className="min-w-0">
+              <p className="max-w-[200px] truncate text-sm font-medium text-[var(--color-text)]">
+                {item.itemName || 'Unknown item'}
+              </p>
+              {item.SKU && (
+                <p className="font-mono text-xs text-[var(--color-text-secondary)]">{item.SKU}</p>
+              )}
+            </div>
           </div>
         )
       },
     },
     {
       key: 'type',
-      label: 'Type',
+      label: 'Movement',
+      render: (val, row) => (
+        <div className="space-y-1">
+          <MovementBadge type={val} />
+          {row.category && (
+            <p className="text-xs text-[var(--color-text-secondary)]">{row.category}</p>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'quantity',
+      label: 'Qty',
       render: (val) => (
-        <span
-          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-            val === 'stockIn'
-              ? 'bg-green-100 text-green-800'
-              : 'bg-red-100 text-red-800'
-          }`}
-        >
-          {val === 'stockIn' ? 'Stock In' : 'Stock Out'}
+        <span className="font-medium text-[var(--color-text)]">
+          {Number(val ?? 0).toLocaleString()}
         </span>
       ),
     },
     {
-      key: 'category',
-      label: 'Category',
-      render: (val) => val || '-',
-    },
-    {
-      key: 'quantity',
-      label: 'Quantity',
-      render: (val) => Number(val ?? 0).toLocaleString(),
-    },
-    {
       key: 'weight',
       label: 'Weight',
-      render: (val) => formatWeight(val),
+      render: (val) => (
+        <div>
+          <p className="text-sm font-medium text-[var(--color-text)]">{formatWeight(val)}</p>
+          <p className="text-xs text-[var(--color-text-secondary)]">{formatWeightTolaLaal(val)}</p>
+        </div>
+      ),
+    },
+    {
+      key: 'purity',
+      label: 'Purity',
+      render: (val) =>
+        val ? (
+          <Badge label={String(val)} variant="default" size="sm" />
+        ) : (
+          <span className="text-sm text-[var(--color-text-secondary)]">-</span>
+        ),
     },
     {
       key: 'reference',
       label: 'Reference',
-      render: (val) => val || '-',
+      render: (val, row) => {
+        if (!val && !row.notes) {
+          return <span className="text-sm text-[var(--color-text-secondary)]">-</span>
+        }
+        return (
+          <div className="min-w-0">
+            {val && (
+              <p className="truncate text-sm font-medium text-[var(--color-text)]">{val}</p>
+            )}
+            {row.notes && (
+              <p
+                className="max-w-[180px] truncate text-xs text-[var(--color-text-secondary)]"
+                title={row.notes}
+              >
+                {row.notes}
+              </p>
+            )}
+          </div>
+        )
+      },
     },
     {
       key: 'performedBy',
       label: 'Performed By',
       render: (val) => {
-        if (!val) return '-'
-        if (typeof val === 'object') return val.name || val.email || '-'
-        return val
+        const name = val && typeof val === 'object' ? val.name || val.email || '' : val || ''
+        if (!name) return <span className="text-sm text-[var(--color-text-secondary)]">-</span>
+        const initials = name
+          .trim()
+          .split(/\s+/)
+          .map((w) => w[0])
+          .join('')
+          .slice(0, 2)
+          .toUpperCase()
+        return (
+          <div className="flex items-center gap-2">
+            <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary-light)] text-xs font-semibold text-[var(--color-primary)]">
+              {initials}
+            </span>
+            <span className="truncate text-sm text-[var(--color-text)]">{name}</span>
+          </div>
+        )
       },
     },
   ]
 
+  const hasActiveFilter = search || Object.keys(filters).some((k) => filters[k])
+
   return (
     <div className="space-y-6">
       <PageHeader title="Stock Movement" subtitle="Track inventory changes">
-        <Button
-          variant="outline"
-          icon={Download}
-          onClick={() => toast('Export feature coming soon')}
-        >
-          Export
-        </Button>
-        <Button
-          variant="outline"
-          icon={Plus}
-          onClick={() => handleAddStock('out')}
-        >
-          New Stock Out
-        </Button>
-        <Button icon={Plus} onClick={() => handleAddStock('in')}>
-          New Stock In
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" icon={Download} onClick={handleExport}>
+            Export CSV
+          </Button>
+          <Button variant="outline" icon={ArrowUpFromLine} onClick={() => handleAddStock('out')}>
+            New Stock Out
+          </Button>
+          <Button icon={ArrowDownToLine} onClick={() => handleAddStock('in')}>
+            New Stock In
+          </Button>
+        </div>
       </PageHeader>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          title="Total Movements"
+          value={stats.totalMovements ?? '—'}
+          icon={Activity}
+          color="blue"
+          subtitle="All stock activity"
+        />
+        <StatCard
+          title="Stock In"
+          value={stats.stockIn ?? '—'}
+          icon={PackagePlus}
+          color="green"
+          subtitle={`${formatWeight(stats.weightIn)} received`}
+          onClick={() => {
+            setSearch('')
+            handleFilterChange('type', 'stockIn')
+          }}
+        />
+        <StatCard
+          title="Stock Out"
+          value={stats.stockOut ?? '—'}
+          icon={PackageMinus}
+          color="red"
+          subtitle={`${formatWeight(stats.weightOut)} issued`}
+          onClick={() => {
+            setSearch('')
+            handleFilterChange('type', 'stockOut')
+          }}
+        />
+        <StatCard
+          title="Net Weight"
+          value={formatWeight(stats.netWeight)}
+          icon={Scale}
+          color="gold"
+          subtitle="Stock in minus stock out"
+        />
+      </div>
 
       <div className="flex flex-col sm:flex-row gap-4">
         <SearchInput
           value={search}
-          onChange={(val) => {
-            setSearch(val)
-            setPagination((prev) => ({ ...prev, page: 1 }))
-          }}
+          onChange={handleSearch}
           placeholder="Search by item name, SKU, reference..."
           className="sm:max-w-md"
         />
@@ -233,80 +409,67 @@ const StockList = () => {
         onFilterChange={handleFilterChange}
         onReset={handleResetFilters}
       >
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">
-              Type
-            </label>
-            <select
-              value={filters.type || ''}
-              onChange={(e) => handleFilterChange('type', e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">All Types</option>
-              {TYPE_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">
-              Category
-            </label>
-            <select
-              value={filters.category || ''}
-              onChange={(e) => handleFilterChange('category', e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">All Categories</option>
-              {CATEGORY_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">
-              Start Date
-            </label>
-            <input
-              type="date"
-              value={filters.startDate || ''}
-              onChange={(e) => handleFilterChange('startDate', e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">
-              End Date
-            </label>
-            <input
-              type="date"
-              value={filters.endDate || ''}
-              onChange={(e) => handleFilterChange('endDate', e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <FilterSelect
+            label="Type"
+            value={filters.type || ''}
+            onChange={(v) => handleFilterChange('type', v)}
+            options={TYPE_OPTIONS}
+            placeholder="All Types"
+          />
+          <FilterSelect
+            label="Category"
+            value={filters.category || ''}
+            onChange={(v) => handleFilterChange('category', v)}
+            options={CATEGORY_OPTIONS}
+            placeholder="All Categories"
+          />
+          <DateInput
+            label="Start Date"
+            value={filters.startDate}
+            onChange={(v) => handleFilterChange('startDate', v)}
+          />
+          <DateInput
+            label="End Date"
+            value={filters.endDate}
+            onChange={(v) => handleFilterChange('endDate', v)}
+          />
         </div>
       </FilterPanel>
 
-      {error ? (
-        <ErrorState message={error} onRetry={fetchMovements} />
+      {movementsQuery.isError ? (
+        <ErrorState
+          message={movementsQuery.error?.message || 'Failed to load stock movements'}
+          onRetry={() => movementsQuery.refetch()}
+        />
+      ) : movements.length === 0 && !movementsQuery.isLoading ? (
+        hasActiveFilter ? (
+          <EmptyState
+            title="No movements found"
+            description="Try adjusting your search or filters"
+          />
+        ) : (
+          <EmptyState
+            title="No stock movements yet"
+            description="Record stock in or out to start tracking your inventory"
+            action={{ label: 'New Stock In', onClick: () => handleAddStock('in') }}
+          />
+        )
       ) : (
         <DataTable
           columns={columns}
           data={movements}
-          loading={loading}
+          loading={movementsQuery.isLoading}
           pagination={{
-            page: pagination.page,
-            limit: pagination.limit,
-            total: pagination.total,
-            totalPages: pagination.totalPages,
-            onPageChange: handlePageChange,
-            onLimitChange: handleLimitChange,
+            page,
+            limit,
+            total: body.pagination?.total ?? 0,
+            totalPages: body.pagination?.totalPages ?? 1,
+            onPageChange: setPage,
+            onLimitChange: (l) => {
+              setLimit(l)
+              setPage(1)
+            },
           }}
         />
       )}

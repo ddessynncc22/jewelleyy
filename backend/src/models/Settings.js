@@ -14,6 +14,7 @@ const settingsSchema = new mongoose.Schema({
   panNumber: { type: String, default: '' },
   goldTransportCharge: { type: Number, default: 0, min: 0 },
   silverTransportCharge: { type: Number, default: 0, min: 0 },
+  logoUrl: { type: String, default: '' },
 }, { timestamps: true });
 
 settingsSchema.post('save', async function () {
@@ -29,6 +30,7 @@ settingsSchema.post('save', async function () {
     if (this.defaultPurity !== undefined) fields.defaultPurity = this.defaultPurity;
     if (this.defaultKarat !== undefined) fields.defaultKarat = this.defaultKarat;
     if (this.lowStockThreshold !== undefined) fields.lowStockThreshold = this.lowStockThreshold;
+    if (this.logoUrl !== undefined) fields.logoUrl = this.logoUrl;
     if (Object.keys(fields).length > 0) {
       await Tenant.findOneAndUpdate({ tenantNumber: this.tenantId }, { $set: fields });
     }

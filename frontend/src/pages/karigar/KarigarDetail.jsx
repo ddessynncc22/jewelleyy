@@ -392,8 +392,10 @@ const KarigarDetail = () => {
     {
       key: '_balance',
       label: 'Balance',
-      render: (val) =>
-        val > 0 ? (
+      render: (val, row) =>
+        !row._isReturned ? (
+          <span className="text-gray-400">-</span>
+        ) : val > 0 ? (
           <span className="text-red-600 font-medium">{formatCurrency(val)}</span>
         ) : val === 0 ? (
           <span className="text-emerald-600 font-medium">Paid</span>
@@ -404,8 +406,10 @@ const KarigarDetail = () => {
     {
       key: 'paymentStatus',
       label: 'Payment Status',
-      render: (val) =>
-        val === 'paid' ? (
+      render: (val, row) =>
+        !row._isReturned ? (
+          '-'
+        ) : val === 'paid' ? (
           <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 border border-emerald-200">
             Paid
           </span>
@@ -628,35 +632,36 @@ const totalGoldTaken = (karigar.materials || []).reduce((s, m) => s + (m.goldRec
          <div className="space-y-6">
            <Card title="Payment Summary">
 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                 {(() => {
-                   const materials = karigar.materials || [];
-                   const totalDue = materials.reduce((s, m) => s + (Number(m.paymentDue) || Number(m.payment) || 0), 0);
-                   const totalPaid = materials.reduce((s, m) => s + (Number(m.paymentReceived) || 0), 0);
-                   const balance = Number(totalDue.toFixed(2)) - Number(totalPaid.toFixed(2));
-                   const overpaid = balance < 0;
-                   return (
-                     <>
-                       <div className="rounded-lg bg-gray-50 p-3">
-                         <p className="text-xs text-gray-500">Total Payment Due</p>
-                         <p className="text-lg font-bold text-gray-900">{formatCurrency(totalDue)}</p>
-                       </div>
-                       <div className="rounded-lg bg-green-50 p-3">
-                         <p className="text-xs text-gray-500">Total Paid</p>
-                         <p className="text-lg font-bold text-green-700">{formatCurrency(totalPaid)}</p>
-                       </div>
-                       <div className={`rounded-lg p-3 ${overpaid ? 'bg-red-50' : 'bg-amber-50'}`}>
-                         <p className="text-xs text-gray-500">{overpaid ? 'Overpaid by' : 'Balance Due'}</p>
-                         <p className={`text-lg font-bold ${overpaid ? 'text-red-700' : 'text-amber-700'}`}>
-                           {formatCurrency(overpaid ? Math.abs(balance) : balance)}
-                         </p>
-                       </div>
-                       <div className="rounded-lg bg-purple-50 p-3">
-                         <p className="text-xs text-gray-500">Total Gold Taken</p>
-                         <p className="text-lg font-bold text-purple-700">{formatCurrency(totalGoldTaken)}</p>
-                       </div>
-                     </>
-                   )
-                 })()}
+                  {(() => {
+                    const materials = karigar.materials || [];
+                    const totalDue = materials.reduce((s, m) => s + (Number(m.paymentDue) || Number(m.payment) || 0), 0);
+                    const totalPaid = materials.reduce((s, m) => s + (Number(m.paymentReceived) || 0), 0);
+                    const balance = Number(totalDue.toFixed(2)) - Number(totalPaid.toFixed(2));
+                    const overpaid = balance < 0;
+                    const pendingDue = Math.max(0, balance);
+                    return (
+                      <>
+                        <div className={`rounded-lg p-3 ${overpaid ? 'bg-purple-50' : pendingDue > 0 ? 'bg-amber-50' : 'bg-green-50'}`}>
+                          <p className="text-xs text-gray-500">{overpaid ? 'Overpaid by' : pendingDue > 0 ? 'Total Payment Due' : 'Payment Due'}</p>
+                          <p className={`text-lg font-bold ${overpaid ? 'text-purple-700' : pendingDue > 0 ? 'text-amber-700' : 'text-green-700'}`}>
+                            {formatCurrency(overpaid ? Math.abs(balance) : pendingDue)}
+                          </p>
+                        </div>
+                        <div className="rounded-lg bg-green-50 p-3">
+                          <p className="text-xs text-gray-500">Total Paid</p>
+                          <p className="text-lg font-bold text-green-700">{formatCurrency(totalPaid)}</p>
+                        </div>
+                        <div className="rounded-lg bg-gray-50 p-3">
+                          <p className="text-xs text-gray-500">Total Payment</p>
+                          <p className="text-lg font-bold text-gray-900">{formatCurrency(totalDue)}</p>
+                        </div>
+                        <div className="rounded-lg bg-purple-50 p-3">
+                          <p className="text-xs text-gray-500">Total Gold Taken</p>
+                          <p className="text-lg font-bold text-purple-700">{formatCurrency(totalGoldTaken)}</p>
+                        </div>
+                      </>
+                    )
+                  })()}
                </div>
            </Card>
            <Card title="Payment Timeline">
@@ -1052,7 +1057,13 @@ const totalGoldTaken = (karigar.materials || []).reduce((s, m) => s + (m.goldRec
          onClose={() => setPaymentModalOpen(false)}
          title="Record Payment"
        >
-         <form onSubmit={handleRecordPayment} className="space-y-4">
+          <form onSubmit={handleRecordPayment} className="space-y-4">
+            {(karigar.materials || []).filter((m) => ((Number(m.paymentDue) || Number(m.payment) || 0) - (Number(m.paymentReceived) || 0)) > 0).length === 0 ? (
+              <div className="rounded-lg bg-green-50 border border-green-200 p-3 text-sm text-green-700">
+                No pending payments — all materials are fully paid.
+              </div>
+            ) : (
+            <>
             <FormSelect
               label="Material"
               name="materialIndex"
@@ -1171,6 +1182,8 @@ const totalGoldTaken = (karigar.materials || []).reduce((s, m) => s + (m.goldRec
                Save Payment
              </Button>
            </div>
+           </>
+           )}
          </form>
        </Modal>
 

@@ -18,14 +18,22 @@ exports.getItems = async (req, res) => {
     if (purity) query.purity = Number(purity);
     if (karat) query.karat = Number(karat);
     if (karigarId) query.karigarId = karigarId;
+    if (req.query.diamond === 'true' || req.query.diamond === '1') {
+      query.$and = [{ $or: [{ metalType: 'diamond' }, { stoneType: 'diamond' }] }];
+    }
     if (search) {
       const searchRegex = { $regex: escapeRegex(search), $options: 'i' };
-      query.$or = [
+      const searchOr = [
         { SKU: searchRegex },
         { barcode: searchRegex },
         { designCode: searchRegex },
         { itemName: searchRegex },
       ];
+      if (query.$and) {
+        query.$and.push({ $or: searchOr });
+      } else {
+        query.$or = searchOr;
+      }
     }
     const sortOption = sort ? sort.split(',').join(' ') : '-createdAt';
     const skip = (Number(page) - 1) * Number(limit);

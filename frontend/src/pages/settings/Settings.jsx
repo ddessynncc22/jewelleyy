@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 
 import toast from "react-hot-toast";
 
-import { Settings as SettingsIcon, Save, Loader2 } from "lucide-react";
+import { Settings as SettingsIcon, Save, Loader2, Upload, Trash2 } from "lucide-react";
 
 import PageHeader from "../../components/ui/PageHeader";
 
@@ -32,7 +32,9 @@ export default function Settings() {
     lowStockThreshold: "5",
     goldTransportCharge: "0",
     silverTransportCharge: "0",
+    logoUrl: "",
   });
+  const [logoFile, setLogoFile] = useState(null);
   useEffect(() => {
     getSettings()
       .then((s) => {
@@ -48,17 +50,39 @@ export default function Settings() {
           lowStockThreshold: String(s.lowStockThreshold || "5"),
           goldTransportCharge: String(s.goldTransportCharge || "0"),
           silverTransportCharge: String(s.silverTransportCharge || "0"),
+          logoUrl: s.logoUrl || "",
         });
       })
       .catch(() => toast.error("Failed to load settings"))
       .finally(() => setLoading(false));
   }, []);
   const set = (field) => (e) => setForm((prev) => ({ ...prev, [field]: e.target.value }));
+
+  const logoPreview = logoFile
+    ? URL.createObjectURL(logoFile)
+    : form.logoUrl || "";
+
+  const handleLogoChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error("Logo must be under 5MB");
+        return;
+      }
+      setLogoFile(file);
+    }
+  };
+
+  const handleLogoRemove = () => {
+    setLogoFile(null);
+    setForm((prev) => ({ ...prev, logoUrl: "" }));
+  };
+
   const onSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
     try {
-      await updateSettings({
+      const payload = {
         storeName: form.storeName,
         address: form.address,
         phone: form.phone,
@@ -70,7 +94,20 @@ export default function Settings() {
         lowStockThreshold: Number(form.lowStockThreshold),
         goldTransportCharge: Number(form.goldTransportCharge),
         silverTransportCharge: Number(form.silverTransportCharge),
-      });
+        logoUrl: form.logoUrl,
+      };
+      const saved = logoFile
+        ? await (async () => {
+            const fd = new FormData();
+            Object.entries(payload).forEach(([key, val]) => {
+              if (val !== undefined && val !== null && val !== "") fd.append(key, String(val));
+            });
+            fd.append("image", logoFile);
+            return updateSettings(fd);
+          })()
+        : await updateSettings(payload);
+      setForm((prev) => ({ ...prev, logoUrl: saved.logoUrl || "" }));
+      setLogoFile(null);
       toast.success("Settings saved successfully");
     } catch (err) {
       toast.error(err?.response?.data?.message || "Failed to save settings");
@@ -93,6 +130,39 @@ export default function Settings() {
           {" "}
           <div className="space-y-4">
             {" "}
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 rounded-full border-2 border-[var(--color-border)] overflow-hidden flex items-center justify-center bg-gray-50 shrink-0">
+                {logoPreview ? (
+                  <img src={logoPreview} alt="Store logo" className="w-full h-full object-contain p-1" />
+                ) : (
+                  <span className="text-xs font-bold text-gray-400 text-center">
+                    {(form.storeName || "J").split(" ")[0]}
+                    <br />LOGO
+                  </span>
+                )}
+              </div>
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Store Logo</p>
+                <p className="text-xs text-gray-400">Shown on printed bills &amp; invoices</p>
+                <div className="flex items-center gap-2">
+                  <label className="inline-flex items-center gap-1.5 cursor-pointer text-xs font-medium px-3 py-1.5 rounded-full border border-[var(--color-border)] hover:bg-gray-50 transition-colors">
+                    <Upload size={14} />
+                    {logoPreview ? "Replace Logo" : "Upload Logo"}
+                    <input type="file" accept="image/*" className="hidden" onChange={handleLogoChange} />
+                  </label>
+                  {logoPreview && (
+                    <button
+                      type="button"
+                      onClick={handleLogoRemove}
+                      className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
+                    >
+                      <Trash2 size={14} />
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
             <FormInput
               label="Store Name"
               name="storeName"

@@ -28,6 +28,7 @@ export default function InvoiceDocument({
   discount,
   taxableAmount,
   totalTax,
+  taxLines,
   roundOff,
   grandTotal,
   paymentType,
@@ -79,6 +80,7 @@ export default function InvoiceDocument({
         discount={discount}
         taxableAmount={taxableAmount}
         totalTax={totalTax}
+        taxLines={taxLines}
         roundOff={roundOff}
         grandTotal={grandTotal}
         paymentType={paymentType}

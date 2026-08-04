@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 
-import { Gem, Wrench, Package, TrendingUp, Activity, Grid3X3, Layers, Shield, Plus, ArrowRightLeft, Banknote, ExternalLink, Clock } from 'lucide-react'
+import { Gem, Wrench, Package, TrendingUp, Activity, Grid3X3, Layers, Plus, ArrowRightLeft, Banknote, ExternalLink, Clock, CheckCircle2 } from 'lucide-react'
 
 import { getDashboardStats } from '../../services/dashboardService'
 
@@ -36,6 +36,13 @@ function timeAgo(date) {
   return `${days}d ago`
 }
 
+const todayLabel = new Date().toLocaleDateString('en-US', {
+  weekday: 'long',
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric',
+})
+
 const statusColors = {
   'In Stock': 'text-emerald-600 bg-emerald-50',
   Sold: 'text-blue-600 bg-blue-50',
@@ -64,6 +71,29 @@ const metalColors = {
   other: 'bg-pink-400',
 }
 
+function DistributionRow({ label, count, total, pct, barColor, badgeClass }) {
+  const share = total ? Math.round((count / total) * 100) : 0
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${badgeClass}`}>
+          {label}
+        </span>
+        <span className="text-sm font-semibold text-[var(--color-text)]">
+          {count}
+          <span className="text-xs font-normal text-[var(--color-text-secondary)]"> · {share}%</span>
+        </span>
+      </div>
+      <div className="h-2 rounded-full bg-[var(--color-elevated)] overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  )
+}
+
 export default function Dashboard() {
   const navigate = useNavigate()
   const { data, isLoading, error, refetch } = useQuery({
@@ -79,6 +109,8 @@ export default function Dashboard() {
   const byMetal = stats.itemsByMetal || []
   const maxStatusCount = Math.max(...byStatus.map((s) => s.count), 1)
   const maxMetalCount = Math.max(...byMetal.map((m) => m.count), 1)
+  const totalStatusCount = byStatus.reduce((a, b) => a + b.count, 0)
+  const totalMetalCount = byMetal.reduce((a, b) => a + b.count, 0)
 
   const charges = getTransportCharges()
   const effGoldRate = applyTransportRate(stats.goldRate, charges.gold)
@@ -105,8 +137,8 @@ export default function Dashboard() {
   ]
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Dashboard" subtitle="Overview of your jewellery inventory">
+    <div className="space-y-6 animate-fade-in">
+      <PageHeader title="Dashboard" subtitle={todayLabel}>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" onClick={() => navigate('/items/new')} icon={<Plus size={14} />}>
             Add Item
@@ -120,38 +152,78 @@ export default function Dashboard() {
         </div>
       </PageHeader>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Total Inventory" value={stats.totalInventory || 0} icon={Gem} color="blue" />
-        <StatCard title="Inventory Value" value={`Rs. ${(stats.totalValue || 0).toLocaleString()}`} icon={Package} color="green" onClick={() => navigate('/inventory-value')} />
-        <StatCard title="Pending Karigar Jobs" value={stats.pendingKarigarJobs || 0} icon={Wrench} color="orange" />
-        <StatCard title="Active Bandaki" value={stats.activePawnLoans || 0} icon={Shield} color="purple" />
+      <div className="rounded-2xl border border-[var(--color-border)] bg-gradient-to-r from-[var(--color-primary-light)] via-[var(--color-card)] to-[var(--color-primary-light)] shadow-sm px-6 py-5">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--color-text)]">
+            <TrendingUp size={16} className="text-[var(--color-primary)]" />
+            Today's Market Rates
+          </h2>
+          <a
+            href="/todays-rate"
+            className="inline-flex items-center gap-1 text-xs font-medium text-[var(--color-primary-hover)] hover:text-[var(--color-primary)]"
+          >
+            View full rates <ExternalLink size={12} />
+          </a>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] px-5 py-4 shadow-sm">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+                <Gem size={20} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-[var(--color-text)]">Gold 24K</p>
+                <p className="text-xs text-[var(--color-text-secondary)]">NPR {goldPerGram.toLocaleString()} / gram</p>
+              </div>
+            </div>
+            <div className="text-right shrink-0">
+              <p className="text-xl font-bold tracking-tight text-amber-700">{goldRate.toLocaleString()}</p>
+              <p className="text-xs text-[var(--color-text-secondary)]">per {goldUnit}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] px-5 py-4 shadow-sm">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-gray-500">
+                <Gem size={20} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-[var(--color-text)]">Silver</p>
+                <p className="text-xs text-[var(--color-text-secondary)]">NPR {silverPerGram.toLocaleString()} / gram</p>
+              </div>
+            </div>
+            <div className="text-right shrink-0">
+              <p className="text-xl font-bold tracking-tight text-gray-700">{silverRate.toLocaleString()}</p>
+              <p className="text-xs text-[var(--color-text-secondary)]">per {silverUnit}</p>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard title="Total Inventory" value={stats.totalInventory || 0} icon={Gem} color="gold" subtitle="Items in stock" />
+        <StatCard title="Inventory Value" value={`Rs. ${(stats.totalValue || 0).toLocaleString()}`} icon={Package} color="green" subtitle="At today's rates" onClick={() => navigate('/inventory-value')} />
+        <StatCard title="Pending Karigar Jobs" value={stats.pendingKarigarJobs || 0} icon={Wrench} color="orange" subtitle="Work in progress" />
+        <StatCard title="Low Stock Alerts" value={stats.lowStockItems || 0} icon={Activity} color="red" subtitle="Below threshold" onClick={() => navigate('/stock')} />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <Card title="Items by Status" icon={Grid3X3}>
           {byStatus.length === 0 ? (
             <div className="text-center py-8 text-sm text-gray-500">No data</div>
           ) : (
-            <div className="space-y-3">
-              {byStatus.map((s) => {
-                const pct = Math.round((s.count / maxStatusCount) * 100)
-                return (
-                  <div key={s._id}>
-                    <div className="flex justify-between items-center mb-1">
-                      <span className={`text-sm font-medium px-2 py-0.5 rounded ${statusColors[s._id] || 'text-gray-700'}`}>
-                        {s._id}
-                      </span>
-                      <span className="text-sm font-bold text-gray-900">{s.count}</span>
-                    </div>
-                    <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all duration-500 ${statusBarColors[s._id] || 'bg-gray-400'}`}
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                  </div>
-                )
-              })}
+            <div className="space-y-4">
+              {byStatus.map((s) => (
+                <DistributionRow
+                  key={s._id}
+                  label={s._id}
+                  count={s.count}
+                  total={totalStatusCount}
+                  pct={Math.round((s.count / maxStatusCount) * 100)}
+                  barColor={statusBarColors[s._id] || 'bg-gray-400'}
+                  badgeClass={statusColors[s._id] || 'text-gray-600 bg-gray-100'}
+                />
+              ))}
             </div>
           )}
         </Card>
@@ -160,100 +232,48 @@ export default function Dashboard() {
           {byMetal.length === 0 ? (
             <div className="text-center py-8 text-sm text-gray-500">No data</div>
           ) : (
-            <div className="space-y-3">
-              {byMetal.map((m) => {
-                const pct = Math.round((m.count / maxMetalCount) * 100)
-                return (
-                  <div key={m._id}>
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-sm font-medium text-gray-700 capitalize flex items-center gap-2">
-                        <span className={`w-2.5 h-2.5 rounded-full ${metalColors[m._id] || 'bg-gray-400'}`} />
-                        {m._id}
-                      </span>
-                      <span className="text-sm font-bold text-gray-900">{m.count}</span>
-                    </div>
-                    <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all duration-500 ${metalColors[m._id] || 'bg-gray-400'}`}
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                  </div>
-                )
-              })}
+            <div className="space-y-4">
+              {byMetal.map((m) => (
+                <DistributionRow
+                  key={m._id}
+                  label={m._id}
+                  count={m.count}
+                  total={totalMetalCount}
+                  pct={Math.round((m.count / maxMetalCount) * 100)}
+                  barColor={metalColors[m._id] || 'bg-gray-400'}
+                  badgeClass="text-gray-600 bg-gray-100 capitalize"
+                />
+              ))}
             </div>
           )}
         </Card>
-      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <Card title="Gold & Silver Rates" icon={TrendingUp}>
-          <div className="space-y-4">
-            <div className="flex justify-between items-center p-3.5 rounded-xl bg-amber-50 border border-amber-200/50">
-              <div>
-                <span className="font-medium text-amber-800">
-                  <Gem size={16} className="inline mr-1.5" />
-                  Gold 24K
-                </span>
-                <p className="text-xs text-amber-600 mt-0.5">
-                  Per gram: NPR {goldPerGram.toLocaleString()}
-                </p>
-              </div>
-              <div className="text-right">
-                <span className="text-lg font-bold text-amber-800">
-                  {goldRate.toLocaleString()}
-                  <span className="text-xs font-normal opacity-70">/{goldUnit}</span>
-                </span>
-              </div>
-            </div>
-            <div className="flex justify-between items-center p-3.5 rounded-xl bg-gray-50 border border-gray-200/50">
-              <div>
-                <span className="font-medium text-gray-700">
-                  <Gem size={16} className="inline mr-1.5" />
-                  Silver
-                </span>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  Per gram: NPR {silverPerGram.toLocaleString()}
-                </p>
-              </div>
-              <div className="text-right">
-                <span className="text-lg font-bold text-gray-700">
-                  {silverRate.toLocaleString()}
-                  <span className="text-xs font-normal opacity-70">/{silverUnit}</span>
-                </span>
-              </div>
-            </div>
-            <a
-              href="/todays-rate"
-              className="inline-flex items-center gap-1 text-xs text-amber-700 hover:text-amber-800 font-medium"
-            >
-              View daily rates <ExternalLink size={12} />
-            </a>
-          </div>
-        </Card>
-
-        <Card title={`Low Stock Items (${stats.lowStockItems || 0})`} icon={Package}>
+        <Card title={`Low Stock (${stats.lowStockItems || 0})`} icon={Package}>
           {stats.lowStockItemList?.length > 0 ? (
             <div className="space-y-2">
               {stats.lowStockItemList.map((item) => (
-                <div key={item._id} className="flex justify-between items-center px-3 py-2 rounded-lg bg-red-50">
+                <div key={item._id} className="flex items-center justify-between gap-3 rounded-xl border border-red-100 bg-red-50/60 px-3.5 py-2.5">
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-gray-900 truncate">{item.itemName}</p>
-                    <p className="text-xs text-gray-500">{item.SKU} - {item.metalType}</p>
+                    <p className="text-sm font-medium text-[var(--color-text)] truncate">{item.itemName}</p>
+                    <p className="text-xs text-[var(--color-text-secondary)] truncate">{item.SKU} · {item.metalType}</p>
                   </div>
-                  <span className="text-sm font-bold text-red-600 ml-3">{item.quantity}</span>
+                  <span className="shrink-0 rounded-full bg-red-600 text-white text-xs font-semibold px-2.5 py-0.5">
+                    {item.quantity} left
+                  </span>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="text-center py-8 text-sm text-gray-500">
-              {stats.lowStockItems || 0} item(s) below threshold
+            <div className="flex flex-col items-center justify-center py-10 text-center">
+              <CheckCircle2 className="h-9 w-9 text-emerald-400 mb-2" />
+              <p className="text-sm font-medium text-[var(--color-text)]">All stocked up</p>
+              <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">No items below the stock threshold</p>
             </div>
           )}
         </Card>
       </div>
 
-      <Card title="Recent Stock Activities" icon={Activity}>
+      <Card title="Recent Stock Activities" subtitle="Latest inventory movements" icon={Activity}>
         <DataTable columns={recentCols} data={stats.recentActivities || []} loading={false} />
       </Card>
     </div>

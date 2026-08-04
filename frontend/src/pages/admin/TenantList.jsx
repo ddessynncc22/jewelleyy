@@ -12,16 +12,10 @@ import DataTable from '../../components/ui/DataTable'
 import StatCard from '../../components/ui/StatCard'
 import SearchInput from '../../components/ui/SearchInput'
 import FilterPanel from '../../components/ui/FilterPanel'
-import Badge from '../../components/ui/Badge'
+import PlanBadge, { PLAN_OPTIONS } from '../../components/ui/PlanBadge'
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton'
 import ErrorState from '../../components/ui/ErrorState'
 import { formatDate } from '../../utils/helpers'
-
-const PLAN_VARIANT = {
-  standard: 'default',
-  premium: 'primary',
-  enterprise: 'info',
-}
 
 export default function TenantList() {
   const navigate = useNavigate()
@@ -128,9 +122,7 @@ export default function TenantList() {
       key: 'planType',
       label: 'Plan',
       sortable: true,
-      render: (val) => (
-        <Badge label={(val || 'standard').toUpperCase()} variant={PLAN_VARIANT[val] || 'default'} size="sm" />
-      ),
+      render: (val) => <PlanBadge plan={val} />
     },
     {
       key: 'userCount',
@@ -237,9 +229,9 @@ export default function TenantList() {
                 className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-2.5 text-sm focus:outline-none focus:ring-2"
               >
                 <option value="">All</option>
-                <option value="standard">Standard</option>
-                <option value="premium">Premium</option>
-                <option value="enterprise">Enterprise</option>
+                {PLAN_OPTIONS.map((p) => (
+                  <option key={p.value} value={p.value}>{p.label}</option>
+                ))}
               </select>
             </div>
           </div>

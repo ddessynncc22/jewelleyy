@@ -308,6 +308,7 @@ const SaleList = () => {
           columns={columns}
           data={sales}
           loading={loading}
+          onRowClick={(row) => navigate(`/pos/sales/${row._id}`)}
           onSort={handleSort}
           pagination={{
             page: pagination.page,

@@ -4,7 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 
 import toast from 'react-hot-toast'
 
-import { ArrowLeft, User, Plus, DollarSign, Edit, CreditCard, FileText, Phone, MessageCircle, Printer, Banknote, Package, ClipboardList, CheckCircle2, Wallet, Trash2 } from 'lucide-react'
+import { ArrowLeft, User, Plus, DollarSign, Edit, CreditCard, FileText, Phone, MessageCircle, Printer, Banknote, Package, ClipboardList, CheckCircle2, Wallet, Trash2, Mail, MapPin } from 'lucide-react'
 
 import { getCustomer, getCustomerLedger, addLedgerEntry, deleteCustomer } from '../../services/customerService'
 
@@ -310,10 +310,10 @@ const CustomerDetail = () => {
       sortable: false,
       render: (val) => (
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" onClick={() => navigate(`/pos/sales/${val}`)}>
+          <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); navigate(`/pos/sales/${val}`) }}>
             View
           </Button>
-          <Button variant="ghost" size="sm" icon={Printer} onClick={() => navigate(`/pos/sales/${val}?print=1`)}>
+          <Button variant="ghost" size="sm" icon={Printer} onClick={(e) => { e.stopPropagation(); navigate(`/pos/sales/${val}?print=1`) }}>
             Reprint
           </Button>
         </div>
@@ -332,7 +332,7 @@ const CustomerDetail = () => {
       sortable: false,
       render: (val, row) => (
         <button
-          onClick={() => navigate(`/pawn/${row._id}`)}
+          onClick={(e) => { e.stopPropagation(); navigate(`/pawn/${row._id}`) }}
           className="text-blue-600 hover:text-blue-800 font-medium"
         >
           {val}
@@ -395,7 +395,7 @@ const CustomerDetail = () => {
       render: (val, row) => (
         <div className="space-y-0.5">
           <button
-            onClick={() => navigate(`/pos/sales/${row.saleId}`)}
+            onClick={(e) => { e.stopPropagation(); navigate(`/pos/sales/${row.saleId}`) }}
             className="text-blue-600 hover:text-blue-800 font-medium text-xs"
           >
             {val}
@@ -415,7 +415,7 @@ const CustomerDetail = () => {
       sortable: false,
       render: (val, row) => (
         <button
-          onClick={() => navigate(`/custom-orders/${row._id}`)}
+          onClick={(e) => { e.stopPropagation(); navigate(`/custom-orders/${row._id}`) }}
           className="text-blue-600 hover:text-blue-800 font-medium"
         >
           {val}
@@ -487,40 +487,83 @@ const CustomerDetail = () => {
   ]
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/customers')}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{customer.name}</h1>
-          <p className="text-sm text-gray-500">{customer.customerCode || 'No code'}</p>
-        </div>
-        <div className="ml-auto flex items-center gap-2">
-          {customer.phone && (
-            <>
-              <a href={`tel:${customer.phone}`}>
-                <Button variant="outline" size="sm" icon={Phone}>
-                  Call
-                </Button>
-              </a>
-              <a
-                href={`https://wa.me/${customer.phone.replace(/[^\d]/g, '')}`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <Button variant="outline" size="sm" icon={MessageCircle}>
-                  WhatsApp
-                </Button>
-              </a>
-            </>
-          )}
-          <Button variant="outline" size="sm" icon={Edit} onClick={() => setShowEditForm(true)}>
-            Edit
-          </Button>
-          <Button variant="danger" size="sm" icon={Trash2} onClick={() => setDeleteOpen(true)}>
-            Delete
-          </Button>
+    <div className="space-y-6 animate-fade-in">
+      <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] shadow-sm p-6">
+        <div className="flex flex-col xl:flex-row xl:items-center gap-6">
+          <div className="flex items-center gap-4 min-w-0">
+            <button
+              onClick={() => navigate('/customers')}
+              className="hidden sm:flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--color-border)] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-elevated)] hover:text-[var(--color-text)]"
+              title="Back to customers"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-[var(--color-primary-light)] text-2xl font-bold text-[var(--color-primary)]">
+              {customer.name.charAt(0).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2.5">
+                <h1 className="truncate text-2xl font-bold tracking-tight text-[var(--color-text)]">
+                  {customer.name}
+                </h1>
+                <span className="inline-flex shrink-0 items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-600">
+                  Customer
+                </span>
+              </div>
+              <p className="mt-0.5 text-sm text-[var(--color-text-secondary)]">
+                {customer.customerCode || 'No code'}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid flex-1 grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="flex items-center gap-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-elevated)] px-3.5 py-2.5">
+              <Phone className="h-4 w-4 shrink-0 text-[var(--color-primary)]" />
+              <div className="min-w-0">
+                <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--color-text-secondary)]">Phone</p>
+                <a href={`tel:${customer.phone}`} className="block truncate text-sm font-medium text-[var(--color-text)] hover:text-[var(--color-primary)]">
+                  {customer.phone || '-'}
+                </a>
+              </div>
+            </div>
+            <div className="flex items-center gap-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-elevated)] px-3.5 py-2.5">
+              <Mail className="h-4 w-4 shrink-0 text-[var(--color-primary)]" />
+              <div className="min-w-0">
+                <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--color-text-secondary)]">Email</p>
+                <p className="truncate text-sm font-medium text-[var(--color-text)]">{customer.email || '-'}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-elevated)] px-3.5 py-2.5">
+              <MapPin className="h-4 w-4 shrink-0 text-[var(--color-primary)]" />
+              <div className="min-w-0">
+                <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--color-text-secondary)]">Address</p>
+                <p className="truncate text-sm font-medium text-[var(--color-text)]">{customer.address || '-'}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 xl:justify-end">
+            {customer.phone && (
+              <>
+                <a href={`tel:${customer.phone}`}>
+                  <Button variant="outline" size="sm" icon={Phone}>Call</Button>
+                </a>
+                <a
+                  href={`https://wa.me/${customer.phone.replace(/[^\d]/g, '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Button variant="outline" size="sm" icon={MessageCircle}>WhatsApp</Button>
+                </a>
+              </>
+            )}
+            <Button variant="outline" size="sm" icon={Edit} onClick={() => setShowEditForm(true)}>
+              Edit
+            </Button>
+            <Button variant="danger" size="sm" icon={Trash2} onClick={() => setDeleteOpen(true)}>
+              Delete
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -539,6 +582,7 @@ const CustomerDetail = () => {
           color={summary.outstandingBalance > 0 ? 'red' : 'blue'}
           trend={summary.outstandingBalance > 0 ? 'down' : 'up'}
           trendValue={summary.outstandingBalance > 0 ? 'Unpaid balance' : 'All settled'}
+          subtitle="On khaata"
         />
         <StatCard
           title="Active Bandaki"
@@ -552,58 +596,60 @@ const CustomerDetail = () => {
           value={formatCurrency(pawnInterest)}
           icon={<FileText size={20} />}
           color="purple"
+          subtitle="On pawn loans"
         />
         <StatCard
           title="Last Purchase"
           value={summary.lastPurchaseDate ? formatDate(summary.lastPurchaseDate) : 'N/A'}
           icon={<Package size={20} />}
           color="cyan"
+          subtitle="Most recent sale"
         />
       </div>
 
       <Tabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
 
       {activeTab === 'info' && (
-        <Card title="Customer Details" icon={<User size={18} />}>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-medium text-gray-500 uppercase">Name</p>
-                <p className="text-xl font-bold text-gray-900">{customer.name}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-xs font-medium text-gray-500 uppercase">Current Balance</p>
-                <p className={`text-2xl font-bold ${ledgerSummary.totalBalance > 0 ? 'text-red-600' : ledgerSummary.totalBalance < 0 ? 'text-green-600' : 'text-gray-600'}`}>
-                  {formatCurrency(ledgerSummary.totalBalance || 0)}
-                </p>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
-              <div className="space-y-0.5">
-                <p className="text-xs font-medium text-gray-500 uppercase">Customer Code</p>
-                <p className="text-gray-900">{customer.customerCode || '-'}</p>
-              </div>
-              <div className="space-y-0.5">
-                <p className="text-xs font-medium text-gray-500 uppercase">Phone</p>
-                <p className="text-gray-900">{customer.phone || '-'}</p>
-              </div>
-              <div className="space-y-0.5">
-                <p className="text-xs font-medium text-gray-500 uppercase">Email</p>
-                <p className="text-gray-900">{customer.email || '-'}</p>
-              </div>
-              <div className="space-y-0.5 sm:col-span-2 lg:col-span-1">
-                <p className="text-xs font-medium text-gray-500 uppercase">Address</p>
-                <p className="text-gray-900 break-words">{customer.address || '-'}</p>
-              </div>
-              {customer.gstNo && (
-                <div className="space-y-0.5">
-                  <p className="text-xs font-medium text-gray-500 uppercase">GST No</p>
-                  <p className="text-gray-900">{customer.gstNo}</p>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          <Card title="Customer Details" icon={User} className="lg:col-span-2">
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5">
+              {[
+                ['Customer Code', customer.customerCode || '-'],
+                ['Phone', customer.phone || '-'],
+                ['Email', customer.email || '-'],
+                ['Address', customer.address || '-'],
+                ['GST No', customer.gstNo || '-'],
+                ['Member Since', customer.createdAt ? formatDate(customer.createdAt) : '-'],
+              ].map(([label, value]) => (
+                <div key={label} className="border-b border-[var(--color-border)] pb-3">
+                  <dt className="text-xs font-medium uppercase tracking-wider text-[var(--color-text-secondary)]">{label}</dt>
+                  <dd className="mt-1 text-sm font-medium text-[var(--color-text)] break-words">{value}</dd>
                 </div>
-              )}
+              ))}
+            </dl>
+          </Card>
+          <Card title="Khaata Balance" icon={Wallet}>
+            <div className="flex flex-col items-center justify-center py-4 text-center">
+              <p className="text-xs font-medium uppercase tracking-wider text-[var(--color-text-secondary)]">Current Balance</p>
+              <p className={`mt-2 text-3xl font-bold tracking-tight ${ledgerSummary.totalBalance > 0 ? 'text-red-600' : ledgerSummary.totalBalance < 0 ? 'text-emerald-600' : 'text-[var(--color-text)]'}`}>
+                {formatCurrency(ledgerSummary.totalBalance || 0)}
+              </p>
+              <span className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${ledgerSummary.totalBalance > 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                {ledgerSummary.totalBalance > 0 ? 'Outstanding balance' : ledgerSummary.totalBalance < 0 ? 'Customer in credit' : 'All settled'}
+              </span>
             </div>
-          </div>
-        </Card>
+            <div className="mt-4 grid grid-cols-2 gap-3 border-t border-[var(--color-border)] pt-4">
+              <div>
+                <p className="text-xs text-[var(--color-text-secondary)]">Total Credit</p>
+                <p className="mt-0.5 text-sm font-semibold text-emerald-600">{formatCurrency(ledgerSummary.totalCredit || 0)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-[var(--color-text-secondary)]">Total Paid</p>
+                <p className="mt-0.5 text-sm font-semibold text-[var(--color-text)]">{formatCurrency(ledgerSummary.totalPayment || 0)}</p>
+              </div>
+            </div>
+          </Card>
+        </div>
       )}
 
       {activeTab === 'ledger' && (
@@ -732,6 +778,7 @@ const CustomerDetail = () => {
           columns={salesColumns}
           data={sales}
           loading={salesLoading}
+          onRowClick={(row) => navigate(`/pos/sales/${row._id}`)}
           pagination={{
             page: salesPagination.page,
             limit: salesPagination.limit,
@@ -768,7 +815,7 @@ const CustomerDetail = () => {
           {pawnLoans.length === 0 ? (
             <EmptyState title="No pawn loans" description="This customer has no bandaki loans yet" />
           ) : (
-            <DataTable columns={pawnColumns} data={pawnLoans} loading={false} />
+            <DataTable columns={pawnColumns} data={pawnLoans} loading={false} onRowClick={(row) => navigate(`/pawn/${row._id}`)} />
           )}
         </div>
       )}
@@ -778,7 +825,7 @@ const CustomerDetail = () => {
           {purchases.length === 0 ? (
             <EmptyState title="No purchases" description="No purchased items found for this customer" />
           ) : (
-            <DataTable columns={purchaseColumns} data={purchases} loading={false} />
+            <DataTable columns={purchaseColumns} data={purchases} loading={false} onRowClick={(row) => row.saleId && navigate(`/pos/sales/${row.saleId}`)} />
           )}
         </div>
       )}
@@ -808,7 +855,7 @@ const CustomerDetail = () => {
           {customOrders.length === 0 ? (
             <EmptyState title="No custom orders" description="This customer has no custom orders yet" />
           ) : (
-            <DataTable columns={customOrderColumns} data={customOrders} loading={false} />
+            <DataTable columns={customOrderColumns} data={customOrders} loading={false} onRowClick={(row) => navigate(`/custom-orders/${row._id}`)} />
           )}
         </div>
       )}

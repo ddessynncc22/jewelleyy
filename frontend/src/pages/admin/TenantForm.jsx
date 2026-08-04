@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { Building2 } from 'lucide-react'
 import { onboardTenant } from '../../services/tenantService'
+import { PLAN_OPTIONS } from '../../components/ui/PlanBadge'
 import PageHeader from '../../components/ui/PageHeader'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
@@ -56,9 +57,9 @@ export default function TenantForm() {
             <div>
               <label className="block text-sm font-medium mb-1.5">Plan</label>
               <select name="planType" value={form.planType} onChange={handleChange} className="w-full rounded-xl border px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2">
-                <option value="standard">Standard</option>
-                <option value="premium">Premium</option>
-                <option value="enterprise">Enterprise</option>
+                {PLAN_OPTIONS.map((p) => (
+                  <option key={p.value} value={p.value}>{p.label}</option>
+                ))}
               </select>
             </div>
             <div>

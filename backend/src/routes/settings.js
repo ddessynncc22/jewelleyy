@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
+const { uploadSingleImage } = require('../middleware/upload');
 const { sendSuccess } = require('../utils/response');
 const Settings = require('../models/Settings');
 const ActivityLog = require('../models/ActivityLog');
@@ -8,7 +9,7 @@ const ActivityLog = require('../models/ActivityLog');
 const defaults = {
   storeName: 'My Jewellery Store', address: '', phone: '', email: '',
   currency: 'NPR', defaultPurity: 916, defaultKarat: 22,
-  lowStockThreshold: 5, panNumber: '',
+  lowStockThreshold: 5, panNumber: '', logoUrl: '',
   goldTransportCharge: 0, silverTransportCharge: 0,
 };
 
@@ -25,14 +26,16 @@ router.get('/', protect, async (req, res, next) => {
   }
 });
 
-router.put('/', protect, async (req, res, next) => {
+router.put('/', protect, uploadSingleImage, async (req, res, next) => {
   try {
-    if (!req.tenantId) return sendSuccess(res, { settings: { ...defaults, ...req.body } });
+    const updates = { ...req.body };
+    if (req.file) updates.logoUrl = `${req.uploadBaseUrl}/${req.file.filename}`;
+    if (!req.tenantId) return sendSuccess(res, { settings: { ...defaults, ...updates } });
     let settings = await Settings.findOne({ tenantId: req.tenantId });
     if (!settings) {
-      settings = await Settings.create({ tenantId: req.tenantId, ...defaults, ...req.body });
+      settings = await Settings.create({ tenantId: req.tenantId, ...defaults, ...updates });
     } else {
-      Object.keys(req.body).forEach(k => { settings[k] = req.body[k]; });
+      Object.keys(updates).forEach(k => { settings[k] = updates[k]; });
       await settings.save();
     }
     await ActivityLog.create({
@@ -45,14 +48,16 @@ router.put('/', protect, async (req, res, next) => {
   }
 });
 
-router.patch('/', protect, async (req, res, next) => {
+router.patch('/', protect, uploadSingleImage, async (req, res, next) => {
   try {
-    if (!req.tenantId) return sendSuccess(res, { settings: { ...defaults, ...req.body } });
+    const updates = { ...req.body };
+    if (req.file) updates.logoUrl = `${req.uploadBaseUrl}/${req.file.filename}`;
+    if (!req.tenantId) return sendSuccess(res, { settings: { ...defaults, ...updates } });
     let settings = await Settings.findOne({ tenantId: req.tenantId });
     if (!settings) {
-      settings = await Settings.create({ tenantId: req.tenantId, ...defaults, ...req.body });
+      settings = await Settings.create({ tenantId: req.tenantId, ...defaults, ...updates });
     } else {
-      Object.keys(req.body).forEach(k => { settings[k] = req.body[k]; });
+      Object.keys(updates).forEach(k => { settings[k] = updates[k]; });
       await settings.save();
     }
     await ActivityLog.create({

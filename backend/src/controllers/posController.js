@@ -8,7 +8,7 @@ const { successResponse, errorResponse, paginatedResponse } = require('../utils/
 
 exports.createSale = async (req, res) => {
   try {
-    const { items, paymentType, cashAmount, khaataAmount, oldGoldDetails, paymentBreakdown, totalAmount, paidAmount, actualAmountReceived, discountAmount, customerId, customer: customerField, saleDate } = req.body;
+    const { items, paymentType, cashAmount, khaataAmount, oldGoldDetails, paymentBreakdown, totalAmount, taxAmount, diamondTaxAmount, paidAmount, actualAmountReceived, discountAmount, customerId, customer: customerField, saleDate } = req.body;
     if (!items || !Array.isArray(items) || items.length === 0 || !paymentType || !totalAmount) {
       return errorResponse(res, 'Items, payment type, and total amount are required', 400);
     }
@@ -54,7 +54,12 @@ exports.createSale = async (req, res) => {
       });
     }
     const ogd = oldGoldDetails || paymentBreakdown?.oldGold || null;
-    const totalTaxAmount = 0;
+    const serviceFee = Number(taxAmount) || 0;
+    const diamondVat = Number(diamondTaxAmount) || 0;
+    const totalTaxAmount = Number((serviceFee + diamondVat).toFixed(2));
+    const taxes = [];
+    if (serviceFee > 0) taxes.push({ name: 'Service Fee', rate: 0.5, amount: Number(serviceFee.toFixed(2)) });
+    if (diamondVat > 0) taxes.push({ name: 'VAT (Diamond)', rate: 13, amount: Number(diamondVat.toFixed(2)) });
     let discount = Number(discountAmount) || 0;
     if (!discount && actualAmountReceived !== undefined && actualAmountReceived !== null && Number(actualAmountReceived) >= 0) {
       const received = Number(actualAmountReceived);
@@ -76,7 +81,7 @@ exports.createSale = async (req, res) => {
       taxDetails: {
         totalTax: totalTaxAmount,
         discountAmount: discount,
-        taxes: [],
+        taxes,
       },
       totalAmount,
       paidAmount: paidAmount !== undefined ? paidAmount : (paymentType === 'cash' ? adjustedTotal : 0),

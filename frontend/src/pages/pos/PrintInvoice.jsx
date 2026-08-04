@@ -76,13 +76,15 @@ export default function PrintInvoice() {
 
   const subtotal = items.reduce((sum, item) => sum + item._total, 0);
   const taxDetails = sale.taxDetails || { totalTax: 0, discountAmount: 0, taxes: [] };
+  const taxLines = Array.isArray(taxDetails.taxes) ? taxDetails.taxes.filter((t) => Number(t.amount) > 0) : [];
+  const totalTax = Number(taxDetails.totalTax) || taxLines.reduce((sum, t) => sum + Number(t.amount || 0), 0);
   const discount = sale.discountAmount || taxDetails.discountAmount || 0;
   const oldGoldAmount = Number(sale.oldGoldDetails?.deductibleAmount || 0);
-  // Old gold brought in for exchange is NON-taxable — the fee is charged only on
-  // the net amount the customer pays for the new item after the exchange.
+  // Taxes (0.5% service fee on gold + 13% VAT on diamonds) are read from the
+  // stored taxDetails rather than recomputed, so the printed bill always matches
+  // what was actually charged at the till.
   const taxableAmount = Number((subtotal - discount - oldGoldAmount).toFixed(2));
-  const fee = Number((taxableAmount * 0.005).toFixed(2));
-  const rawTotal = Number((taxableAmount + fee + oldGoldAmount).toFixed(2));
+  const rawTotal = Number((subtotal - discount + totalTax).toFixed(2));
   const received = Number(sale.actualAmountReceived) || 0;
   let grandTotal = Math.round(rawTotal);
   let roundOff = Number((grandTotal - rawTotal).toFixed(2));
@@ -163,7 +165,8 @@ export default function PrintInvoice() {
           subtotal={subtotal}
           discount={discount}
           taxableAmount={taxableAmount}
-          totalTax={fee}
+          totalTax={totalTax}
+          taxLines={taxLines}
           roundOff={roundOff}
           grandTotal={grandTotal}
           paymentType={sale.paymentType || '-'}

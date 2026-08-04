@@ -75,13 +75,16 @@ function calcItemTotal(item, makingCharge, wastagePercent, ratePerGram, stonePri
   return metalValue + makingCharge + wastageAmt + (stonePrice || 0)
 }
 
-const POS = () => {
+const POS = ({ mode = 'standard' }) => {
+  const isDiamondMode = mode === 'diamond'
   const navigate = useNavigate()
   const [showPrintDialog, setShowPrintDialog] = useState(false)
   const [showPreviewDialog, setShowPreviewDialog] = useState(false)
   const [showHoldDialog, setShowHoldDialog] = useState(false)
   const [completedSaleId, setCompletedSaleId] = useState(null)
   const [heldBills, setHeldBills] = useState([])
+  const [diamondModalItem, setDiamondModalItem] = useState(null)
+  const [diamondValue, setDiamondValue] = useState('')
 
   useEffect(() => {
     try {
@@ -130,6 +133,7 @@ const POS = () => {
     setLoading(true)
     try {
       const params = {}
+      if (isDiamondMode) params.diamond = true
       if (search) params.search = search
       if (categoryFilter) params.category = categoryFilter
       if (metalFilter) params.metalType = metalFilter
@@ -143,7 +147,7 @@ const POS = () => {
     } finally {
       setLoading(false)
     }
-  }, [search, categoryFilter, metalFilter])
+  }, [search, categoryFilter, metalFilter, isDiamondMode])
   useEffect(() => { fetchItems() }, [fetchItems])
   useEffect(() => {
     if (items.length > 0) {
@@ -196,6 +200,41 @@ const POS = () => {
     toast.success(`${item.itemName || item.name} added to cart`)
   }
 
+  const hasDiamond = (item) => (item?.metalType || '').toLowerCase() === 'diamond' || (item?.stoneType || '') === 'diamond'
+
+  const handleAddItem = (item) => {
+    if (isDiamondMode) {
+      setDiamondValue(item.sellingStonePrice || item.stonePrice || '')
+      setDiamondModalItem(item)
+      return
+    }
+    addToCart(item)
+  }
+
+  const confirmDiamondAdd = () => {
+    if (!diamondModalItem) return
+    const value = Number(diamondValue)
+    if (!value || value <= 0) {
+      toast.error('Enter the diamond value')
+      return
+    }
+    const item = diamondModalItem
+    setCart((prev) => {
+      if (prev.some((c) => c.item._id === item._id)) return prev
+      return [...prev, {
+        item,
+        qty: 1,
+        makingCharge: Number(item.sellingMakingCharge || item.makingCharge) || 0,
+        wastagePercent: Number(item.sellingWastagePercent || item.wastagePercent) || 0,
+        stonePrice: value,
+        ratePerGram: getRateForItem(item),
+      }]
+    })
+    setDiamondModalItem(null)
+    setDiamondValue('')
+    toast.success(`${item.itemName || item.name} added to cart`)
+  }
+
   const updateCartField = (itemId, field, value) => {
     setCart((prev) => prev.map((c) =>
       c.item._id === itemId ? { ...c, [field]: value } : c
@@ -219,6 +258,14 @@ const POS = () => {
   }, 0)
 
   const feeRate = 0.5
+  const diamondTaxRate = 13
+
+  const diamondSubtotal = cart.reduce((sum, c) => {
+    if (!hasDiamond(c.item)) return sum
+    const itemTotal = calcItemTotal(c.item, c.makingCharge, c.wastagePercent, c.ratePerGram, c.stonePrice)
+    return sum + itemTotal * c.qty
+  }, 0)
+  const nonDiamondSubtotal = cartTotal - diamondSubtotal
 
   // Old gold brought in for exchange is NON-taxable — the fee (0.5%) is only
   // charged on the net amount the customer actually pays for the new item.
@@ -231,37 +278,93 @@ const POS = () => {
   const oldGoldValueForTax =
     paymentType === 'oldGoldExchange' ? Math.min(oldGoldValue, cartTotal) : 0
 
+  // Taxes: diamond items carry 13% VAT (the 0.5% service fee does not apply to
+  // them); gold carries the 0.5% service fee. A discount is split
+  // proportionally across diamond / non-diamond before either tax is applied.
+  const computeTax = (discount) => {
+    const d = Math.max(0, Number(discount) || 0)
+    const diamondShare = cartTotal > 0 ? d * (diamondSubtotal / cartTotal) : 0
+    const nonDiamondShare = d - diamondShare
+    const taxableAmount = Math.max(0, nonDiamondSubtotal - nonDiamondShare - oldGoldValueForTax)
+    const feeAmount = Number((taxableAmount * feeRate / 100).toFixed(2))
+    const diamondTaxable = Math.max(0, diamondSubtotal - diamondShare)
+    const diamondTaxAmount = Number((diamondTaxable * diamondTaxRate / 100).toFixed(2))
+    const totalTaxAmount = Number((feeAmount + diamondTaxAmount).toFixed(2))
+    const totalTaxable = Number((taxableAmount + diamondTaxable).toFixed(2))
+    const rawTotal = Number((taxableAmount + feeAmount + oldGoldValueForTax + diamondTaxable + diamondTaxAmount).toFixed(2))
+    return { taxableAmount, diamondTaxable, diamondTaxAmount, feeAmount, totalTaxAmount, totalTaxable, rawTotal }
+  }
+
   // Full (undiscounted) bill
-  const fullFeeAmount = Number((cartTotal * feeRate / 100).toFixed(2))
-  const fullBill = Number((cartTotal + fullFeeAmount).toFixed(2))
+  const full = computeTax(0)
+  const fullBill = Number((cartTotal + full.totalTaxAmount).toFixed(2))
 
-  // If the customer pays less than the bill, the shortfall becomes a discount.
-  // It is applied to the subtotal BEFORE tax, so the 0.5% fee is charged on
-  // the discounted amount and the customer pays less tax.
-  let computedDiscount = 0
-  let receivedAmount
-  if (paymentType === 'oldGoldExchange') {
-    const cashPaid = Number(oldGoldCash) > 0 ? Number(oldGoldCash) : oldGoldAmountToPay
-    receivedAmount = Math.round(oldGoldValue) + cashPaid
-  } else {
-    receivedAmount = Number(actualAmountReceived) || 0
-  }
-  if (receivedAmount > 0 && receivedAmount < fullBill) {
-    computedDiscount = Number((fullBill - receivedAmount).toFixed(2))
-  }
-
-  const taxableAmount = Math.max(0, cartTotal - computedDiscount - oldGoldValueForTax)
-  const feeAmount = Number((taxableAmount * feeRate / 100).toFixed(2))
-  const rawTotal = Number((taxableAmount + feeAmount + oldGoldValueForTax).toFixed(2))
+  // The bill is always computed from the cart. Round off is only the normal
+  // whole-rupee rounding of the raw total — it is never used to absorb a
+  // shortfall or reconcile against what the cashier collected.
+  let { taxableAmount, feeAmount, diamondTaxAmount, totalTaxAmount, totalTaxable, rawTotal } = computeTax(0)
   let billTotal = Math.round(rawTotal)
   let roundOff = Number((billTotal - rawTotal).toFixed(2))
 
-  // Reconcile the grand total to the exact amount the customer pays
-  if (computedDiscount > 0) {
-    billTotal = Math.round(receivedAmount)
-    roundOff = Number((billTotal - rawTotal).toFixed(2))
-  }
+  let computedDiscount = 0
+  let receivedAmount = 0
+  let oldGoldCredit = 0
+  let oldGoldAmountToPay = 0
+  let oldGoldChange = 0
+  let oldGoldCashPaid = 0
 
+  if (paymentType === 'oldGoldExchange') {
+    // Old gold brought in for exchange is credited against the bill. The credit
+    // is rounded to whole rupees; the balance is what the customer pays in cash.
+    oldGoldCredit = Math.round(Math.min(oldGoldValue, billTotal))
+    oldGoldAmountToPay = Math.max(0, billTotal - oldGoldCredit)
+    oldGoldChange = Math.max(0, Math.round(oldGoldValue) - billTotal)
+    oldGoldCashPaid = Number(oldGoldCash) > 0 ? Number(oldGoldCash) : oldGoldAmountToPay
+
+    // The cashier records the actual money received from the customer. If it is
+    // less than the remaining amount, the rest is treated as a discount and the
+    // 0.5% fee is charged on the discounted amount.
+    const actualCashReceived = Number(actualAmountReceived) || 0
+    if (actualCashReceived > 0) {
+      oldGoldCashPaid = actualCashReceived
+    }
+    if (actualCashReceived > 0 && actualCashReceived < oldGoldAmountToPay) {
+      computedDiscount = Number((oldGoldAmountToPay - actualCashReceived).toFixed(2))
+      const t = computeTax(computedDiscount)
+      taxableAmount = t.taxableAmount
+      feeAmount = t.feeAmount
+      diamondTaxAmount = t.diamondTaxAmount
+      totalTaxAmount = t.totalTaxAmount
+      totalTaxable = t.totalTaxable
+      rawTotal = t.rawTotal
+      receivedAmount = oldGoldCredit + actualCashReceived
+      billTotal = Math.round(receivedAmount)
+      roundOff = Number((billTotal - rawTotal).toFixed(2))
+      oldGoldAmountToPay = Math.max(0, billTotal - oldGoldCredit)
+      oldGoldChange = Math.max(0, Math.round(oldGoldValue) - billTotal)
+    } else {
+      receivedAmount = oldGoldCredit + oldGoldCashPaid
+    }
+  } else {
+    // The cashier's entered amount decides the bill: if less than the bill,
+    // the shortfall is a discount applied to the subtotal BEFORE tax, so the
+    // taxes are charged on the discounted amount and the customer pays less.
+    receivedAmount = Number(actualAmountReceived) || 0
+    if (receivedAmount > 0 && receivedAmount < fullBill) {
+      computedDiscount = Number((fullBill - receivedAmount).toFixed(2))
+    }
+    if (computedDiscount > 0) {
+      const t = computeTax(computedDiscount)
+      taxableAmount = t.taxableAmount
+      feeAmount = t.feeAmount
+      diamondTaxAmount = t.diamondTaxAmount
+      totalTaxAmount = t.totalTaxAmount
+      totalTaxable = t.totalTaxable
+      rawTotal = t.rawTotal
+      billTotal = Math.round(receivedAmount)
+      roundOff = Number((billTotal - rawTotal).toFixed(2))
+    }
+  }
 
   const changeDue = receivedAmount > 0 ? Number((receivedAmount - billTotal).toFixed(2)) : 0
 
@@ -326,6 +429,8 @@ const POS = () => {
       }),
       paymentType,
       totalAmount: cartTotal,
+      taxAmount: feeAmount,
+      diamondTaxAmount,
       actualAmountReceived: receivedAmount || null,
       discountAmount: computedDiscount,
       paidAmount: paymentType === 'cash' ? billTotal : (breakdown.oldGold ? (breakdown.oldGold.deduction || 0) + (breakdown.cash || 0) : (breakdown.cash || 0)),
@@ -438,13 +543,13 @@ const POS = () => {
       case 'khaata': return { cash: 0, khaata: Number(khaataAmount) || cartTotal }
       case 'partial': return { cash: Number(cashAmount) || 0, khaata: Number(khaataAmount) || 0 }
       case 'oldGoldExchange': return {
-        cash: Number(oldGoldCash) > 0 ? Number(oldGoldCash) : oldGoldAmountToPay, khaata: 0,
+        cash: oldGoldCashPaid, khaata: 0,
         oldGold: {
           weight: oldGoldWeightNum,
           purity: oldGoldKaratNum,
           deductionPercent: oldGoldDeductionPercentNum,
           netWeight: oldGoldNetWeight,
-          deduction: Math.round(oldGoldCredit),
+          deduction: oldGoldCredit,
           value: oldGoldValue,
           amountToPay: oldGoldAmountToPay,
           change: oldGoldChange,
@@ -457,10 +562,6 @@ const POS = () => {
   const goldRate = effectiveGoldRate
   const silverRate = effectiveSilverRate
   const silverPerGram = getRatePerGram(effectiveSilverRate)
-
-  const oldGoldCredit = Math.min(oldGoldValue, billTotal)
-  const oldGoldAmountToPay = Math.max(0, billTotal - oldGoldValue)
-  const oldGoldChange = Math.max(0, oldGoldValue - billTotal)
 
   const handleOldGoldKaratChange = (value) => {
     setOldGoldKarat(value)
@@ -504,6 +605,14 @@ const POS = () => {
   return (
     <div className="flex flex-col lg:flex-row gap-4">
       <div className="w-full lg:w-[60%] flex flex-col">
+        {isDiamondMode && (
+          <div className="mb-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-amber-900">Diamond POS</p>
+              <p className="text-xs text-amber-700">Tap an item to enter its diamond value at sale time</p>
+            </div>
+          </div>
+        )}
         <div className="mb-3 flex flex-wrap gap-3 text-sm">
           {goldRate && (
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-1.5 flex items-center gap-2">
@@ -563,13 +672,22 @@ const POS = () => {
                 const purity = item.purity || 0
                 const metalValue = netWt * ratePerGram * (purity / 1000)
                 const isSold = item.status && item.status !== 'In Stock'
+                const itemHasDiamond = hasDiamond(item)
+                const displayPrice = itemHasDiamond
+                  ? (item.sellingStonePrice || item.sellingPrice || item.price || 0)
+                  : (ratePerGram > 0 ? metalValue : (item.sellingPrice || item.price || 0))
                 return (
-                  <button key={item._id} onClick={() => !isSold && addToCart(item)} disabled={isSold} className={`rounded-xl border border-gray-200 bg-white p-4 text-left transition-all group ${isSold ? 'opacity-60 cursor-not-allowed' : 'hover:border-amber-300 hover:shadow-md'}`}>
+                  <button key={item._id} onClick={() => !isSold && handleAddItem(item)} disabled={isSold} className={`rounded-xl border border-gray-200 bg-white p-4 text-left transition-all group ${isSold ? 'opacity-60 cursor-not-allowed' : 'hover:border-amber-300 hover:shadow-md'}`}>
                     <div className="h-24 bg-gray-100 rounded-lg mb-3 flex items-center justify-center overflow-hidden relative">
                       {item.images?.[0] || item.image ? (
                         <img src={getImageSrc(item.images?.[0] || item.image)} alt={item.itemName} className="h-full w-full object-cover" />
                       ) : (
                         <Package className="h-8 w-8 text-gray-300" />
+                      )}
+                      {itemHasDiamond && (
+                        <span className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-semibold">
+                          Diamond
+                        </span>
                       )}
                       {isSold && (
                         <span className="absolute top-1.5 right-1.5 px-2 py-0.5 rounded-full bg-gray-800/80 text-white text-[10px] font-semibold">
@@ -582,11 +700,18 @@ const POS = () => {
                     <div className="mt-1 space-y-0.5">
                       <p className="text-xs text-gray-400">{item.metalType} / {item.karat ? `${item.karat}K` : ''} / {item.purity || ''}</p>
                       {netWt > 0 && <p className="text-xs text-gray-400">Net: {formatWeight(netWt)} ({formatWeightLaal(netWt)})</p>}
+                      {item.stoneType && item.stoneType !== 'none' && (
+                        <p className="text-xs text-gray-400">
+                          Stone: {item.stoneType.charAt(0).toUpperCase() + item.stoneType.slice(1)}
+                          {Number(item.stoneWeight) > 0 && ` · ${formatWeight(item.stoneWeight)}`}
+                          {Number(item.carat) > 0 && ` · ${item.carat}ct`}
+                        </p>
+                      )}
                     </div>
                     <p className="text-sm font-bold text-amber-700 mt-1">
-                      {ratePerGram > 0 ? formatCurrency(metalValue) : formatCurrency(item.sellingPrice || item.price || 0)}
+                      {itemHasDiamond ? formatCurrency(displayPrice) : formatCurrency(displayPrice)}
                     </p>
-                    {ratePerGram > 0 && <p className="text-[10px] text-gray-400">@ Rs.{Math.round(ratePerGram)}/g × {purity/1000} purity</p>}
+                    {isDiamondMode && <p className="text-[10px] text-gray-400">Tap to enter value at sale</p>}
                   </button>
                 )
               })}
@@ -613,11 +738,12 @@ const POS = () => {
               const netWt = c.item.netMetalWeight || c.item.grossWeight || 0
               const metalVal = netWt * c.ratePerGram * ((c.item.purity || 0) / 1000)
               const wastageAmt = metalVal * (c.wastagePercent / 100)
+              const itemHasDiamond = hasDiamond(c.item)
               return (
                 <div key={c.item._id} className="p-3 rounded-lg border border-gray-200 bg-white space-y-2">
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{c.item.itemName || c.item.name}</p>
+                      <p className="text-sm font-medium text-gray-900 truncate">{c.item.itemName || c.item.name} {itemHasDiamond && <span className="ml-1 px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-semibold align-middle">Diamond</span>}</p>
                       <p className="text-xs text-gray-400">{c.item.SKU} · {c.item.metalType} · {formatWeight(netWt)} ({formatWeightLaal(netWt)})</p>
                     </div>
                     <button onClick={() => removeFromCart(c.item._id)} className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500">
@@ -638,7 +764,7 @@ const POS = () => {
                       <input type="number" value={c.wastagePercent} onChange={(e) => updateCartField(c.item._id, 'wastagePercent', Number(e.target.value))} className="w-full rounded border border-gray-200 px-2 py-1 text-sm" />
                     </div>
                     <div>
-                      <label className="text-gray-500">Stone/Mala Price</label>
+                      <label className="text-gray-500">{itemHasDiamond ? 'Diamond Value' : 'Stone/Mala Price'}</label>
                       <input type="number" value={c.stonePrice} onChange={(e) => updateCartField(c.item._id, 'stonePrice', Number(e.target.value))} className="w-full rounded border border-gray-200 px-2 py-1 text-sm" />
                     </div>
                     <div>
@@ -655,7 +781,7 @@ const POS = () => {
                     <div className="flex justify-between"><span>Making Charge (×{c.qty})</span><span>{formatCurrency(c.makingCharge * c.qty)}</span></div>
                     <div className="flex justify-between"><span>Wastage ({c.wastagePercent}%)</span><span>{formatCurrency(wastageAmt * c.qty)}</span></div>
                     {Number(c.stonePrice) > 0 && (
-                      <div className="flex justify-between"><span>Stone/Mala Price (×{c.qty})</span><span>{formatCurrency(c.stonePrice * c.qty)}</span></div>
+                      <div className="flex justify-between"><span>{itemHasDiamond ? 'Diamond Value' : 'Stone/Mala Price'} (×{c.qty})</span><span>{formatCurrency(c.stonePrice * c.qty)}</span></div>
                     )}
                     <div className="flex justify-between font-bold text-gray-900 pt-1"><span>Item Total</span><span>{formatCurrency(itemTotal * c.qty)}</span></div>
                   </div>
@@ -671,9 +797,15 @@ const POS = () => {
               <span>{formatCurrency(cartTotal)}</span>
             </div>
             <div className="flex justify-between items-center text-sm">
-              <span className="text-gray-600">Fee ({feeRate}%)</span>
+              <span className="text-gray-600">Service Fee ({feeRate}%)</span>
               <span>{formatCurrency(feeAmount)}</span>
             </div>
+            {diamondSubtotal > 0 && (
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-gray-600">Diamond VAT ({diamondTaxRate}%)</span>
+                <span>{formatCurrency(diamondTaxAmount)}</span>
+              </div>
+            )}
             {computedDiscount > 0 && (
               <div className="flex justify-between items-center text-sm text-green-600">
                 <span>Discount</span>
@@ -689,6 +821,7 @@ const POS = () => {
               <span className="text-xl font-bold text-amber-700">{formatCurrency(billTotal)}</span>
             </div>
           </div>
+          {paymentType !== 'oldGoldExchange' && (
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Actual Amount Received</label>
             <input
@@ -700,7 +833,7 @@ const POS = () => {
             />
             {computedDiscount > 0 && (
               <p className="text-xs text-green-600 font-medium mt-1">
-                Discount applied: {formatCurrency(computedDiscount)} — tax charged on {formatCurrency(taxableAmount)}
+                Discount applied: {formatCurrency(computedDiscount)} — service fee charged on {formatCurrency(taxableAmount)}
               </p>
             )}
             {changeDue > 0 && (
@@ -709,6 +842,7 @@ const POS = () => {
               </p>
             )}
           </div>
+          )}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Payment Type</label>
             <select value={paymentType} onChange={(e) => setPaymentType(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white">
@@ -777,16 +911,16 @@ const POS = () => {
                 </p>
               )}
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Cash Paid</label>
-                <input type="number" value={oldGoldCash} onChange={(e) => setOldGoldCash(e.target.value)} placeholder={`Cash paid (due ${formatCurrency(oldGoldAmountToPay)})`} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-                {Number(oldGoldCash) > 0 && Number(oldGoldCash) > oldGoldAmountToPay && (
+                <label className="block text-xs font-medium text-gray-600 mb-1">Actual Money Received</label>
+                <input type="number" value={actualAmountReceived} onChange={(e) => setActualAmountReceived(e.target.value)} placeholder={`Amount received (due ${formatCurrency(oldGoldAmountToPay)})`} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+                {computedDiscount > 0 && (
                   <p className="text-xs text-green-600 font-medium mt-1">
-                    Change due: {formatCurrency(Number(oldGoldCash) - oldGoldAmountToPay)}
+                    Remaining {formatCurrency(computedDiscount)} discounted — service fee charged on {formatCurrency(taxableAmount)}
                   </p>
                 )}
-                {Number(oldGoldCash) > 0 && Number(oldGoldCash) < oldGoldAmountToPay && oldGoldAmountToPay > 0 && (
-                  <p className="text-xs text-orange-600 font-medium mt-1">
-                    Remaining balance: {formatCurrency(oldGoldAmountToPay - Number(oldGoldCash))}
+                {Number(actualAmountReceived) > 0 && Number(actualAmountReceived) > oldGoldAmountToPay && (
+                  <p className="text-xs text-green-600 font-medium mt-1">
+                    Change due: {formatCurrency(Number(actualAmountReceived) - oldGoldAmountToPay)}
                   </p>
                 )}
               </div>
@@ -860,17 +994,18 @@ const POS = () => {
             <p>Are you sure you want to complete this sale?</p>
             <div className="mt-2 space-y-0.5 text-right">
               <div><span className="font-medium">Subtotal:</span> {formatCurrency(cartTotal)}</div>
-              <div><span className="font-medium">Fee ({feeRate}%):</span> {formatCurrency(feeAmount)}</div>
+              <div><span className="font-medium">Service Fee ({feeRate}%):</span> {formatCurrency(feeAmount)}</div>
+              {diamondSubtotal > 0 && <div><span className="font-medium">Diamond VAT ({diamondTaxRate}%):</span> {formatCurrency(diamondTaxAmount)}</div>}
               {computedDiscount > 0 && <div className="text-green-600"><span className="font-medium">Discount:</span> -{formatCurrency(computedDiscount)}</div>}
               <div className="font-bold pt-1 border-t"><span className="font-medium">Bill Total:</span> {formatCurrency(billTotal)}</div>
               {paymentType === 'oldGoldExchange' && oldGoldValue > 0 && (
                 <>
-                  <div className="text-green-600"><span className="font-medium">Old Gold Credit:</span> {formatCurrency(Math.round(oldGoldCredit))}</div>
-                  <div className="text-blue-600"><span className="font-medium">Cash Paid:</span> {formatCurrency(Number(oldGoldCash) > 0 ? Number(oldGoldCash) : oldGoldAmountToPay)}</div>
-                  {oldGoldChange > 0 && <div className="text-purple-600"><span className="font-medium">Change/Credit Due:</span> {formatCurrency(Math.round(oldGoldChange))}</div>}
+                  <div className="text-green-600"><span className="font-medium">Old Gold Credit:</span> {formatCurrency(oldGoldCredit)}</div>
+                  <div className="text-blue-600"><span className="font-medium">Cash Received:</span> {formatCurrency(oldGoldCashPaid)}</div>
+                  {oldGoldChange > 0 && <div className="text-purple-600"><span className="font-medium">Change/Credit Due:</span> {formatCurrency(oldGoldChange)}</div>}
                 </>
               )}
-              {actualAmountReceived && <div className="text-blue-600"><span className="font-medium">Amount Received:</span> {formatCurrency(Number(actualAmountReceived))}</div>}
+              {paymentType !== 'oldGoldExchange' && actualAmountReceived && <div className="text-blue-600"><span className="font-medium">Amount Received:</span> {formatCurrency(Number(actualAmountReceived))}</div>}
             </div>
           </div>
         }
@@ -943,8 +1078,12 @@ const POS = () => {
               words={previewWords}
               subtotal={previewSubtotal}
               discount={computedDiscount}
-              taxableAmount={taxableAmount}
-              totalTax={feeAmount}
+              taxableAmount={totalTaxable}
+              totalTax={totalTaxAmount}
+              taxLines={[
+                { name: 'Service Fee', rate: feeRate, amount: feeAmount },
+                { name: 'VAT (Diamond)', rate: diamondTaxRate, amount: diamondTaxAmount },
+              ].filter((t) => t.amount > 0)}
               roundOff={roundOff}
               grandTotal={billTotal}
               paymentType={previewPaymentLabel}
@@ -993,9 +1132,45 @@ const POS = () => {
              ))}
            </div>
          )}
-       </Modal>
-     </div>
-   )
- }
+        </Modal>
+        <Modal
+          isOpen={!!diamondModalItem}
+          onClose={() => { setDiamondModalItem(null); setDiamondValue('') }}
+          title={`Enter Value — ${diamondModalItem?.itemName || diamondModalItem?.name || ''}`}
+          size="md"
+        >
+          <div className="space-y-4">
+            <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800 space-y-1">
+              <p className="font-semibold">{diamondModalItem?.itemName || diamondModalItem?.name}</p>
+              <p className="text-xs">{diamondModalItem?.SKU} · {diamondModalItem?.metalType}</p>
+              {diamondModalItem?.stoneType && diamondModalItem.stoneType !== 'none' && (
+                <p className="text-xs">
+                  Stone: {diamondModalItem.stoneType.charAt(0).toUpperCase() + diamondModalItem.stoneType.slice(1)}
+                  {Number(diamondModalItem.stoneWeight) > 0 && ` · ${formatWeight(diamondModalItem.stoneWeight)}`}
+                  {Number(diamondModalItem.carat) > 0 && ` · ${diamondModalItem.carat}ct`}
+                </p>
+              )}
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Diamond Value (Rs)</label>
+              <input
+                type="number"
+                value={diamondValue}
+                onChange={(e) => setDiamondValue(e.target.value)}
+                placeholder="Enter the diamond value"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                autoFocus
+              />
+              <p className="text-xs text-gray-500 mt-1">This value is used as the stone price when the sale is created.</p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => { setDiamondModalItem(null); setDiamondValue('') }}>Cancel</Button>
+              <Button variant="primary" onClick={confirmDiamondAdd}>Add to Cart</Button>
+            </div>
+          </div>
+        </Modal>
+      </div>
+    )
+  }
 
- export default POS
+  export default POS

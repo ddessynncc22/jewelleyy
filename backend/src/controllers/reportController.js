@@ -859,6 +859,161 @@ exports.getProfitSummary = async (req, res) => {
   }
 };
 
+function extractSaleTax(sale) {
+  const taxes = Array.isArray(sale.taxDetails?.taxes) ? sale.taxDetails.taxes : [];
+  let serviceFee = 0;
+  let diamondVat = 0;
+  let serviceBase = 0;
+  let vatBase = 0;
+  taxes.forEach((t) => {
+    const amt = Number(t.amount) || 0;
+    const rate = Number(t.rate) || 0;
+    const base = rate > 0 ? amt / (rate / 100) : 0;
+    const name = String(t.name || '');
+    if (/service|fee/i.test(name)) {
+      serviceFee += amt;
+      serviceBase += base;
+    } else if (/vat|diamond/i.test(name)) {
+      diamondVat += amt;
+      vatBase += base;
+    } else {
+      serviceFee += amt;
+      serviceBase += base;
+    }
+  });
+  const totalTax =
+    Number(sale.taxDetails?.totalTax) ||
+    Number(Number(serviceFee + diamondVat).toFixed(2)) ||
+    0;
+  return {
+    serviceFee: Number(serviceFee.toFixed(2)),
+    diamondVat: Number(diamondVat.toFixed(2)),
+    serviceBase: Number(serviceBase.toFixed(2)),
+    vatBase: Number(vatBase.toFixed(2)),
+    totalTax,
+  };
+}
+
+exports.getTaxReport = async (req, res) => {
+  try {
+    const { startDate, endDate, paymentType } = req.query;
+    const match = { isDeleted: false };
+    if (startDate || endDate) {
+      match.saleDate = {};
+      if (startDate) match.saleDate.$gte = new Date(startDate);
+      if (endDate) match.saleDate.$lte = new Date(endDate);
+    }
+    if (paymentType) match.paymentType = paymentType;
+
+    const sales = await Sale.find(match)
+      .populate('customer', 'name')
+      .sort({ saleDate: -1 })
+      .lean();
+
+    const rows = sales.map((sale) => {
+      const tax = extractSaleTax(sale);
+      const revenue = Number(sale.totalAmount) || 0;
+      const discount = Number(sale.discountAmount) || Number(sale.taxDetails?.discountAmount) || 0;
+      return {
+        _id: sale._id,
+        saleNumber: sale.saleNumber,
+        saleDate: sale.saleDate,
+        customerName: sale.customer?.name || null,
+        paymentType: sale.paymentType,
+        itemCount: (sale.items || []).length,
+        revenue,
+        discount,
+        taxableBase: Number((tax.serviceBase + tax.vatBase).toFixed(2)),
+        serviceFeeBase: tax.serviceBase,
+        vatBase: tax.vatBase,
+        serviceFee: tax.serviceFee,
+        diamondVat: tax.diamondVat,
+        totalTax: tax.totalTax,
+        grandTotal: Number((revenue + tax.totalTax - discount).toFixed(2)),
+      };
+    });
+
+    const totals = rows.reduce(
+      (acc, s) => {
+        acc.totalSales += 1;
+        acc.totalRevenue += s.revenue;
+        acc.totalDiscount += s.discount;
+        acc.totalTax += s.totalTax;
+        acc.serviceFee += s.serviceFee;
+        acc.diamondVat += s.diamondVat;
+        acc.serviceFeeBase += s.serviceFeeBase;
+        acc.vatBase += s.vatBase;
+        return acc;
+      },
+      { totalSales: 0, totalRevenue: 0, totalDiscount: 0, totalTax: 0, serviceFee: 0, diamondVat: 0, serviceFeeBase: 0, vatBase: 0 }
+    );
+
+    const monthMap = new Map();
+    rows.forEach((s) => {
+      const d = new Date(s.saleDate);
+      const key = `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
+      const m =
+        monthMap.get(key) || { month: key, sortKey: d.getFullYear() * 12 + d.getMonth(), sales: 0, revenue: 0, serviceFee: 0, diamondVat: 0, totalTax: 0 };
+      m.sales += 1;
+      m.revenue += s.revenue;
+      m.serviceFee += s.serviceFee;
+      m.diamondVat += s.diamondVat;
+      m.totalTax += s.totalTax;
+      monthMap.set(key, m);
+    });
+    const monthly = [...monthMap.values()]
+      .map(({ sortKey, ...m }) => m)
+      .sort((a, b) => a.month.localeCompare(b.month));
+
+    const payMap = new Map();
+    rows.forEach((s) => {
+      const key = s.paymentType || 'other';
+      const p =
+        payMap.get(key) || { paymentType: key, count: 0, revenue: 0, serviceFee: 0, diamondVat: 0, totalTax: 0 };
+      p.count += 1;
+      p.revenue += s.revenue;
+      p.serviceFee += s.serviceFee;
+      p.diamondVat += s.diamondVat;
+      p.totalTax += s.totalTax;
+      payMap.set(key, p);
+    });
+    const byPaymentType = [...payMap.values()];
+
+    const taxTypeBreakdown = [
+      {
+        type: 'serviceFee',
+        label: 'Service Fee',
+        rate: '0.5%',
+        count: rows.filter((r) => r.serviceFee > 0).length,
+        taxableBase: totals.serviceFeeBase,
+        amount: totals.serviceFee,
+      },
+      {
+        type: 'diamondVat',
+        label: 'VAT (Diamond)',
+        rate: '13%',
+        count: rows.filter((r) => r.diamondVat > 0).length,
+        taxableBase: totals.vatBase,
+        amount: totals.diamondVat,
+      },
+    ];
+
+    return successResponse(res, {
+      summary: {
+        ...totals,
+        avgTaxPerSale: totals.totalSales ? Number((totals.totalTax / totals.totalSales).toFixed(2)) : 0,
+      },
+      taxTypeBreakdown,
+      monthly,
+      byPaymentType,
+      sales: rows,
+      filters: { startDate: startDate || null, endDate: endDate || null, paymentType: paymentType || null },
+    });
+  } catch (error) {
+    return errorResponse(res, error.message, 500);
+  }
+};
+
 function drawTableRows(doc, headers, keys, widths, rows) {
   const fmtCell = (v) => {
     if (v == null || v === '') return '-';
@@ -1118,11 +1273,37 @@ exports.exportReport = async (req, res) => {
         });
         break;
       }
+      case 'tax': {
+        const taxMatch = { isDeleted: false };
+        if (startDate || endDate) {
+          taxMatch.saleDate = {};
+          if (startDate) taxMatch.saleDate.$gte = new Date(startDate);
+          if (endDate) taxMatch.saleDate.$lte = new Date(endDate);
+        }
+        const taxSales = await Sale.find(taxMatch).populate('customer', 'name').lean();
+        data = taxSales.map((sale) => {
+          const tax = extractSaleTax(sale);
+          const revenue = Number(sale.totalAmount) || 0;
+          const discount = Number(sale.discountAmount) || Number(sale.taxDetails?.discountAmount) || 0;
+          return {
+            'Sale Number': sale.saleNumber,
+            Date: sale.saleDate ? new Date(sale.saleDate).toISOString().split('T')[0] : '-',
+            Customer: sale.customer?.name || '-',
+            'Payment Type': sale.paymentType,
+            'Revenue (pre-tax)': revenue,
+            Discount: discount,
+            'Service Fee': tax.serviceFee,
+            'VAT (Diamond)': tax.diamondVat,
+            'Total Tax': tax.totalTax,
+            'Grand Total': Number((revenue + tax.totalTax - discount).toFixed(2)),
+          };
+        });
+        break;
+      }
       default:
         return errorResponse(res, 'Invalid report type', 400);
     }
-    if (!data) data = [];
-    if (format === 'excel') {
+    if (!data) data = [];    if (format === 'excel') {
       const workbook = new ExcelJS.Workbook();
       const sheet = workbook.addWorksheet(type);
       if (data.length > 0) {
@@ -1201,6 +1382,8 @@ exports.exportReport = async (req, res) => {
         } else {
           drawTableRows(doc, ['Customer', 'Phone', 'Opening', 'Credit', 'Payment', 'Closing', 'Txns'], ['Customer', 'Phone', 'Opening', 'Credit', 'Payment', 'Closing', 'Transactions'], [110, 70, 55, 55, 55, 55, 40], data);
         }
+      } else if (type === 'tax') {
+        drawTableRows(doc, ['Sale', 'Date', 'Customer', 'Payment', 'Revenue', 'Discount', 'Service Fee', 'VAT', 'Total Tax', 'Grand Total'], ['Sale Number', 'Date', 'Customer', 'Payment Type', 'Revenue (pre-tax)', 'Discount', 'Service Fee', 'VAT (Diamond)', 'Total Tax', 'Grand Total'], [55, 50, 80, 45, 45, 40, 40, 40, 40, 45], data);
       } else {
         data.slice(0, 100).forEach((item, i) => {
           const name = item.itemName || item.name || `Record ${i + 1}`;

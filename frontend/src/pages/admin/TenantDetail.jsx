@@ -10,6 +10,7 @@ import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton'
 import ErrorState from '../../components/ui/ErrorState'
+import PlanBadge, { PLAN_OPTIONS } from '../../components/ui/PlanBadge'
 import TenantUsers from '../../components/admin/TenantUsers'
 import { formatDate } from '../../utils/helpers'
 
@@ -65,7 +66,7 @@ export default function TenantDetail() {
     { label: 'Contact Phone', value: tenant.contactPhone, name: 'contactPhone', icon: Phone },
     { label: 'Address', value: tenant.address, name: 'address', icon: MapPin },
     { label: 'VAT Number', value: tenant.vatNumber, name: 'vatNumber', icon: Hash },
-    { label: 'Plan', value: tenant.planType, name: 'planType', icon: Tag },
+    { label: 'Plan', value: tenant.planType, name: 'planType', icon: Tag, render: () => <PlanBadge plan={tenant.planType} /> },
     { label: 'Business Start Date', value: tenant.businessStartDate ? formatDate(tenant.businessStartDate) : '—', name: 'businessStartDate' },
     { label: 'Currency', value: tenant.currency },
     { label: 'Status', value: tenant.isActive !== false ? 'Active' : 'Inactive' },
@@ -84,7 +85,7 @@ export default function TenantDetail() {
               <div key={f.label} className="flex items-center gap-3 py-2 border-b border-gray-100 last:border-0">
                 {f.icon && <f.icon size={16} className="text-gray-400 shrink-0" />}
                 <span className="text-sm text-gray-500 w-32 shrink-0">{f.label}</span>
-                <span className="text-sm font-medium">{f.value || '\u2014'}</span>
+                <span className="text-sm font-medium">{f.render ? f.render() : (f.value || '\u2014')}</span>
               </div>
             ))}
             <div className="pt-4 flex gap-3">
@@ -108,9 +109,9 @@ export default function TenantDetail() {
                 <label className="block text-sm font-medium mb-1">Plan</label>
                 <select name="planType" value={form.planType || 'standard'} onChange={handleChange}
                   className="w-full rounded-xl border px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2">
-                  <option value="standard">Standard</option>
-                  <option value="premium">Premium</option>
-                  <option value="enterprise">Enterprise</option>
+                  {PLAN_OPTIONS.map((p) => (
+                    <option key={p.value} value={p.value}>{p.label}</option>
+                  ))}
                 </select>
               </div>
               <div>

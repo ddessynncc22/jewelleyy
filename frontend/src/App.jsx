@@ -79,6 +79,8 @@ import CustomerLedgerReport from "./pages/reports/CustomerLedgerReport";
 
 import ProfitSummaryReport from "./pages/reports/ProfitSummaryReport";
 
+import TaxReport from "./pages/reports/TaxReport";
+
 import AuditLog from "./pages/audit/AuditLog";
 
 import InventoryLog from "./pages/audit/InventoryLog";
@@ -206,6 +208,7 @@ export default function App() {
         <Route path="/pawn/new" element={<PawnForm />} />
         <Route path="/pawn/:id" element={<PawnDetail />} />
         <Route path="/pos" element={<POS />} />
+        <Route path="/pos/diamond" element={<POS mode="diamond" />} />
         <Route path="/pos/sales" element={<SaleList />} />
         <Route path="/pos/sales/:id" element={<SaleDetail />} />
         <Route path="/customers" element={<CustomerList />} />
@@ -216,6 +219,7 @@ export default function App() {
         <Route path="/reports/pawn" element={<PawnReport />} />
         <Route path="/reports/customer-ledger" element={<CustomerLedgerReport />} />
         <Route path="/reports/profit-summary" element={<ProfitSummaryReport />} />
+        <Route path="/reports/tax" element={<TaxReport />} />
         <Route path="/reports/:type" element={<ReportView />} />
         <Route path="/audit" element={<AuditLog />} />
         <Route path="/audit/inventory" element={<InventoryLog />} />

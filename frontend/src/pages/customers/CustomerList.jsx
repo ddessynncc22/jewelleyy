@@ -338,6 +338,7 @@ const CustomerList = () => {
           columns={columns}
           data={customers}
           loading={loading}
+          onRowClick={(row) => navigate(`/customers/${row._id}`)}
           onSort={handleSort}
           pagination={{
             page: pagination.page,

@@ -277,6 +277,7 @@ const KarigarList = () => {
           columns={columns}
           data={karigars}
           loading={loading}
+          onRowClick={handleRowClick}
           onSort={(s) => setPagination((p) => ({ ...p, page: 1 }))}
           pagination={{
             page: pagination.page,
