@@ -239,8 +239,14 @@ const POS = () => {
   // It is applied to the subtotal BEFORE tax, so the 0.5% fee is charged on
   // the discounted amount and the customer pays less tax.
   let computedDiscount = 0
-  const receivedAmount = Number(actualAmountReceived) || 0
-  if (paymentType !== 'oldGoldExchange' && receivedAmount > 0 && receivedAmount < fullBill) {
+  let receivedAmount
+  if (paymentType === 'oldGoldExchange') {
+    const cashPaid = Number(oldGoldCash) > 0 ? Number(oldGoldCash) : oldGoldAmountToPay
+    receivedAmount = Math.round(oldGoldValue) + cashPaid
+  } else {
+    receivedAmount = Number(actualAmountReceived) || 0
+  }
+  if (receivedAmount > 0 && receivedAmount < fullBill) {
     computedDiscount = Number((fullBill - receivedAmount).toFixed(2))
   }
 
@@ -284,8 +290,8 @@ const POS = () => {
 
   const handleCompleteSale = async () => {
     if (cart.length === 0) { toast.error('Cart is empty'); return }
-    if ((paymentType === 'khaata' || paymentType === 'partial' || paymentType === 'oldGoldExchange') && (!customerName.trim() || !customerPhone.trim())) {
-      toast.error('Please enter customer name and number for this payment type'); return
+    if (!customerName.trim() || !customerPhone.trim()) {
+      toast.error('Customer name and phone number are required'); return
     }
     if (paymentType === 'partial' && !Number(cashAmount) && !Number(khaataAmount)) {
       toast.error('Enter cash or khaata amount for partial payment'); return
@@ -320,7 +326,7 @@ const POS = () => {
       }),
       paymentType,
       totalAmount: cartTotal,
-      actualAmountReceived: paymentType === 'oldGoldExchange' ? null : (actualAmountReceived || null),
+      actualAmountReceived: receivedAmount || null,
       discountAmount: computedDiscount,
       paidAmount: paymentType === 'cash' ? billTotal : (breakdown.oldGold ? (breakdown.oldGold.deduction || 0) + (breakdown.cash || 0) : (breakdown.cash || 0)),
       customerId,

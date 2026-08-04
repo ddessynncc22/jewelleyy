@@ -6,7 +6,7 @@ import { Plus, Eye, Edit, Trash2, Download, AlertTriangle, LayoutGrid, List, Cop
 
 import toast from 'react-hot-toast'
 
-import { getItems, deleteItem, getLowStockItems, cloneItem, bulkUpdateItems, getItemByBarcode } from '../../services/itemService'
+import { getItems, deleteItem, getLowStockItems, cloneItem, bulkUpdateItems, bulkDeleteItems, getItemByBarcode } from '../../services/itemService'
 
 import useBarcodeScanner from '../../hooks/useBarcodeScanner'
 
@@ -93,6 +93,7 @@ const ItemList = () => {
   const [selectedIds, setSelectedIds] = useState([])
   const [bulkAction, setBulkAction] = useState('')
   const [bulkProcessing, setBulkProcessing] = useState(false)
+  const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false)
   const [labelSize, setLabelSize] = useState('standard')
 
   useBarcodeScanner(async (barcode) => {
@@ -258,6 +259,11 @@ const ItemList = () => {
 
   const handleBulkAction = async () => {
     if (!bulkAction || selectedIds.length === 0) return
+    const validStatuses = bulkActions.map((a) => a.value)
+    if (!validStatuses.includes(bulkAction)) {
+      setBulkAction('')
+      return
+    }
     setBulkProcessing(true)
     try {
       await bulkUpdateItems({ ids: selectedIds, updates: { status: bulkAction } })
@@ -267,6 +273,22 @@ const ItemList = () => {
       fetchItems()
     } catch (err) {
       toast.error(err.response?.data?.message || 'Bulk update failed')
+    } finally {
+      setBulkProcessing(false)
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    setBulkProcessing(true)
+    try {
+      await bulkDeleteItems(selectedIds)
+      toast.success(`${selectedIds.length} items deleted`)
+      setSelectedIds([])
+      setBulkAction('')
+      setBulkDeleteConfirmOpen(false)
+      fetchItems()
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Bulk delete failed')
     } finally {
       setBulkProcessing(false)
     }
@@ -565,6 +587,15 @@ const ItemList = () => {
           >
             Apply
           </Button>
+          <Button
+            size="sm"
+            variant="danger"
+            icon={Trash2}
+            onClick={() => setBulkDeleteConfirmOpen(true)}
+            loading={bulkProcessing}
+          >
+            Delete
+          </Button>
           <div className="flex items-center gap-1.5 ml-auto sm:ml-0">
             <select value={labelSize} onChange={(e) => setLabelSize(e.target.value)}
               className="border border-gray-300 rounded px-2 py-1 text-xs bg-white">
@@ -743,6 +774,16 @@ const ItemList = () => {
         title="Delete Item"
         message="Are you sure you want to delete this item? This action cannot be undone."
         confirmText={deleting ? 'Deleting...' : 'Delete'}
+        variant="danger"
+      />
+
+      <ConfirmDialog
+        isOpen={bulkDeleteConfirmOpen}
+        onClose={() => setBulkDeleteConfirmOpen(false)}
+        onConfirm={handleBulkDelete}
+        title="Delete Items"
+        message={`Are you sure you want to delete ${selectedIds.length} item${selectedIds.length > 1 ? 's' : ''}? This action cannot be undone.`}
+        confirmText={bulkProcessing ? 'Deleting...' : 'Delete'}
         variant="danger"
       />
     </div>

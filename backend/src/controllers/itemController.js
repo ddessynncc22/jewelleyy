@@ -267,6 +267,32 @@ exports.bulkUpdateItems = async (req, res) => {
   }
 };
 
+exports.bulkDeleteItems = async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) return errorResponse(res, 'ids array is required', 400);
+
+    const items = await Item.find({ _id: { $in: ids }, isDeleted: false });
+    if (items.length === 0) return errorResponse(res, 'No items found', 404);
+
+    await Promise.all(items.map((item) => item.softDelete()));
+
+    const logs = items.map((item) => ({
+      action: 'delete',
+      module: 'item',
+      description: `Item ${item.SKU} deleted via bulk`,
+      performedBy: req.user._id,
+      referenceId: item._id,
+      referenceModel: 'Item',
+    }));
+    await ActivityLog.insertMany(logs);
+
+    return successResponse(res, { deletedCount: items.length }, `${items.length} items deleted successfully`);
+  } catch (error) {
+    return errorResponse(res, error.message, 500);
+  }
+};
+
 exports.getDashboardItemStats = async (req, res) => {
   try {
     const settings = await Settings.getSettings();

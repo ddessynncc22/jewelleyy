@@ -10,4 +10,5 @@ export const getItemByBarcode = (barcode) =>
 export const getLowStockItems = () => api.get("/items/low-stock");
 export const bulkCreateItems = (data) => api.post("/items/bulk", data);
 export const bulkUpdateItems = (data) => api.post("/items/bulk-update", data);
+export const bulkDeleteItems = (ids) => api.post("/items/bulk-delete", { ids });
 export const getDashboardItemStats = () => api.get("/items/stats");

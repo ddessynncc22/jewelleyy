@@ -26,7 +26,7 @@ export default function InvoiceTable({ items }) {
             <th className="border border-black px-1 py-0.5 font-bold bg-white">Wt. (Crt)</th>
             <th className="border border-black px-1 py-0.5 font-bold bg-white">Amount</th>
             <th className="border border-black px-1 py-0.5 font-bold bg-white">Wt. (Crt)</th>
-            <th className="border border-black px-1 py-0.5 font-bold bg-white">Stone Amt</th>
+            <th className="border border-black px-1 py-0.5 font-bold bg-white">Stone/Mala Amt</th>
           </tr>
         </thead>
         <tbody>

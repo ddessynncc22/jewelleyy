@@ -62,21 +62,18 @@ export default function InvoiceSummary({
               <th colSpan="2" className="border border-black px-1 py-0.5 font-bold">बेपत्ता सुन (Old Gold)</th>
             </tr>
             <tr>
-              <th className="border border-black px-1 py-0.5 font-bold">Gross Wt (g)</th>
-              <th className="border border-black px-1 py-0.5 font-bold">Net Wt (g)</th>
+              <td colSpan="2" className="border border-black px-1 py-0.5 font-bold text-center">Weight (g)</td>
             </tr>
             <tr>
-              <td className="border border-black px-1 py-0.5 text-center">{grossWeight ? grossWeight.toFixed(3) : ''}</td>
-              <td className="border border-black px-1 py-0.5 text-center">{netWeight ? netWeight.toFixed(3) : ''}</td>
+              <td colSpan="2" className="border border-black px-1 py-0.5 text-center">{grossWeight ? grossWeight.toFixed(3) : ''}</td>
             </tr>
             {karat ? (
               <tr>
-                <td className="border border-black px-1 py-0.5 text-center">{karat}K</td>
-                <td className="border border-black px-1 py-0.5 text-center">{Number(oldGoldDeductionPercent) || 0}% off</td>
+                <td className="border border-black px-1 py-0.5 text-center" colSpan="2">{karat}K</td>
               </tr>
             ) : null}
             <tr>
-              <td className="border border-black px-1 py-0.5 text-center" colSpan="2">Value: {formatCurrency(oldGoldAmount)}</td>
+              <td className="border border-black px-1 py-0.5 text-center" colSpan="2">Value: {fmt(oldGoldAmount)}</td>
             </tr>
           </tbody>
         </table>
@@ -103,7 +100,7 @@ export default function InvoiceSummary({
                     बेपत्ता सुन (Old Gold Exchange)
                     <br />
                     <span className="text-[8px] text-gray-500">
-                      {grossWeight.toFixed(3)}g · {karat}K · {Number(oldGoldDeductionPercent) || 0}% off → {netWeight.toFixed(3)}g net
+                      {grossWeight.toFixed(3)}g · {karat}K → {netWeight.toFixed(3)}g net
                     </span>
                   </td>
                   <td className="border border-black px-1.5 py-0.5 text-right">{fmt(oldGoldAmount)}</td>
