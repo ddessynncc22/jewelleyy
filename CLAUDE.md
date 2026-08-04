@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A multi-tenant jewellery shop management system for the Nepali market: inventory (items by SKU/barcode/metal/purity), POS sales, pawn loans (dhito), karigar (goldsmith) job tracking, custom orders, customer khaata ledgers, and reports. Currency defaults to NPR, weights are handled in both grams and tola (`GRAMS_PER_TOLA = 11.6638`, see `backend/src/utils/rates.js`), and daily gold/silver rates are scraped from hamropatro.com.
+A multi-tenant jewellery shop management system for the Nepali market: inventory (items by SKU/barcode/metal/purity), POS sales, pawn loans (dhito), karigar (goldsmith) job tracking, custom orders, customer khaata ledgers, and reports. Currency defaults to NPR, weights are handled in both grams and tola (`GRAMS_PER_TOLA = 11.664`, see `backend/src/utils/rates.js`), and daily gold/silver rates are scraped from hamropatro.com.
 
 Two independent npm projects: `backend/` (Express 4 + Mongoose 8, CommonJS) and `frontend/` (React 19 + Vite + Tailwind v4, ESM).
 

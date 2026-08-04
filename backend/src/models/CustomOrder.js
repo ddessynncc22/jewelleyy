@@ -77,7 +77,50 @@ const customOrderSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    ratePerGram: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    wastagePercent: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    makingCharge: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    oldGoldWeight: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    oldGoldKarat: {
+      type: Number,
+      default: 24,
+      min: 1,
+      max: 24,
+    },
+    oldGoldPurity: {
+      type: Number,
+      default: 999,
+      min: 0,
+      max: 1000,
+    },
+    oldGoldDeductionPercent: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100,
+    },
     finalPrice: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    actualAmountReceived: {
       type: Number,
       default: 0,
       min: 0,
@@ -95,6 +138,15 @@ const customOrderSchema = new mongoose.Schema(
     wastageVariance: {
       type: Number,
       default: 0,
+    },
+    oldGoldDetails: {
+      weight: { type: Number, default: 0 },
+      karat: { type: Number, default: 0 },
+      purity: { type: Number, default: 0 },
+      deductionPercent: { type: Number, default: 0 },
+      netWeight: { type: Number, default: 0 },
+      deductibleAmount: { type: Number, default: 0 },
+      ratePerGram: { type: Number, default: 0 },
     },
     itemName: {
       type: String,

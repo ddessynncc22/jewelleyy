@@ -22,7 +22,7 @@ import EmptyState from '../../components/ui/EmptyState'
 
 import ErrorState from '../../components/ui/ErrorState'
 
-import { formatCurrency, formatDate } from '../../utils/helpers'
+import { formatCurrency, formatDate, applyTransportRate, getTransportCharges } from '../../utils/helpers'
 
 import RateForm from './RateForm'
 
@@ -94,9 +94,12 @@ const RateList = () => {
 
   const latestRate = rates.length > 0 ? rates[0] : null
 
+  const transport = (activeTab === 'gold' ? getTransportCharges().gold : getTransportCharges().silver)
+  const effectiveLatest = applyTransportRate(latestRate, transport)
+
   const chartData = [...rates].reverse().map((r) => ({
     date: formatDate(r.date || r.createdAt),
-    rate: r.rate || 0,
+    rate: (r.unit === 'gram' ? (r.rate || 0) * TOLA_TO_GRAM : (r.rate || 0)) + transport,
   }))
 
   const getRatePerGram = (row) => {
@@ -173,14 +176,14 @@ const RateList = () => {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <StatCard
             title={`Latest ${activeTab === 'gold' ? 'Gold' : 'Silver'} Rate`}
-            value={formatCurrency(latestRate.rate || 0)}
+            value={formatCurrency(effectiveLatest?.rate || 0)}
             icon={<TrendingUp size={20} />}
             color={activeTab === 'gold' ? 'yellow' : 'gray'}
-            subtitle={`As of ${formatDate(latestRate.date || latestRate.createdAt)}`}
+            subtitle={`As of ${formatDate(latestRate.date || latestRate.createdAt)}${transport > 0 ? ` (incl. transport Rs ${transport}/tola)` : ''}`}
           />
           <StatCard
             title="Rate per Gram"
-            value={formatCurrency(getRatePerGram(latestRate))}
+            value={formatCurrency(effectiveLatest?.perGram || 0)}
             icon={<CircleDollarSign size={20} />}
             color="blue"
           />
@@ -197,7 +200,7 @@ const RateList = () => {
         <div className="rounded-xl border border-gray-200 bg-white p-6">
           <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
             <LineChart className="h-4 w-4" />
-            Rate Trend
+            Rate Trend (per Tola{transport > 0 ? `, incl. transport Rs ${transport}/tola` : ''})
           </h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
@@ -207,10 +210,10 @@ const RateList = () => {
                 <YAxis
                   tick={{ fontSize: 12 }}
                   stroke="#9ca3af"
-                  tickFormatter={(v) => `$${(v / 1000).toFixed(0)}K`}
+                  tickFormatter={(v) => `Rs ${(v / 1000).toFixed(0)}K`}
                 />
                 <Tooltip
-                  formatter={(value) => [formatCurrency(value), 'Rate']}
+                  formatter={(value) => [formatCurrency(value), 'Rate (per Tola)']}
                   labelStyle={{ fontWeight: 600 }}
                   contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb' }}
                 />

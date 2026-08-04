@@ -6,7 +6,7 @@ const Item = require('../models/Item');
 const StockMovement = require('../models/StockMovement');
 const ActivityLog = require('../models/ActivityLog');
 const { generateSKU, generateBarcode } = require('../services/barcode');
-const { getNextCustomerCode } = require('../services/sequence');
+const { getNextCustomerCode, getNextCustomOrderNumber } = require('../services/sequence');
 const { successResponse, errorResponse, paginatedResponse } = require('../utils/response');
 const { scopeAggregate } = require('../utils/tenant');
 
@@ -29,9 +29,22 @@ function daysOverdue(order, asOf = new Date()) {
 }
 
 function enrichOrder(order) {
+  const finalPrice = Number(order.finalPrice || 0);
+  const estimatedPrice = Number(order.estimatedPrice || 0);
+  const price = finalPrice > 0 ? finalPrice : estimatedPrice;
+  const oldGoldAmount = Number(order.oldGoldDetails?.deductibleAmount || 0);
+  const taxableAmount = Math.max(0, price - oldGoldAmount);
+  const taxAmount = Number((taxableAmount * 0.005).toFixed(2));
+  const billTotal = Math.round(Number(price) + taxAmount);
+  const balanceDue = Math.max(0, billTotal - (order.advanceAmount || 0) - oldGoldAmount - (Number(order.actualAmountReceived) || 0));
   return {
     ...order,
-    balanceDue: Math.max(0, (order.finalPrice || 0) - (order.advanceAmount || 0)),
+    price,
+    oldGoldAmount,
+    taxableAmount,
+    taxAmount,
+    billTotal,
+    balanceDue,
     daysOverdue: daysOverdue(order),
   };
 }
@@ -94,6 +107,12 @@ async function updateKarigarMaterial(order, patch) {
     karigar.pendingJobs = Math.max(0, (karigar.pendingJobs || 0) - 1);
     karigar.totalReturned = (karigar.totalReturned || 0) + (patch.finalWeight || 0);
   }
+  if (patch.finalWeight !== undefined) material.finalWeight = patch.finalWeight;
+  if (patch.jartiPercent !== undefined) material.jartiPercent = patch.jartiPercent;
+  if (patch.jartiAmount !== undefined) material.jartiAmount = patch.jartiAmount;
+  if (patch.labourCharge !== undefined) material.labourCharge = patch.labourCharge;
+  if (patch.payment !== undefined) material.payment = patch.payment;
+  if (patch.paymentStatus !== undefined) material.paymentStatus = patch.paymentStatus;
   if (patch.finishedItem) material.finishedItem = patch.finishedItem;
   await karigar.save();
   return karigar;
@@ -163,7 +182,10 @@ exports.getCustomOrder = async (req, res) => {
       return errorResponse(res, 'Custom order not found', 404);
     }
     const karigarJob = await findKarigarJob(order);
-    const balanceDue = Math.max(0, (order.finalPrice || 0) - (order.advanceAmount || 0));
+    const price = order.finalPrice != null && Number(order.finalPrice) > 0
+      ? Number(order.finalPrice)
+      : Number(order.estimatedPrice || 0);
+    const balanceDue = Math.max(0, price - (order.advanceAmount || 0));
     return successResponse(res, {
       order: enrichOrder(order),
       karigarJob,
@@ -176,6 +198,13 @@ exports.getCustomOrder = async (req, res) => {
 
 exports.createCustomOrder = async (req, res) => {
   try {
+    if (typeof req.body.customer === 'string' && req.body.customer.trim()) {
+      try {
+        req.body.customer = JSON.parse(req.body.customer);
+      } catch {
+        req.body.customer = null;
+      }
+    }
     const { customer, category, requestedWeight } = req.body;
     if (!customer || !customer.name || !customer.phone) {
       return errorResponse(res, 'Customer name and phone are required', 400);
@@ -189,8 +218,7 @@ exports.createCustomOrder = async (req, res) => {
     if (!req.tenantId) return errorResponse(res, 'Tenant context required to create custom order', 400);
     const cust = await resolveCustomer(req.body, req);
     if (!cust) return errorResponse(res, 'Could not resolve customer', 400);
-    const orderCount = await CustomOrder.countDocuments({ isDeleted: false });
-    const orderNumber = `CO-${String(orderCount + 1).padStart(5, '0')}`;
+    const orderNumber = await getNextCustomOrderNumber(req.tenantId);
     const designImages = collectDesignImages(req);
     const order = await CustomOrder.create({
       tenantId: req.tenantId,
@@ -207,7 +235,14 @@ exports.createCustomOrder = async (req, res) => {
       targetCompletionDate: req.body.targetCompletionDate || null,
       advanceAmount: req.body.advanceAmount || 0,
       estimatedPrice: req.body.estimatedPrice || 0,
-      karigarId: req.body.karigarId || null,
+      ratePerGram: req.body.ratePerGram || 0,
+      wastagePercent: req.body.wastagePercent || 0,
+       makingCharge: req.body.makingCharge || 0,
+       oldGoldWeight: req.body.oldGoldWeight || 0,
+       oldGoldKarat: req.body.oldGoldKarat || 24,
+       oldGoldPurity: req.body.oldGoldPurity || 999,
+       oldGoldDeductionPercent: req.body.oldGoldDeductionPercent || 0,
+       karigarId: req.body.karigarId || null,
       itemName: req.body.itemName || '',
       itemDescription: req.body.itemDescription || '',
       status: 'booked',
@@ -296,24 +331,56 @@ exports.updateOrderStatus = async (req, res) => {
       }
       case 'ready': {
         if (!order.karigarJobId) return errorResponse(res, 'Material must be issued before marking ready', 400);
-        const { finalWeight, finalMakingCharge, itemName, itemDescription } = req.body;
-        if (finalWeight === undefined || Number(finalWeight) <= 0) {
+        const { finalWeight, finalMakingCharge, itemName, itemDescription, wastage, wastagePercent, karigarWastagePercent } = req.body;
+        const finalWt = Number(finalWeight);
+        if (finalWeight === undefined || finalWeight === null || finalWeight === '' || Number.isNaN(finalWt) || finalWt <= 0) {
           return errorResponse(res, 'Final weight is required', 400);
         }
-        const wastage = order.requestedWeight - Number(finalWeight);
-        if (wastage < 0) return errorResponse(res, 'Final weight cannot exceed the issued weight', 400);
-        order.finalWeight = Number(finalWeight);
-        order.finalMakingCharge = finalMakingCharge || 0;
-        order.wastageVariance = Number(wastage.toFixed(3));
+        order.finalWeight = Number(finalWt.toFixed(3));
+        order.wastageVariance = Number((order.requestedWeight - order.finalWeight).toFixed(3));
+        if (wastage !== undefined && wastage !== null && wastage !== '') {
+          const w = Number(wastage);
+          if (Number.isNaN(w) || w < 0) return errorResponse(res, 'Wastage cannot be negative', 400);
+          if (w > order.requestedWeight) return errorResponse(res, 'Wastage cannot exceed the issued weight', 400);
+          order.wastageVariance = Number(w.toFixed(3));
+        }
+        let customerWastagePct = 0;
+        if (wastagePercent !== undefined && wastagePercent !== null && wastagePercent !== '') {
+          customerWastagePct = Number(wastagePercent);
+          if (Number.isNaN(customerWastagePct) || customerWastagePct < 0) return errorResponse(res, 'Customer wastage percentage cannot be negative', 400);
+          if (customerWastagePct > 100) return errorResponse(res, 'Customer wastage percentage cannot exceed 100%', 400);
+          order.wastagePercent = customerWastagePct;
+        }
+        let karigarJartiPct = 0;
+        if (karigarWastagePercent !== undefined && karigarWastagePercent !== null && karigarWastagePercent !== '') {
+          karigarJartiPct = Number(karigarWastagePercent);
+          if (Number.isNaN(karigarJartiPct) || karigarJartiPct < 0) return errorResponse(res, 'Karigar jarti percentage cannot be negative', 400);
+          if (karigarJartiPct > 100) return errorResponse(res, 'Karigar jarti percentage cannot exceed 100%', 400);
+        }
+        const makingCharge = Number(finalMakingCharge || 0);
+        order.finalMakingCharge = makingCharge;
         if (itemName) order.itemName = itemName;
         if (itemDescription !== undefined) order.itemDescription = itemDescription;
-        await updateKarigarMaterial(order, { status: 'Returned', wastage, finalWeight: Number(finalWeight) });
+        const purityFactor = Number(order.purity) > 0 ? Number(order.purity) / 1000 : 1;
+        const metalValue = order.finalWeight * (Number(order.ratePerGram) || 0) * purityFactor;
+        const jartiAmount = Number(((metalValue * karigarJartiPct) / 100).toFixed(2));
+        const payment = Number((jartiAmount + makingCharge).toFixed(2));
+        await updateKarigarMaterial(order, {
+          status: 'Returned',
+          wastage: order.wastageVariance,
+          finalWeight: order.finalWeight,
+          jartiPercent: karigarJartiPct,
+          jartiAmount,
+          labourCharge: makingCharge,
+          payment,
+          paymentStatus: 'pending',
+        });
         break;
       }
       case 'delivered': {
         if (current !== 'ready') return errorResponse(res, 'Order must be ready before delivery', 400);
-        const { finalPrice, itemName, itemDescription } = req.body;
-        if (finalPrice === undefined || Number(finalPrice) < 0) {
+        const { finalPrice, actualAmountReceived, itemName, itemDescription, oldGoldDetails } = req.body;
+        if (finalPrice === undefined || finalPrice === null || finalPrice === '' || Number(finalPrice) < 0) {
           return errorResponse(res, 'Final price is required', 400);
         }
         if (!req.tenantId) return errorResponse(res, 'Tenant context required', 400);
@@ -349,11 +416,36 @@ exports.updateOrderStatus = async (req, res) => {
           performedBy: req.user._id,
         });
         order.finalPrice = Number(finalPrice);
+        order.actualAmountReceived = Number(actualAmountReceived || 0);
         order.deliveredItemId = item._id;
         if (itemName) order.itemName = itemName;
         if (itemDescription !== undefined) order.itemDescription = itemDescription;
+        if (oldGoldDetails) {
+          const og = typeof oldGoldDetails === 'string' ? JSON.parse(oldGoldDetails) : oldGoldDetails;
+          const ogWeight = Number(og.weight || 0);
+          const ogDeduction = Number(og.deductionPercent || 0);
+          const ogKarat = Number(og.karat || og.purity || 24);
+          const ogNetWeight = ogWeight > 0 ? ogWeight * (1 - ogDeduction / 100) : 0;
+          const ogRate = Number(og.ratePerGram || order.ratePerGram || 0);
+          const ogValue = ogNetWeight * (ogKarat / 24) * ogRate;
+          order.oldGoldDetails = {
+            weight: ogWeight,
+            karat: ogKarat,
+            purity: ogKarat,
+            deductionPercent: ogDeduction,
+            netWeight: Number(ogNetWeight.toFixed(4)),
+            deductibleAmount: Number(ogValue.toFixed(2)),
+            ratePerGram: ogRate,
+          };
+        } else {
+          order.oldGoldDetails = { weight: 0, karat: 0, purity: 0, deductionPercent: 0, netWeight: 0, deductibleAmount: 0, ratePerGram: 0 };
+        }
         await updateKarigarMaterial(order, { finishedItem: item._id });
-        const balanceDue = Number(finalPrice) - (order.advanceAmount || 0);
+        const oldGoldValue = Number(order.oldGoldDetails.deductibleAmount || 0);
+        const taxableAmount = Math.max(0, Number(finalPrice) - oldGoldValue);
+        const taxAmount = Number((taxableAmount * 0.005).toFixed(2));
+        const billTotal = Math.round(Number(finalPrice) + taxAmount);
+        const balanceDue = Math.max(0, billTotal - (order.advanceAmount || 0) - oldGoldValue - Number(order.actualAmountReceived || 0));
         if (balanceDue > 0 && order.customerId) {
           const lastLedger = await CustomerLedger.findOne({ customer: order.customerId }).sort({ transactionDate: -1 });
           const prevBalance = lastLedger ? lastLedger.balanceAfter : 0;
@@ -365,7 +457,7 @@ exports.updateOrderStatus = async (req, res) => {
             referenceId: order._id,
             amount: balanceDue,
             balanceAfter: prevBalance + balanceDue,
-            note: `Custom order ${order.orderNumber} - balance after advance of ${order.advanceAmount}`,
+            note: `Custom order ${order.orderNumber} - balance of ${billTotal} after advance ${order.advanceAmount} and received ${order.actualAmountReceived}`,
             transactionDate: new Date(),
           });
         }

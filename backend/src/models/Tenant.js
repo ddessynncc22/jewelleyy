@@ -70,20 +70,6 @@ const tenantSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
-    taxSettings: {
-      type: mongoose.Schema.Types.Mixed,
-      default: {},
-    },
-    nepalTaxSettings: {
-      enabled: { type: Boolean, default: false },
-      luxuryTax: { type: Number, default: 0 },
-      vatRate: { type: Number, default: 13 },
-      vatEnabled: { type: Boolean, default: true },
-      irdPrintEnabled: { type: Boolean, default: true },
-      fiscalYearStart: { type: String, default: '04' },
-      panNumber: { type: String, default: '' },
-      includeInInvoice: { type: Boolean, default: true },
-    },
     isActive: {
       type: Boolean,
       default: true,

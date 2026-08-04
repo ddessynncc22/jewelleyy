@@ -37,7 +37,6 @@ exports.listTenants = async (req, res) => {
     const skip = (Number(page) - 1) * Number(limit);
     const [tenants, total] = await Promise.all([
       Tenant.find(query)
-        .select('-taxSettings')
         .sort({ [sortField]: direction })
         .skip(skip)
         .limit(Number(limit))
@@ -69,7 +68,7 @@ exports.listTenants = async (req, res) => {
 
 exports.getTenantById = async (req, res) => {
   try {
-    const tenant = await Tenant.findById(req.params.id).select('-taxSettings').lean();
+    const tenant = await Tenant.findById(req.params.id).lean();
     if (!tenant) return errorResponse(res, 'Tenant not found', 404);
     return successResponse(res, { ...tenant, shopUrl: shopUrlFor(tenant.slug, req) });
   } catch (error) {
@@ -132,7 +131,6 @@ exports.onboard = async (req, res) => {
       lowStockThreshold: req.body.lowStockThreshold || 5,
       planType: req.body.planType || 'standard',
       businessStartDate: req.body.businessStartDate || undefined,
-      taxSettings: req.body.taxSettings || {},
       isActive: true,
     });
 
@@ -152,7 +150,6 @@ exports.onboard = async (req, res) => {
       defaultKarat: tenant.defaultKarat,
       lowStockThreshold: tenant.lowStockThreshold,
       businessStartDate: tenant.businessStartDate,
-      taxSettings: tenant.taxSettings,
       tenantId: tenant.tenantNumber,
     });
 
@@ -182,7 +179,7 @@ exports.getTenant = async (req, res) => {
 
 exports.updateTenant = async (req, res) => {
   try {
-    const allowed = ['name', 'contactEmail', 'contactPhone', 'address', 'vatNumber', 'logoUrl', 'storeName', 'currency', 'defaultPurity', 'defaultKarat', 'lowStockThreshold', 'businessStartDate', 'planType', 'taxSettings', 'nepalTaxSettings'];
+    const allowed = ['name', 'contactEmail', 'contactPhone', 'address', 'vatNumber', 'logoUrl', 'storeName', 'currency', 'defaultPurity', 'defaultKarat', 'lowStockThreshold', 'businessStartDate', 'planType'];
     const updates = {};
     allowed.forEach((field) => {
       if (req.body[field] !== undefined) updates[field] = req.body[field];

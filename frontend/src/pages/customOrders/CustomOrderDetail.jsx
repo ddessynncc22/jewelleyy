@@ -4,7 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 
 import toast from 'react-hot-toast'
 
-import { ArrowLeft, Phone, CheckCircle2, Circle, Wallet, Trash2, XCircle } from 'lucide-react'
+import { ArrowLeft, Phone, CheckCircle2, Circle, Wallet, Trash2, XCircle, Printer } from 'lucide-react'
 
 import {
   getCustomOrder,
@@ -29,7 +29,7 @@ import FormTextarea from '../../components/ui/FormTextarea'
 
 import StatusBadge from '../../components/ui/StatusBadge'
 
-import { formatDate } from '../../utils/helpers'
+import { formatDate, gramsToLaal, laalToGrams, formatWeightTolaLaal, formatCurrency } from '../../utils/helpers'
 
 const STATUS_STEPS = ['booked', 'material_issued', 'in_progress', 'ready', 'delivered']
 
@@ -57,7 +57,27 @@ const CustomOrderDetail = () => {
   const [error, setError] = useState('')
 
   const order = data?.order
-  const balanceDue = order?.finalPrice ? Math.max(0, order.finalPrice - (order.advanceAmount || 0)) : 0
+  const payable = order?.finalPrice > 0 ? Number(order.finalPrice) : Number(order?.estimatedPrice || 0)
+  const balanceDue = Math.max(0, payable - (order?.advanceAmount || 0))
+
+   const suggestedDeliveryPrice = useMemo(() => {
+     if (!order) return 0;
+     const weight = Number(order.finalWeight) > 0 ? Number(order.finalWeight) : Number(order.requestedWeight) || 0;
+     const rate = Number(order.ratePerGram) || 0;
+     const purityFactor = Number(order.purity) > 0 ? Number(order.purity) / 1000 : 1;
+     const makingCharge = Number(order.finalMakingCharge || order.makingCharge || 0);
+     const wastagePercent = Number(order.wastagePercent || 0);
+     const metalValue = weight * rate * purityFactor;
+     const jartiAmount = metalValue * (wastagePercent / 100);
+     const basePrice = metalValue + jartiAmount + makingCharge;
+     const oldGoldWeight = Number(order.oldGoldWeight || 0);
+     const oldGoldKarat = Number(order.oldGoldKarat || 24);
+     const oldGoldDeductionPercent = Number(order.oldGoldDeductionPercent || 0);
+     const oldGoldNetWeight = oldGoldWeight * (1 - oldGoldDeductionPercent / 100);
+     const oldGoldValue = oldGoldNetWeight * (oldGoldKarat / 24) * rate * purityFactor;
+     const oldGoldCredit = Math.min(oldGoldValue, basePrice);
+     return Math.round(basePrice - oldGoldCredit);
+   }, [order]);
 
   const fetchOrder = async () => {
     setLoading(true)
@@ -89,7 +109,19 @@ const CustomOrderDetail = () => {
   }, [order])
 
   const openModal = (type) => {
-    setForm({})
+    if (type === 'delivered') {
+      setForm({
+        finalPrice: '',
+        itemName: order?.itemName || '',
+        actualAmountReceived: '',
+        ogWeight: order?.oldGoldWeight || '',
+        ogKarat: order?.oldGoldKarat || '',
+        ogPurity: order?.oldGoldPurity || '',
+        ogDeductionPercent: order?.oldGoldDeductionPercent || '',
+      })
+    } else {
+      setForm({})
+    }
     setModal(type)
   }
 
@@ -110,6 +142,24 @@ const CustomOrderDetail = () => {
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleFinalWeightLaalChange = (e) => {
+    const value = e.target.value
+    setForm((prev) => ({
+      ...prev,
+      finalWeightLaal: value,
+      finalWeight: value !== '' ? laalToGrams(Number(value)) : '',
+    }))
+  }
+
+  const handleFinalWeightChange = (e) => {
+    const value = e.target.value
+    setForm((prev) => ({
+      ...prev,
+      finalWeight: value,
+      finalWeightLaal: value !== '' ? gramsToLaal(Number(value)) : '',
+    }))
   }
 
   const handleAddAdvance = async (e) => {
@@ -222,6 +272,21 @@ const CustomOrderDetail = () => {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {order.status === 'booked' && (
+            <Button variant="outline" onClick={() => navigate(`/custom-orders/bill/${id}?type=order`)}>
+              <Printer className="h-4 w-4" /> Print Order Bill
+            </Button>
+          )}
+          {order.status === 'delivered' && (
+            <>
+              <Button variant="outline" onClick={() => navigate(`/custom-orders/bill/${id}?type=order`)}>
+                <Printer className="h-4 w-4" /> Print Order Bill
+              </Button>
+              <Button variant="outline" onClick={() => navigate(`/custom-orders/bill/${id}?type=tax`)}>
+                <Printer className="h-4 w-4" /> Print Tax Invoice
+              </Button>
+            </>
+          )}
           {!['delivered', 'cancelled'].includes(order.status) && (
             <Button variant="outline" onClick={() => openModal('advance')}>
               <Wallet className="h-4 w-4" /> Add Advance
@@ -308,10 +373,30 @@ const CustomOrderDetail = () => {
                 <p className="text-xs text-gray-500">Wastage Variance</p>
                 <p className="text-sm font-medium text-gray-900">{order.wastageVariance != null ? `${order.wastageVariance} g` : '—'}</p>
               </div>
-              <div>
-                <p className="text-xs text-gray-500">Making Charge</p>
-                <p className="text-sm font-medium text-gray-900">{order.finalMakingCharge ? `Rs. ${Number(order.finalMakingCharge).toLocaleString()}` : '—'}</p>
-              </div>
+               <div>
+                 <p className="text-xs text-gray-500">Making Charge</p>
+                  <p className="text-sm font-medium text-gray-900">{order.makingCharge ? `Rs. ${Number(order.makingCharge).toLocaleString()}` : '—'}</p>
+               </div>
+               {(Number(order.oldGoldWeight) > 0 || Number(order.oldGoldDeductionPercent) > 0) && (
+                 <>
+                   <div>
+                     <p className="text-xs text-gray-500">Old Gold Weight</p>
+                     <p className="text-sm font-medium text-gray-900">{order.oldGoldWeight || 0} g</p>
+                   </div>
+                   <div>
+                     <p className="text-xs text-gray-500">Old Gold Karat</p>
+                     <p className="text-sm font-medium text-gray-900">{order.oldGoldKarat || 24}K</p>
+                   </div>
+                   <div>
+                     <p className="text-xs text-gray-500">Old Gold Purity</p>
+                     <p className="text-sm font-medium text-gray-900">{order.oldGoldPurity || 999}</p>
+                   </div>
+                   <div>
+                     <p className="text-xs text-gray-500">Old Gold Deduction %</p>
+                     <p className="text-sm font-medium text-gray-900">{order.oldGoldDeductionPercent || 0}%</p>
+                   </div>
+                 </>
+               )}
             </div>
             {order.designReference && (
               <div className="mt-4">
@@ -357,6 +442,27 @@ const CustomOrderDetail = () => {
                   <div>
                     <p className="text-xs text-gray-500">Returned</p>
                     <p className="font-medium text-gray-900">{data.karigarJob.material.returnedDate ? formatDate(data.karigarJob.material.returnedDate) : '—'}</p>
+                  </div>
+                </div>
+                <div className="mt-3 rounded-lg bg-gray-50 p-3 text-sm">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Karigar Payment</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div>
+                      <p className="text-xs text-gray-500">Jarti %</p>
+                      <p className="font-medium text-gray-900">{data.karigarJob.material.jartiPercent ?? 0}%</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Jarti Amount</p>
+                      <p className="font-medium text-gray-900">{formatCurrency(data.karigarJob.material.jartiAmount ?? 0)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Making Charge</p>
+                      <p className="font-medium text-gray-900">{formatCurrency(data.karigarJob.material.labourCharge ?? 0)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Total Payment</p>
+                      <p className="font-semibold text-gray-900">{formatCurrency(data.karigarJob.material.payment ?? 0)}</p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -409,23 +515,76 @@ const CustomOrderDetail = () => {
           <Card title="Payment">
             <div className="space-y-3 text-sm">
               <div className="flex items-center justify-between">
-                <span className="text-gray-500">Advance Paid</span>
-                <span className="font-semibold text-gray-900">Rs. {Number(order.advanceAmount || 0).toLocaleString()}</span>
-              </div>
-              <div className="flex items-center justify-between">
                 <span className="text-gray-500">Estimated Price</span>
                 <span className="text-gray-900">{order.estimatedPrice ? `Rs. ${Number(order.estimatedPrice).toLocaleString()}` : '—'}</span>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-500">Final Price</span>
-                <span className="font-medium text-gray-900">{order.finalPrice != null ? `Rs. ${Number(order.finalPrice).toLocaleString()}` : '—'}</span>
-              </div>
-              {order.finalPrice != null && (
-                <div className={`flex items-center justify-between rounded-lg p-3 ${balanceDue > 0 ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}>
-                  <span className="font-medium">Balance Due</span>
-                  <span className="font-bold">Rs. {balanceDue.toLocaleString()}</span>
+              {(Number(order.ratePerGram) > 0 || Number(order.wastagePercent) > 0 || Number(order.makingCharge) > 0) && (
+                <div className="space-y-1 rounded-lg bg-gray-50 p-3 text-xs">
+                  {Number(order.ratePerGram) > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-500">Rate</span>
+                      <span className="font-medium text-gray-700">Rs. {Number(order.ratePerGram).toLocaleString()}/g</span>
+                    </div>
+                  )}
+                  {Number(order.wastagePercent) > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-500">Wastage</span>
+                      <span className="font-medium text-gray-700">{order.wastagePercent}%</span>
+                    </div>
+                  )}
+                  {Number(order.makingCharge) > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-500">Making Charge</span>
+                      <span className="font-medium text-gray-700">Rs. {Number(order.makingCharge).toLocaleString()}</span>
+                    </div>
+                  )}
                 </div>
               )}
+              {order.finalPrice > 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-500">Final Price</span>
+                  <span className="font-medium text-gray-900">{formatCurrency(Number(order.finalPrice))}</span>
+                </div>
+              )}
+              {Number(order.oldGoldDetails?.deductibleAmount || 0) > 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-500">
+                    Old Gold (non-taxable)
+                    <span className="block text-[10px] text-gray-400">
+                      {order.oldGoldDetails.weight}·{order.oldGoldDetails.karat}K·{order.oldGoldDetails.deductionPercent}% off
+                    </span>
+                  </span>
+                  <span className="font-medium text-gray-700">-{formatCurrency(Number(order.oldGoldDetails.deductibleAmount))}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between">
+                <span className="text-gray-500">Taxable Value</span>
+                <span className="font-medium text-gray-700">{formatCurrency(order.taxableAmount || 0)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-500">Tax (0.5%)</span>
+                <span className="font-medium text-gray-700">{formatCurrency(order.taxAmount || 0)}</span>
+              </div>
+              {order.finalPrice > 0 && (
+                <div className="flex items-center justify-between border-t border-gray-200 pt-2">
+                  <span className="font-medium text-gray-600">Total Amount</span>
+                  <span className="font-bold text-gray-900">{formatCurrency(order.billTotal || 0)}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between">
+                <span className="text-gray-500">Advance Paid</span>
+                <span className="font-semibold text-emerald-600">{formatCurrency(Number(order.advanceAmount || 0))}</span>
+              </div>
+              {order.actualAmountReceived > 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-500">Amount Received</span>
+                  <span className="font-semibold text-emerald-600">{formatCurrency(Number(order.actualAmountReceived || 0))}</span>
+                </div>
+              )}
+              <div className={`flex items-center justify-between rounded-lg p-3 ${order.balanceDue > 0 ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}>
+                <span className="font-medium">{order.finalPrice > 0 ? 'Balance Due' : 'Balance Due (est.)'}</span>
+                <span className="font-bold">{formatCurrency(Number(order.balanceDue || 0))}</span>
+              </div>
               {order.cancellation && (
                 <div className="space-y-2 border-t border-gray-100 pt-3">
                   <div className="flex items-center justify-between">
@@ -483,6 +642,8 @@ const CustomOrderDetail = () => {
             <Button variant="ghost" onClick={closeModal} disabled={saving}>Cancel</Button>
             <Button onClick={() => handleAction('ready', {
               finalWeight: Number(form.finalWeight),
+              wastagePercent: form.wastagePercent !== undefined && form.wastagePercent !== '' ? Number(form.wastagePercent) : 0,
+              karigarWastagePercent: form.karigarWastagePercent !== undefined && form.karigarWastagePercent !== '' ? Number(form.karigarWastagePercent) : 0,
               finalMakingCharge: form.finalMakingCharge ? Number(form.finalMakingCharge) : 0,
               itemName: form.itemName || order.itemName,
             })} loading={saving} disabled={!form.finalWeight || Number(form.finalWeight) <= 0}>
@@ -493,22 +654,53 @@ const CustomOrderDetail = () => {
       >
         <div className="space-y-4">
           <p className="text-xs text-gray-500">
-            Issued weight: <span className="font-semibold text-gray-900">{order.requestedWeight} g</span>. Wastage = issued − final.
+            Issued weight: <span className="font-semibold text-gray-900">{order.requestedWeight} g</span>. Enter the final weight of the finished item; jarti/wastage is recorded separately as a karigar payment and does not change the weight.
           </p>
-          <FormInput label="Final Weight (g)" name="finalWeight" type="number" step="0.01" value={form.finalWeight} onChange={(e) => setForm((prev) => ({ ...prev, finalWeight: e.target.value }))} required placeholder="e.g. 19.8" />
-          <FormInput label="Making Charge (Rs.)" name="finalMakingCharge" type="number" step="1" value={form.finalMakingCharge} onChange={(e) => setForm((prev) => ({ ...prev, finalMakingCharge: e.target.value }))} placeholder="0" />
+          <FormInput label="Final Weight (g)" name="finalWeight" type="number" step="0.01" value={form.finalWeight} onChange={handleFinalWeightChange} required placeholder="e.g. 19.8" />
+          <FormInput label="Customer Wastage (%)" name="wastagePercent" type="number" step="0.1" value={form.wastagePercent} onChange={(e) => setForm((prev) => ({ ...prev, wastagePercent: e.target.value }))} placeholder="e.g. 5" helper="Wastage % added to the customer bill. Does not change the weight." />
+          <FormInput label="Karigar Jarti/Wastage (%)" name="karigarWastagePercent" type="number" step="0.1" value={form.karigarWastagePercent} onChange={(e) => setForm((prev) => ({ ...prev, karigarWastagePercent: e.target.value }))} placeholder="e.g. 1.5" helper="Jarti % paid to the karigar for their material wastage. Separate from the customer wastage." />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <FormInput label="Final Weight (laal)" name="finalWeightLaal" type="number" step="0.001" value={form.finalWeightLaal} onChange={handleFinalWeightLaalChange} placeholder="e.g. 169.780" />
+            <div className="flex items-end pb-1">
+              {form.finalWeight && Number(form.finalWeight) > 0 && (
+                <p className="text-sm text-gray-500">{formatWeightTolaLaal(form.finalWeight)}</p>
+              )}
+            </div>
+          </div>
+          <FormInput label="Making Charge (Rs.)" name="finalMakingCharge" type="number" step="1" value={form.finalMakingCharge} onChange={(e) => setForm((prev) => ({ ...prev, finalMakingCharge: e.target.value }))} placeholder="0" helper="Labour / making charge paid to the karigar, recorded alongside jarti." />
           <FormInput label="Item Name" name="itemName" value={form.itemName} onChange={(e) => setForm((prev) => ({ ...prev, itemName: e.target.value }))} placeholder={order.itemName || 'e.g. Gold chain'} />
         </div>
       </Modal>
 
-      <Modal isOpen={modal === 'delivered'} onClose={closeModal} title="Mark Delivered" size="md"
+      <Modal
+        isOpen={modal === 'delivered'}
+        onClose={closeModal}
+        title="Mark Delivered"
+        size="lg"
         footer={
           <>
-            <Button variant="ghost" onClick={closeModal} disabled={saving}>Cancel</Button>
-            <Button onClick={() => handleAction('delivered', {
-              finalPrice: Number(form.finalPrice),
-              itemName: form.itemName || order.itemName,
-            })} loading={saving} disabled={form.finalPrice === undefined || form.finalPrice === '' || Number(form.finalPrice) < 0}>
+            <Button variant="ghost" onClick={closeModal} disabled={saving}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() =>
+                handleAction('delivered', {
+                  finalPrice: Number(form.finalPrice),
+                  actualAmountReceived: form.actualAmountReceived !== '' ? Number(form.actualAmountReceived) : 0,
+                  itemName: form.itemName || order.itemName,
+                  oldGoldDetails: {
+                    weight: Number(form.ogWeight) || 0,
+                    karat: Number(form.ogKarat) || 0,
+                    deductionPercent: Number(form.ogDeductionPercent) || 0,
+                    netWeight:
+                      (Number(form.ogWeight) || 0) * (1 - (Number(form.ogDeductionPercent) || 0) / 100),
+                    deductibleAmount: 0,
+                  },
+                })
+              }
+              loading={saving}
+              disabled={form.finalPrice === undefined || form.finalPrice === '' || Number(form.finalPrice) < 0}
+            >
               Mark Delivered
             </Button>
           </>
@@ -516,10 +708,163 @@ const CustomOrderDetail = () => {
       >
         <div className="space-y-4">
           <p className="text-xs text-gray-500">
-            On delivery, an item is created (status Sold) and a stock-out is recorded. Outstanding balance, if any, is added to the customer&apos;s khaata.
+            On delivery, an item is created (status Sold) and a stock-out is recorded. The final price is suggested
+            from the order date&apos;s rate × weight + wastage% + making charge; adjust if needed.
           </p>
-          <FormInput label="Final Price (Rs.)" name="finalPrice" type="number" step="1" value={form.finalPrice} onChange={(e) => setForm((prev) => ({ ...prev, finalPrice: e.target.value }))} required placeholder="e.g. 150000" />
-          <FormInput label="Item Name" name="itemName" value={form.itemName} onChange={(e) => setForm((prev) => ({ ...prev, itemName: e.target.value }))} placeholder={order.itemName || 'e.g. Gold chain'} />
+
+          <FormInput
+            label="Final Price (Rs.)"
+            name="finalPrice"
+            type="number"
+            step="1"
+            value={form.finalPrice}
+            onChange={(e) => setForm((prev) => ({ ...prev, finalPrice: e.target.value }))}
+            required
+            placeholder="e.g. 150000"
+            hint={suggestedDeliveryPrice > 0 ? `Suggested: Rs. ${suggestedDeliveryPrice.toLocaleString()} (rate × weight + wastage + making)` : ''}
+          />
+          <FormInput
+            label="Item Name"
+            name="itemName"
+            value={form.itemName}
+            onChange={(e) => setForm((prev) => ({ ...prev, itemName: e.target.value }))}
+            placeholder={order.itemName || 'e.g. Gold chain'}
+          />
+
+          <div className="rounded-lg bg-gray-50 p-3 text-xs">
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+              Delivery Summary (auto-computed)
+            </p>
+            {(() => {
+              const fp = Number(form.finalPrice) || suggestedDeliveryPrice;
+              const ogWeight = Number(form.ogWeight) || Number(order.oldGoldWeight);
+              const ogKarat = Number(form.ogKarat) || Number(order.oldGoldKarat) || 24;
+              const ogDeduction = Number(form.ogDeductionPercent) || Number(order.oldGoldDeductionPercent) || 0;
+              const ogNet = ogWeight > 0 ? ogWeight * (1 - ogDeduction / 100) : 0;
+              const rate = Number(order.ratePerGram) || 0;
+              const ogValue = ogNet * (ogKarat / 24) * rate;
+              const taxable = Math.max(0, fp - ogValue);
+              const tax = Math.round(taxable * 0.005 * 100) / 100;
+              const grandTotal = Math.round(fp + tax);
+              const received = Number(form.actualAmountReceived) || 0;
+              const balanceDue = Math.max(0, grandTotal - (Number(order.advanceAmount) || 0) - ogValue - received);
+              const metalValue =
+                ((order.finalWeight || order.requestedWeight || 0) *
+                  rate *
+                  (Number(order.purity) > 0 ? Number(order.purity) / 1000 : 1)) ||
+                0;
+              return (
+                <>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Metal Value (rate × weight × purity)</span>
+                    <span className="font-medium text-gray-900">Rs. {metalValue.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Wastage</span>
+                    <span className="font-medium text-gray-700">{Number(order.wastagePercent || 0) || 0}%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Making Charge</span>
+                    <span className="font-medium text-gray-700">
+                      Rs. {(Number(order.finalMakingCharge || order.makingCharge || 0) || 0).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between border-t border-gray-200 pt-1">
+                    <span className="font-medium text-gray-600">Final Price</span>
+                    <span className="font-medium text-gray-900">Rs. {(fp || 0).toLocaleString()}</span>
+                  </div>
+                  {ogWeight > 0 ? (
+                    <>
+                      <div className="flex justify-between border-t border-gray-200 pt-1">
+                        <span className="font-medium text-gray-600">
+                          Old Gold Exchange
+                          <span className="block text-[10px] font-normal text-gray-500">
+                            {ogWeight} g · {Math.round(ogKarat)}K · {ogDeduction}% off
+                          </span>
+                        </span>
+                        <span className="font-medium text-gray-700">-Rs. {ogValue.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Taxable Value (non-taxable excluded)</span>
+                        <span className="font-medium text-gray-900">Rs. {taxable.toLocaleString()}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Taxable Value</span>
+                      <span className="font-medium text-gray-900">Rs. {taxable.toLocaleString()}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Tax (0.5%)</span>
+                    <span className="font-medium text-gray-900">Rs. {tax.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-gray-200 pt-1">
+                    <span className="font-medium text-gray-600">Grand Total</span>
+                    <span className="font-bold text-gray-900">Rs. {grandTotal.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-gray-200 pt-1">
+                    <span className="font-medium text-gray-600">Advance Paid</span>
+                    <span className="font-medium text-gray-900">
+                      Rs. {(Number(order.advanceAmount) || 0).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Amount Received</span>
+                    <span className="font-medium text-gray-900">Rs. {(received || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-gray-200 pt-1">
+                    <span className="font-medium text-gray-600">Balance Due (khaata)</span>
+                    <span className="font-bold text-gray-900">Rs. {balanceDue.toLocaleString()}</span>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <FormInput
+              label="Old Gold Weight (g)"
+              name="ogWeight"
+              type="number"
+              step="0.001"
+              value={form.ogWeight}
+              onChange={(e) => setForm((prev) => ({ ...prev, ogWeight: e.target.value }))}
+              placeholder="e.g. 5.2"
+              helper="Weight of old gold exchanged (optional)."
+            />
+            <FormInput
+              label="Old Gold Karat"
+              name="ogKarat"
+              type="number"
+              step="0.5"
+              value={form.ogKarat}
+              onChange={(e) => setForm((prev) => ({ ...prev, ogKarat: e.target.value }))}
+              placeholder="e.g. 22"
+              helper="Karat of the old gold. Purity is derived from karat."
+            />
+            <FormInput
+              label="Old Gold Deduction (%)"
+              name="ogDeductionPercent"
+              type="number"
+              step="0.1"
+              value={form.ogDeductionPercent}
+              onChange={(e) => setForm((prev) => ({ ...prev, ogDeductionPercent: e.target.value }))}
+              placeholder="e.g. 10"
+              helper="Deduction % applied to the old gold weight before valuation."
+            />
+          </div>
+
+          <FormInput
+            label="Actual Amount Received (Rs.)"
+            name="actualAmountReceived"
+            type="number"
+            step="1"
+            value={form.actualAmountReceived}
+            onChange={(e) => setForm((prev) => ({ ...prev, actualAmountReceived: e.target.value }))}
+            placeholder="0"
+            hint="Cash the customer hands over at delivery (remaining balance posts to their khaata)."
+          />
         </div>
       </Modal>
 

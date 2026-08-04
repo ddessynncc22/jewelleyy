@@ -43,6 +43,11 @@ const saleItemSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    stonePrice: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
   },
   { _id: false }
 );
@@ -75,6 +80,8 @@ const saleSchema = new mongoose.Schema(
       description: { type: String, default: '' },
       weight: { type: Number, default: 0 },
       purity: { type: Number, default: 0 },
+      deductionPercent: { type: Number, default: 0 },
+      netWeight: { type: Number, default: 0 },
       deductibleAmount: { type: Number, default: 0 },
     },
     taxDetails: {

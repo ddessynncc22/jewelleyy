@@ -32,7 +32,7 @@ import EmptyState from '../../components/ui/EmptyState'
 
 import ErrorState from '../../components/ui/ErrorState'
 
-import { formatWeight, formatCurrency, formatDate, getImageSrc } from '../../utils/helpers'
+import { formatWeight, formatWeightTolaLaal, formatCurrency, formatDate, getImageSrc } from '../../utils/helpers'
 import { getCachedSettings } from '../../services/settingsService'
 import { getCategories } from '../../services/categoryService'
 
@@ -288,14 +288,15 @@ const ItemList = () => {
             * { box-sizing: border-box; margin: 0; padding: 0; }
             body { font-family: Arial; width: 90mm; height: 15mm; }
             .labels { display: flex; flex-direction: column; }
-            .label { width: 90mm; height: 15mm; display: flex; flex-direction: row; align-items: center; justify-content: space-between; page-break-after: always; border: none; padding: 1mm 3mm; overflow: hidden; }
+            .label { width: 90mm; height: 15mm; display: flex; flex-direction: row; align-items: center; justify-content: space-between; page-break-after: always; border: none; padding: 0.5mm 3mm; overflow: hidden; }
             .left { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; flex: 1; min-width: 0; }
             .right { display: flex; flex-direction: column; align-items: flex-end; justify-content: center; text-align: right; flex-shrink: 0; }
-            .item-name { font-size: 8px; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-            .sku { font-weight: bold; letter-spacing: 0.5px; font-size: 11px; line-height: 1.2; }
-            .info { color: #444; font-size: 6px; line-height: 1.1; }
-            .store-name { color: #888; text-transform: uppercase; letter-spacing: 0.5px; font-size: 5px; line-height: 1; }
-            .barcode { color: #888; letter-spacing: 0.5px; font-size: 7px; line-height: 1; }`
+            .item-name { font-size: 11px; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+            .sku { letter-spacing: 0.5px; font-size: 9px; line-height: 1.25; }
+            .info { color: #000; font-weight: bold; font-size: 10px; line-height: 1.15; }
+            .weight { color: #333; font-weight: bold; font-size: 11px; line-height: 1.15; }
+            .store-name { color: #000; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; font-size: 11px; line-height: 1.1; }
+            .barcode { color: #888; letter-spacing: 0.5px; font-size: 9px; line-height: 1.1; }`
             : `
             body { font-family: Arial; margin: 20px; }
             .labels { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; }
@@ -319,7 +320,8 @@ const ItemList = () => {
                 </div>
                 <div class="right">
                   <div class="info">${item.metalType || ''}${item.karat ? ` ${item.karat}K` : ''}${item.purity ? ` ${item.purity}` : ''}</div>
-                  <div class="info">W: ${item.grossWeight || 0}g</div>
+                  <div class="weight">Gross: ${item.grossWeight || 0}g / ${formatWeightTolaLaal(item.grossWeight)}</div>
+                  <div class="weight">Stone: ${item.stoneWeight || 0}g | Net: ${item.netMetalWeight || 0}g</div>
                   <div class="barcode">${item.barcode || item.SKU || ''}</div>
                 </div>
               </div>
@@ -396,6 +398,12 @@ const ItemList = () => {
     { key: 'karat', label: 'Karat', render: (val) => (val ? `${val}K` : '-') },
     { key: 'quantity', label: 'Qty', render: (val) => val ?? '-' },
     { key: 'grossWeight', label: 'Gross Wt (g)', render: (val) => formatWeight(val) },
+    {
+      key: 'grossWeightLaal',
+      label: 'Gross (laal)',
+      sortable: false,
+      render: (_, row) => formatWeightTolaLaal(row.grossWeight),
+    },
     { key: 'costPrice', label: 'Cost Price', render: (val) => formatCurrency(val) },
     {
       key: 'status',

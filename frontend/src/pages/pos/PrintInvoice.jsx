@@ -2,12 +2,10 @@ import { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { getSale } from '../../services/posService';
-import InvoiceHeader from '../../components/invoice/InvoiceHeader';
-import CustomerInfo from '../../components/invoice/CustomerInfo';
-import InvoiceTable from '../../components/invoice/InvoiceTable';
-import InvoiceSummary from '../../components/invoice/InvoiceSummary';
-import InvoiceFooter from '../../components/invoice/InvoiceFooter';
-import { formatDate, gramsToLaal, getFiscalYear, getInvoiceCurrency } from '../../utils/helpers';
+import InvoiceDocument from '../../components/invoice/InvoiceDocument';
+import { getBSDate, buildInvoiceItems } from '../../components/invoice/invoiceUtils';
+import { formatDate, numberToWords } from '../../utils/helpers';
+import { getSettings } from '../../services/settingsService';
 
 export default function PrintInvoice() {
   const { id } = useParams();
@@ -16,6 +14,11 @@ export default function PrintInvoice() {
   const [sale, setSale] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [settings, setSettings] = useState({});
+
+  useEffect(() => {
+    getSettings().then(setSettings).catch(() => {});
+  }, []);
 
   useEffect(() => {
     const fetchSale = async () => {
@@ -69,82 +72,49 @@ export default function PrintInvoice() {
     return null;
   }
 
-  const currency = getInvoiceCurrency();
-  const items = (sale.items || []).map((entry, idx) => {
-    const item = entry.item || entry;
-    const qty = entry.quantity || entry.qty || 1;
-    const netWt = Number(item.netMetalWeight || item.grossWeight || 0);
-    const grossWt = Number(item.grossWeight || 0);
-    const stoneWt = Number(item.stoneWeight || 0);
-    const ratePerGram = entry.ratePerGram || 0;
-    const metalAmount = netWt * ratePerGram * ((item.purity || 0) / 1000);
-    const makingCharge = entry.makingCharge || entry.sellingMakingCharge || 0;
-    const wastagePercent = entry.wastagePercent || entry.sellingWastagePercent || 0;
-    const wastageAmount = metalAmount * (wastagePercent / 100);
-    const stoneAmount = entry.stoneAmount || 0;
-    const totalAmount = (metalAmount + makingCharge + wastageAmount + stoneAmount) * qty;
+  const items = buildInvoiceItems(sale.items || []);
 
-    return {
-      sn: idx + 1,
-      barcode: item.barcode || '',
-      itemName: item.itemName || item.name || '-',
-      category: item.category || '-',
-      purity: item.purity ? `${item.purity}` : (item.karat ? `${item.karat}K` : '-'),
-      grossWeight: grossWt,
-      stoneWeight: stoneWt,
-      netWeight: netWt,
-      grossWeightLaal: gramsToLaal(grossWt),
-      stoneWeightLaal: gramsToLaal(stoneWt),
-      netWeightLaal: gramsToLaal(netWt),
-      qty,
-      goldRate: ratePerGram > 0 ? ratePerGram : undefined,
-      metalAmount: Number(metalAmount.toFixed(2)),
-      stoneAmount: Number(stoneAmount.toFixed(2)),
-      makingCharge: Number(makingCharge.toFixed(2)),
-      wastage: `${wastagePercent}%`,
-      totalAmount: Number(totalAmount.toFixed(2)),
-    };
-  });
-
-  const subtotal = items.reduce((sum, item) => sum + item.totalAmount, 0);
-  const makingChargeTotal = items.reduce((sum, item) => sum + item.makingCharge, 0);
-  const stoneTotal = items.reduce((sum, item) => sum + (item.stoneAmount || 0), 0);
-
+  const subtotal = items.reduce((sum, item) => sum + item._total, 0);
   const taxDetails = sale.taxDetails || { totalTax: 0, discountAmount: 0, taxes: [] };
-  const totalTax = taxDetails.totalTax || 0;
   const discount = sale.discountAmount || taxDetails.discountAmount || 0;
-  const taxableAmount = Number((subtotal - discount).toFixed(2));
-  const taxBreakdown = (taxDetails.taxes || []).map((t) => ({
-    name: t.name || 'Tax',
-    rate: t.rate || 0,
-    amount: t.amount || 0,
-  }));
-  const vatTotal = totalTax;
-  const grandTotal = Number((taxableAmount + totalTax).toFixed(2));
-  const paidAmount = sale.paidAmount || 0;
-  const dueAmount = Number((grandTotal - paidAmount).toFixed(2));
+  const oldGoldAmount = Number(sale.oldGoldDetails?.deductibleAmount || 0);
+  // Old gold brought in for exchange is NON-taxable — the fee is charged only on
+  // the net amount the customer pays for the new item after the exchange.
+  const taxableAmount = Number((subtotal - discount - oldGoldAmount).toFixed(2));
+  const fee = Number((taxableAmount * 0.005).toFixed(2));
+  const rawTotal = Number((taxableAmount + fee + oldGoldAmount).toFixed(2));
+  const received = Number(sale.actualAmountReceived) || 0;
+  let grandTotal = Math.round(rawTotal);
+  let roundOff = Number((grandTotal - rawTotal).toFixed(2));
+  if (discount > 0 && received > 0) {
+    grandTotal = Math.round(received);
+    roundOff = Number((grandTotal - rawTotal).toFixed(2));
+  }
+  const words = `${numberToWords(grandTotal)} only`;
 
   const customer = sale.customer || {};
-
-  const settings = (() => {
-    try {
-      const s = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('settings') || '{}') : {};
-      return s;
-    } catch {
-      return {};
-    }
-  })();
+  const customerName =
+    typeof customer === 'object' && customer !== null ? customer.name || 'Walk-in Customer' : customer;
+  const customerPhone =
+    typeof customer === 'object' && customer !== null ? customer.phone || '' : '';
+  const customerAddress =
+    typeof customer === 'object' && customer !== null ? customer.address || '' : '';
+  const customerCode =
+    typeof customer === 'object' && customer !== null ? customer.customerCode || '' : '';
+  const salesPerson = sale.soldBy?.name || '';
 
   const companyName = settings.storeName || 'My Jewellery Store';
-  const address = settings.address || 'Kathmandu, Nepal';
-  const phone = settings.phone || 'N/A';
-  const email = settings.email || 'info@jewellery.com';
-  const panNumber = settings.panNumber || 'N/A';
+  const address = settings.address || '';
+  const tagline = 'AN EXCLUSIVE GOLD & DIAMOND JEWELLERY SHOWROOM';
+  const panNumber = settings.panNumber || '';
   const LogoUrl = settings.logoUrl || '';
-  const fiscalYear = getFiscalYear(sale.createdAt);
-  const dateAD = formatDate(sale.createdAt, 'dd/MM/yyyy');
-  const dateBS = '';
-  const time = formatDate(sale.createdAt, 'HH:mm');
+
+  const dateAD = formatDate(sale.createdAt, 'd/M/yyyy');
+  const dateBS = getBSDate(sale.createdAt);
+  const time = formatDate(sale.createdAt, 'hh:mm a');
+  const dateTime = `${dateAD}-${time}`;
+
+  const oldGold = sale.oldGoldDetails || {};
 
   return (
     <div className="bg-white text-black">
@@ -152,12 +122,14 @@ export default function PrintInvoice() {
         @media print {
           body { background: #fff !important; }
           .no-print { display: none !important; }
-          .print-page { page-break-after: always; }
         }
-        @page { margin: 10mm; }
+        @page { size: A4; margin: 4mm; }
+        @media print {
+          .invoice-printable { max-height: 100%; }
+        }
       `}</style>
 
-      <div className="p-6 max-w-4xl mx-auto print:p-6">
+      <div className="p-6 max-w-[1050px] mx-auto print:p-0">
         <div className="no-print flex justify-between items-center mb-4">
           <h1 className="text-lg font-bold">Invoice Preview</h1>
           <button
@@ -168,57 +140,42 @@ export default function PrintInvoice() {
           </button>
         </div>
 
-        <div className="border-2 border-gray-800 p-4 bg-white text-black font-sans" style={{ fontFamily: 'monospace' }}>
-          <InvoiceHeader
-            logoUrl={LogoUrl}
-            companyName={companyName}
-            address={address}
-            phone={phone}
-            email={email}
-            panNumber={panNumber}
-            invoiceNumber={sale.saleNumber || '-'}
-            fiscalYear={fiscalYear}
-            dateAD={dateAD}
-            dateBS={dateBS}
-            time={time}
-          />
-
-          <CustomerInfo
-            customerName={
-              typeof customer === 'object' && customer !== null ? (customer.name) : customer
-            }
-            customerPhone={
-              typeof customer === 'object' && customer !== null ? (customer.phone) : ''
-            }
-            customerAddress={
-              typeof customer === 'object' && customer !== null ? (customer.address) : ''
-            }
-            paymentMethod={sale.paymentType || '-'}
-          />
-
-          <InvoiceTable items={items} />
-
-          <InvoiceSummary
-            subtotal={subtotal}
-            makingChargeTotal={makingChargeTotal}
-            stoneTotal={stoneTotal}
-            discount={discount}
-            taxableAmount={taxableAmount}
-            taxes={taxBreakdown}
-            vatTotal={vatTotal}
-            grandTotal={grandTotal}
-            paidAmount={paidAmount}
-            dueAmount={dueAmount}
-            currency={currency}
-            actualAmountReceived={sale.actualAmountReceived}
-          />
-
-          <InvoiceFooter
-            companyName={companyName}
-            qrData={sale.saleNumber}
-            barcodeData={sale.saleNumber || sale._id}
-          />
-        </div>
+        <InvoiceDocument
+          logoUrl={LogoUrl}
+          companyName={companyName}
+          tagline={tagline}
+          address={address}
+          phone={settings.phone || ''}
+          panNumber={panNumber}
+          invoiceNumber={sale.saleNumber || '-'}
+          dateAD={dateAD}
+          dateBS={dateBS}
+          dateTime={dateTime}
+          title="Estimate"
+          customerName={customerName}
+          customerPhone={customerPhone}
+          customerAddress={customerAddress}
+          customerCode={customerCode}
+          customerPan=""
+          salesPerson={salesPerson}
+          items={items}
+          words={words}
+          subtotal={subtotal}
+          discount={discount}
+          taxableAmount={taxableAmount}
+          totalTax={fee}
+          roundOff={roundOff}
+          grandTotal={grandTotal}
+          paymentType={sale.paymentType || '-'}
+          paidAmount={sale.paidAmount || 0}
+          oldGoldWeight={oldGold.netWeight || oldGold.weight}
+          oldGoldAmount={oldGold.deductibleAmount}
+          oldGoldPurity={oldGold.purity}
+          oldGoldDeductionPercent={oldGold.deductionPercent}
+          oldGoldGrossWeight={oldGold.weight}
+          oldGoldNetWeight={oldGold.netWeight || oldGold.weight}
+          cashier={salesPerson}
+        />
       </div>
     </div>
   );

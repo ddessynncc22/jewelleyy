@@ -30,24 +30,34 @@ export function formatWeight(weight, decimals = 3) {
 
 export function formatWeightLaal(weight, decimals = 3) {
   if (weight == null) return "-";
-  const laal = Number(weight) * (100 / 11.6638);
+  const laal = Number(weight) * (100 / 11.664);
   return `${laal.toFixed(decimals)} laal`;
 }
 
 export function formatWeightBoth(weight, decimals = 3) {
   if (weight == null) return "-";
-  const laal = Number(weight) * (100 / 11.6638);
+  const laal = Number(weight) * (100 / 11.664);
   return `${Number(weight).toFixed(decimals)} g / ${laal.toFixed(decimals)} laal`;
 }
 
 export function gramsToLaal(grams) {
   if (grams == null) return 0;
-  return Number((grams * (100 / 11.6638)).toFixed(3));
+  return Number((grams * (100 / 11.664)).toFixed(3));
 }
 
 export function laalToGrams(laal) {
   if (laal == null) return 0;
-  return Number((laal * (11.6638 / 100)).toFixed(4));
+  return Number((laal * (11.664 / 100)).toFixed(4));
+}
+
+export function formatWeightTolaLaal(grams) {
+  if (grams == null) return "-";
+  const totalLaal = Math.round(Number(grams) * (100 / 11.664) * 1000) / 1000;
+  if (totalLaal < 100) return `${totalLaal.toFixed(3)} laal`;
+  const tola = Math.floor(totalLaal / 100);
+  const remainder = Math.round((totalLaal - tola * 100) * 1000) / 1000;
+  if (remainder === 0) return `${tola} tola`;
+  return `${tola} tola ${remainder.toFixed(3)} laal`;
 }
 
 export function getImageSrc(img) {
@@ -174,12 +184,34 @@ export function getFiscalYear(date) {
   return `${year - 1}-${String(year).slice(-2)}`;
 }
 
-export function getInvoiceTaxSettings() {
-  const settings = getCachedSettings();
-  return settings?.taxSettings || {};
-}
-
 export function getInvoiceCurrency() {
   const settings = getCachedSettings();
   return settings?.currency || 'NPR';
+}
+
+export const GRAMS_PER_TOLA = 11.664;
+
+// Actual rate for a tenant = scraped/base rate + one-time transport charge.
+// The transport charge is a flat per-tola NPR amount. Returns an effective
+// tola rate object (plus perGram) so every consumer shows the same figure.
+export function applyTransportRate(rateObj, transportPerTola) {
+  if (!rateObj) return null;
+  const baseTola = rateObj.unit === 'tola'
+    ? Number(rateObj.rate || 0)
+    : Number(rateObj.rate || 0) * GRAMS_PER_TOLA;
+  const effectiveTola = baseTola + (Number(transportPerTola) || 0);
+  return {
+    ...rateObj,
+    unit: 'tola',
+    rate: Math.round(effectiveTola * 100) / 100,
+    perGram: Math.round(effectiveTola / GRAMS_PER_TOLA),
+  };
+}
+
+export function getTransportCharges() {
+  const settings = getCachedSettings() || {};
+  return {
+    gold: Number(settings.goldTransportCharge) || 0,
+    silver: Number(settings.silverTransportCharge) || 0,
+  };
 }

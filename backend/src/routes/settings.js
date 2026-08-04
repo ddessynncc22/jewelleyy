@@ -8,8 +8,8 @@ const ActivityLog = require('../models/ActivityLog');
 const defaults = {
   storeName: 'My Jewellery Store', address: '', phone: '', email: '',
   currency: 'NPR', defaultPurity: 916, defaultKarat: 22,
-  lowStockThreshold: 5, taxSettings: {},
-  nepalTaxSettings: { enabled: false, luxuryTax: 0, vatRate: 13, vatEnabled: true, irdPrintEnabled: true, fiscalYearStart: '04', panNumber: '', includeInInvoice: true },
+  lowStockThreshold: 5, panNumber: '',
+  goldTransportCharge: 0, silverTransportCharge: 0,
 };
 
 router.get('/', protect, async (req, res, next) => {

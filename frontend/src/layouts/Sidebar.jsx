@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 
-import { LayoutDashboard, Gem, ArrowLeftRight, Wrench, Banknote, ShoppingCart, Users, TrendingUp, BarChart3, ShieldCheck, Settings, ChevronLeft, ChevronRight, X, Sparkles, Receipt, ChevronDown, Building2, Globe, Megaphone, History, ClipboardList,
-} from 'lucide-react'
+import { LayoutDashboard, Gem, ArrowLeftRight, Wrench, Banknote, ShoppingCart, Users, TrendingUp, BarChart3, ShieldCheck, Settings, ChevronLeft, ChevronRight, X, Sparkles, ChevronDown, Building2, Globe, Megaphone, History, ClipboardList } from 'lucide-react'
 import { getCachedSettings } from '../services/settingsService'
 import { useAuth } from '../hooks/useAuth'
 
@@ -12,13 +11,15 @@ const tenantNavItems = [
   { to: '/stock', label: 'Stock Movement', icon: ArrowLeftRight },
   { to: '', label: 'Karigar', icon: Wrench, children: [
     { to: '/karigar', label: 'Karigars', end: true },
-    { to: '/karigar/pending-jobs', label: 'Pending Jobs', icon: History },
+    { to: '/karigar/pending-jobs', label: 'Pending Jobs' },
   ] },
-  { to: '/pawn', label: 'Bandaki', icon: Banknote },
+  { to: '', label: 'Loan', icon: Banknote, children: [
+    { to: '/pawn', label: 'Bandaki', end: true },
+  ] },
   { to: '/custom-orders', label: 'Custom Orders', icon: ClipboardList },
   { to: '', label: 'POS', icon: ShoppingCart, children: [
     { to: '/pos', label: 'New Sale', end: true },
-    { to: '/pos/sales', label: 'Sales History', icon: Receipt },
+    { to: '/pos/sales', label: 'Sales History' },
   ] },
   { to: '/customers', label: 'Customers', icon: Users },
   { to: '/rates', label: 'Rates', icon: TrendingUp },
@@ -63,11 +64,10 @@ export default function Sidebar({ collapsed, storeName, onToggle, mobileOpen, on
             {!collapsed && <ChevronDown size={16} className={`transition-transform duration-200 ${isOpen ? 'rotate-0' : '-rotate-90'}`} />}
           </button>
           {!collapsed && isOpen && (
-            <div className="ml-3 mt-0.5 space-y-0.5 border-l border-[var(--color-border)] pl-2">
+            <div className="ml-2 mt-0.5 space-y-0.5">
               {item.children.map((child) => (
-                <NavLink key={child.to} to={child.to} end={child.end} onClick={onMobileClose} className={({ isActive }) => `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${ isActive ? 'bg-[var(--color-primary-light)] text-[var(--color-primary)] font-medium' : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-elevated)] hover:text-[var(--color-text)]' }` } >
-                  {child.icon && <child.icon size={16} className="shrink-0" />}
-                  <span>{child.label}</span>
+                <NavLink key={child.to} to={child.to} end={child.end} onClick={onMobileClose} className={({ isActive }) => `block w-full px-3 py-2 rounded-lg text-sm transition-all duration-200 ${ isActive ? 'bg-[var(--color-primary-light)] text-[var(--color-primary)] font-medium' : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-elevated)] hover:text-[var(--color-text)]' }` } >
+                  <span className="truncate">{child.label}</span>
                 </NavLink>
               ))}
             </div>

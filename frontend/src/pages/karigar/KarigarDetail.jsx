@@ -6,7 +6,7 @@ import toast from 'react-hot-toast'
 
 import { ArrowLeft, Plus, User, ClipboardList } from 'lucide-react'
 
-import { getKarigar, deleteKarigar, issueMaterial, receiveFinished, getKarigarReport, updateMaterialStatus } from '../../services/karigarService'
+import { getKarigar, deleteKarigar, issueMaterial, receiveFinished, getKarigarReport, updateMaterialStatus, recordKarigarPayment, recordGoldTaken, getKarigarPaymentHistory } from '../../services/karigarService'
 import { getItems } from '../../services/itemService'
 
 import Card from '../../components/ui/Card'
@@ -44,6 +44,7 @@ const tabs = [
   { value: 'materials', label: 'Materials Issued' },
   { value: 'finished', label: 'Finished Items' },
   { value: 'products', label: 'Products' },
+  { value: 'payments', label: 'Payments' },
   { value: 'report', label: 'Report' },
 ]
 
@@ -71,8 +72,29 @@ const KarigarDetail = () => {
   const [updatingStatus, setUpdatingStatus] = useState(false)
   const [issueModalOpen, setIssueModalOpen] = useState(false)
   const [receiveModalOpen, setReceiveModalOpen] = useState(false)
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false)
+  const [goldModalOpen, setGoldModalOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [paymentHistory, setPaymentHistory] = useState([])
+  const [paymentForm, setPaymentForm] = useState({
+    materialIndex: '',
+    amount: '',
+    type: 'cash',
+    goldWeight: '',
+    goldKarat: '24',
+    goldPurity: '999',
+    ratePerGram: '',
+    note: '',
+  })
+  const [goldForm, setGoldForm] = useState({
+    materialIndex: '',
+    weight: '',
+    karat: '24',
+    purity: '999',
+    value: '',
+    note: '',
+  })
 
   const [issueForm, setIssueForm] = useState({
     itemName: '',
@@ -136,6 +158,19 @@ const KarigarDetail = () => {
     if (activeTab === 'report') fetchReport()
   }, [activeTab, fetchReport])
 
+  const fetchPaymentHistory = useCallback(async () => {
+    try {
+      const { data } = await getKarigarPaymentHistory(id)
+      setPaymentHistory(data?.data || data || [])
+    } catch {
+      setPaymentHistory([])
+    }
+  }, [id])
+
+  useEffect(() => {
+    if (activeTab === 'payments') fetchPaymentHistory()
+  }, [activeTab, fetchPaymentHistory])
+
   const fetchItems = useCallback(async () => {
     if (!id) return
     setLoadingItems(true)
@@ -158,6 +193,58 @@ const KarigarDetail = () => {
     await deleteKarigar(id)
     toast.success('Karigar deleted successfully')
     navigate('/karigar')
+  }
+
+  const handleRecordPayment = async (e) => {
+    e.preventDefault()
+    setSubmitting(true)
+    try {
+      const payload = {
+        materialIndex: Number(paymentForm.materialIndex),
+        amount: paymentForm.type === 'cash' ? Number(paymentForm.amount) : 0,
+        type: paymentForm.type,
+        goldWeight: paymentForm.type === 'gold' ? Number(paymentForm.goldWeight) : undefined,
+        goldKarat: Number(paymentForm.goldKarat),
+        goldPurity: Number(paymentForm.goldPurity),
+        ratePerGram: Number(paymentForm.ratePerGram) || 0,
+        note: paymentForm.note,
+      }
+      await recordKarigarPayment(id, Number(paymentForm.materialIndex), payload)
+      toast.success('Payment recorded successfully')
+      setPaymentModalOpen(false)
+      setPaymentForm({ materialIndex: '', amount: '', type: 'cash', goldWeight: '', goldKarat: '24', goldPurity: '999', ratePerGram: '', note: '' })
+      fetchKarigar()
+      fetchPaymentHistory()
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Failed to record payment')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleRecordGold = async (e) => {
+    e.preventDefault()
+    setSubmitting(true)
+    try {
+      const payload = {
+        materialIndex: Number(goldForm.materialIndex),
+        weight: Number(goldForm.weight),
+        karat: Number(goldForm.karat),
+        purity: Number(goldForm.purity),
+        value: Number(goldForm.value) || 0,
+        note: goldForm.note,
+      }
+      await recordGoldTaken(id, Number(goldForm.materialIndex), payload)
+      toast.success('Gold taken record added successfully')
+      setGoldModalOpen(false)
+      setGoldForm({ materialIndex: '', weight: '', karat: '24', purity: '999', value: '', note: '' })
+      fetchKarigar()
+      fetchPaymentHistory()
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Failed to record gold taken')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const handleIssueMaterial = async (e) => {
@@ -263,7 +350,7 @@ const KarigarDetail = () => {
     { key: 'itemName', label: 'Item' },
     { key: 'grossWeight', label: 'Gross Weight', render: (val) => (val ? `${val}g` : '-') },
     { key: 'stoneWeight', label: 'Stone Weight', render: (val) => (val ? `${val}g` : '-') },
-    { key: 'purity', label: 'Purity', render: (val) => (val ? `${val}%` : '-') },
+    { key: 'purity', label: 'Purity', render: (val) => (val ? val : '-') },
     {
       key: 'status',
       label: 'Status',
@@ -294,12 +381,53 @@ const KarigarDetail = () => {
     },
     { key: 'wastage', label: 'Wastage', render: (val) => (val ? `${val}g` : '-') },
     { key: 'labourCharge', label: 'Labour Charge', render: (val) => (val ? formatCurrency(val) : '-') },
+    { key: 'jartiPercent', label: 'Jarti %', render: (val) => (val ? `${val}%` : '-') },
+    { key: 'jartiAmount', label: 'Jarti Amount', render: (val) => (val ? formatCurrency(val) : '-') },
+    { key: 'payment', label: 'Total Payment', render: (val) => (val ? formatCurrency(val) : '-') },
+    {
+      key: 'paymentReceived',
+      label: 'Paid',
+      render: (val) => (Number(val) > 0 ? formatCurrency(val) : '-'),
+    },
+    {
+      key: '_balance',
+      label: 'Balance',
+      render: (val) =>
+        val > 0 ? (
+          <span className="text-red-600 font-medium">{formatCurrency(val)}</span>
+        ) : val === 0 ? (
+          <span className="text-emerald-600 font-medium">Paid</span>
+        ) : (
+          <span className="text-red-600 font-medium">Overpaid {formatCurrency(Math.abs(val))}</span>
+        ),
+    },
+    {
+      key: 'paymentStatus',
+      label: 'Payment Status',
+      render: (val) =>
+        val === 'paid' ? (
+          <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 border border-emerald-200">
+            Paid
+          </span>
+        ) : val === 'partial' ? (
+          <span className="inline-flex items-center rounded-full bg-yellow-50 px-2.5 py-1 text-xs font-medium text-yellow-700 border border-yellow-200">
+            Partial
+          </span>
+        ) : val ? (
+          <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 border border-amber-200">
+            Pending
+          </span>
+        ) : (
+          '-'
+        ),
+    },
   ]
 
   const materialsData = (karigar.materials || []).map((m, i) => ({
     ...m,
     _index: i,
     _isReturned: m.status === 'Returned',
+    _balance: Number((Number(m.paymentDue) || Number(m.payment) || 0) - (Number(m.paymentReceived) || 0)),
   }))
 
   const finishedItems = (karigar.materials || []).filter(
@@ -334,6 +462,9 @@ const KarigarDetail = () => {
         return w != null ? `${w}%` : '-'
       },
     },
+    { key: 'jartiPercent', label: 'Jarti %', render: (val) => (val ? `${val}%` : '-') },
+    { key: 'jartiAmount', label: 'Jarti Amount', render: (val) => (val ? formatCurrency(val) : '-') },
+    { key: 'payment', label: 'Total Payment', render: (val) => (val ? formatCurrency(val) : '-') },
   ]
 
   const productColumns = [
@@ -349,28 +480,49 @@ const KarigarDetail = () => {
     { key: 'status', label: 'Status', render: (val) => <StatusBadge status={val} size="sm" /> },
   ]
 
+const totalGoldTaken = (karigar.materials || []).reduce((s, m) => s + (m.goldReceived || []).reduce((gs, g) => gs + (g.value || 0), 0), 0)
   const reportCards = report
-    ? [
-        { label: 'Materials Issued', value: report.summary?.issuedCount ?? 0 },
-        { label: 'Finished Items', value: report.summary?.returnedCount ?? 0 },
-        { label: 'Total Labour Cost', value: formatCurrency(report.summary?.totalLabour ?? 0) },
-        {
-          label: 'Avg Wastage',
-          value:
-            report.summary?.wastagePercentage != null
-              ? `${report.summary.wastagePercentage}%`
-              : '0%',
-        },
-        { label: 'Pending Items', value: report.summary?.pendingCount ?? 0 },
-        {
-          label: 'Completion Rate',
-          value:
-            report.summary?.issuedCount > 0
-              ? `${((report.summary.returnedCount / report.summary.issuedCount) * 100).toFixed(1)}%`
-              : '0%',
-        },
-      ]
-    : []
+     ? [
+         { label: 'Materials Issued', value: report.summary?.issuedCount ?? 0 },
+         { label: 'Finished Items', value: report.summary?.returnedCount ?? 0 },
+         { label: 'Total Labour Cost', value: formatCurrency(report.summary?.totalLabour ?? 0) },
+         {
+           label: 'Total Jarti',
+           value: formatCurrency(report.summary?.totalJarti ?? 0),
+         },
+         {
+           label: 'Total Payment',
+           value: formatCurrency(report.summary?.totalPayment ?? 0),
+         },
+         {
+           label: 'Pending Payment',
+           value: formatCurrency(report.summary?.pendingPayment ?? 0),
+         },
+         {
+           label: 'Total Gold Taken',
+           value: formatCurrency(report.summary?.totalGoldTaken ?? 0),
+         },
+         {
+           label: 'Total Payments Recorded',
+           value: formatCurrency(report.summary?.totalPayments ?? 0),
+         },
+         {
+           label: 'Avg Wastage',
+           value:
+             report.summary?.wastagePercentage != null
+               ? `${report.summary.wastagePercentage}%`
+               : '0%',
+         },
+         { label: 'Pending Items', value: report.summary?.pendingCount ?? 0 },
+         {
+           label: 'Completion Rate',
+           value:
+             report.summary?.issuedCount > 0
+               ? `${((report.summary.returnedCount / report.summary.issuedCount) * 100).toFixed(1)}%`
+               : '0%',
+         },
+       ]
+     : []
 
   return (
     <div className="space-y-6">
@@ -470,9 +622,93 @@ const KarigarDetail = () => {
             <DataTable columns={productColumns} data={items} />
           )}
         </div>
-      )}
+       )}
 
-      {activeTab === 'report' && (
+       {activeTab === 'payments' && (
+         <div className="space-y-6">
+           <Card title="Payment Summary">
+<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                 {(() => {
+                   const materials = karigar.materials || [];
+                   const totalDue = materials.reduce((s, m) => s + (Number(m.paymentDue) || Number(m.payment) || 0), 0);
+                   const totalPaid = materials.reduce((s, m) => s + (Number(m.paymentReceived) || 0), 0);
+                   const balance = Number(totalDue.toFixed(2)) - Number(totalPaid.toFixed(2));
+                   const overpaid = balance < 0;
+                   return (
+                     <>
+                       <div className="rounded-lg bg-gray-50 p-3">
+                         <p className="text-xs text-gray-500">Total Payment Due</p>
+                         <p className="text-lg font-bold text-gray-900">{formatCurrency(totalDue)}</p>
+                       </div>
+                       <div className="rounded-lg bg-green-50 p-3">
+                         <p className="text-xs text-gray-500">Total Paid</p>
+                         <p className="text-lg font-bold text-green-700">{formatCurrency(totalPaid)}</p>
+                       </div>
+                       <div className={`rounded-lg p-3 ${overpaid ? 'bg-red-50' : 'bg-amber-50'}`}>
+                         <p className="text-xs text-gray-500">{overpaid ? 'Overpaid by' : 'Balance Due'}</p>
+                         <p className={`text-lg font-bold ${overpaid ? 'text-red-700' : 'text-amber-700'}`}>
+                           {formatCurrency(overpaid ? Math.abs(balance) : balance)}
+                         </p>
+                       </div>
+                       <div className="rounded-lg bg-purple-50 p-3">
+                         <p className="text-xs text-gray-500">Total Gold Taken</p>
+                         <p className="text-lg font-bold text-purple-700">{formatCurrency(totalGoldTaken)}</p>
+                       </div>
+                     </>
+                   )
+                 })()}
+               </div>
+           </Card>
+           <Card title="Payment Timeline">
+             {paymentHistory.filter((h) => !(h.type === 'cash' && Number(h.amount) <= 0) && !(h.type !== 'cash' && Number(h.goldWeight) <= 0)).length === 0 ? (
+               <EmptyState title="No payment records" description="Record a payment or gold taken to see the timeline" />
+             ) : (
+               <div className="space-y-3">
+                 {paymentHistory
+                   .filter((h) => !(h.type === 'cash' && Number(h.amount) <= 0) && !(h.type !== 'cash' && Number(h.goldWeight) <= 0))
+                   .map((h, i) => (
+                   <div key={i} className="flex items-center justify-between rounded-lg border border-gray-200 p-3">
+                     <div>
+                       <p className="text-sm font-medium text-gray-900">
+                         {h.type === 'gold_taken' ? 'Gold Taken' : h.type === 'gold' ? 'Gold Payment' : 'Cash Payment'}
+                       </p>
+                       <p className="text-xs text-gray-500">
+                         {h.materialName} · {h.date ? new Date(h.date).toLocaleDateString() : ''}
+                         {h.note ? ` · ${h.note}` : ''}
+                       </p>
+                     </div>
+                      <div className="text-right">
+                        {h.type === 'gold_taken' ? (
+                          <>
+                            <span className="text-sm font-medium text-purple-700">{h.goldWeight}g {h.goldKarat}K</span>
+                            {Number(h.goldValue) > 0 && <span className="block text-xs text-gray-500">{formatCurrency(h.goldValue)}</span>}
+                          </>
+                        ) : h.type === 'gold' ? (
+                          <>
+                            <span className="text-sm font-medium text-gray-900">{formatCurrency(h.goldValue || 0)}</span>
+                            <span className="block text-xs text-gray-500">{h.goldWeight}g {h.goldKarat}K</span>
+                          </>
+                        ) : (
+                          <span className="text-sm font-medium text-gray-900">{formatCurrency(h.amount)}</span>
+                        )}
+                      </div>
+                   </div>
+                 ))}
+               </div>
+             )}
+           </Card>
+           <div className="flex gap-3">
+             <Button onClick={() => { setPaymentForm((p) => ({ ...p, materialIndex: '' })); setPaymentModalOpen(true) }}>
+               Record Payment
+             </Button>
+             <Button variant="outline" onClick={() => { setGoldForm((f) => ({ ...f, materialIndex: '' })); setGoldModalOpen(true) }}>
+               Record Gold Taken
+             </Button>
+           </div>
+         </div>
+       )}
+
+       {activeTab === 'report' && (
         <div className="space-y-6">
           <Card title="Date Range">
             <div className="flex flex-col sm:flex-row gap-4">
@@ -551,6 +787,7 @@ const KarigarDetail = () => {
               name="grossWeight"
               type="number"
               step="0.01"
+              min="0"
               value={issueForm.grossWeight}
               onChange={(e) => setIssueForm((p) => ({ ...p, grossWeight: e.target.value }))}
               required
@@ -560,16 +797,19 @@ const KarigarDetail = () => {
               name="stoneWeight"
               type="number"
               step="0.01"
+              min="0"
               value={issueForm.stoneWeight}
               onChange={(e) => setIssueForm((p) => ({ ...p, stoneWeight: e.target.value }))}
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <FormInput
-              label="Purity (%)"
+              label="Purity (per mille, e.g. 999 / 916 / 750)"
               name="purity"
               type="number"
-              step="0.1"
+              step="1"
+              min="0"
+              max="1000"
               value={issueForm.purity}
               onChange={(e) => setIssueForm((p) => ({ ...p, purity: e.target.value }))}
               required
@@ -577,7 +817,7 @@ const KarigarDetail = () => {
             <FormSelect
               label="Karat"
               name="karat"
-              options={KARAT_OPTIONS.map((k) => ({ value: k, label: k }))}
+              options={KARAT_OPTIONS.map((k) => ({ value: k.replace('K', ''), label: k }))}
               value={issueForm.karat}
               onChange={(e) => setIssueForm((p) => ({ ...p, karat: e.target.value }))}
               placeholder="Select karat"
@@ -666,6 +906,7 @@ const KarigarDetail = () => {
               name="grossWeight"
               type="number"
               step="0.01"
+              min="0"
               value={receiveForm.grossWeight}
               onChange={(e) => setReceiveForm((p) => ({ ...p, grossWeight: e.target.value }))}
               required
@@ -675,16 +916,19 @@ const KarigarDetail = () => {
               name="stoneWeight"
               type="number"
               step="0.01"
+              min="0"
               value={receiveForm.stoneWeight}
               onChange={(e) => setReceiveForm((p) => ({ ...p, stoneWeight: e.target.value }))}
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <FormInput
-              label="Purity (%)"
+              label="Purity (per mille, e.g. 999 / 916 / 750)"
               name="purity"
               type="number"
-              step="0.1"
+              step="1"
+              min="0"
+              max="1000"
               value={receiveForm.purity}
               onChange={(e) => setReceiveForm((p) => ({ ...p, purity: e.target.value }))}
               required
@@ -694,6 +938,7 @@ const KarigarDetail = () => {
               name="netMetalWeight"
               type="number"
               step="0.01"
+              min="0"
               value={receiveForm.netMetalWeight}
               onChange={(e) => setReceiveForm((p) => ({ ...p, netMetalWeight: e.target.value }))}
             />
@@ -802,17 +1047,210 @@ const KarigarDetail = () => {
         </form>
       </Modal>
 
-      <ConfirmDialog
-        isOpen={deleteOpen}
-        onClose={() => setDeleteOpen(false)}
-        onConfirm={handleDelete}
-        title="Delete Karigar"
-        message="Are you sure you want to delete this karigar? This action cannot be undone."
-        confirmText="Delete"
-        variant="danger"
-      />
-    </div>
-  )
-}
+       <Modal
+         isOpen={paymentModalOpen}
+         onClose={() => setPaymentModalOpen(false)}
+         title="Record Payment"
+       >
+         <form onSubmit={handleRecordPayment} className="space-y-4">
+            <FormSelect
+              label="Material"
+              name="materialIndex"
+              options={(karigar.materials || [])
+                .map((m, i) => ({
+                  value: i,
+                  label: `${m.itemName} (${m.grossWeight}g, ${m.paymentStatus})`,
+                  _remaining: (Number(m.paymentDue) || Number(m.payment) || 0) - (Number(m.paymentReceived) || 0),
+                }))
+                .filter((opt) => opt._remaining > 0)}
+              value={paymentForm.materialIndex}
+              onChange={(e) => setPaymentForm((p) => ({ ...p, materialIndex: e.target.value }))}
+              required
+            />
+            {paymentForm.materialIndex !== '' && paymentForm.materialIndex !== undefined && paymentForm.materialIndex !== null && (karigar.materials || [])[Number(paymentForm.materialIndex)] ? (() => {
+              const m = (karigar.materials || [])[Number(paymentForm.materialIndex)];
+              const totalDue = Number(m.paymentDue) || Number(m.payment) || 0;
+              const received = Number(m.paymentReceived) || 0;
+              const pending = Math.max(0, totalDue - received);
+              return (
+                <div className="rounded-lg bg-gray-50 p-3 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Total Amount</span>
+                    <span className="font-medium text-gray-900">{formatCurrency(totalDue)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Amount Received</span>
+                    <span className="font-medium text-gray-700">{formatCurrency(received)}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-gray-200 pt-1">
+                    <span className="font-medium text-gray-600">Pending (Balance Due)</span>
+                    <span className="font-bold text-red-600">{formatCurrency(pending)}</span>
+                  </div>
+                </div>
+              );
+            })() : null}
+           <FormSelect
+             label="Payment Type"
+             name="type"
+             options={[{ value: 'cash', label: 'Cash' }, { value: 'gold', label: 'Gold' }]}
+             value={paymentForm.type}
+             onChange={(e) => setPaymentForm((p) => ({ ...p, type: e.target.value }))}
+           />
+           {paymentForm.type === 'cash' && (
+             <FormInput
+               label="Amount (Rs.)"
+               name="amount"
+               type="number"
+               step="1"
+               value={paymentForm.amount}
+               onChange={(e) => setPaymentForm((p) => ({ ...p, amount: e.target.value }))}
+               placeholder="0"
+               required
+             />
+           )}
+           {paymentForm.type === 'gold' && (
+             <>
+               <FormInput
+                 label="Gold Weight (g)"
+                 name="goldWeight"
+                 type="number"
+                 step="0.001"
+                 value={paymentForm.goldWeight}
+                 onChange={(e) => setPaymentForm((p) => ({ ...p, goldWeight: e.target.value }))}
+                 placeholder="e.g. 2.5"
+                 required
+               />
+               <FormSelect
+                 label="Gold Karat"
+                 name="goldKarat"
+                 options={[{ value: '24', label: '24K' }, { value: '22', label: '22K' }, { value: '21', label: '21K' }, { value: '18', label: '18K' }, { value: '14', label: '14K' }]}
+                 value={paymentForm.goldKarat}
+                 onChange={(e) => setPaymentForm((p) => ({ ...p, goldKarat: e.target.value }))}
+               />
+               <FormSelect
+                 label="Gold Purity"
+                 name="goldPurity"
+                 options={[{ value: '999', label: '999' }, { value: '995', label: '995' }, { value: '916', label: '916' }, { value: '875', label: '875' }, { value: '750', label: '750' }]}
+                 value={paymentForm.goldPurity}
+                 onChange={(e) => setPaymentForm((p) => ({ ...p, goldPurity: e.target.value }))}
+               />
+                <FormInput
+                  label="Rate per Gram (Rs.)"
+                  name="ratePerGram"
+                  type="number"
+                  step="1"
+                  value={paymentForm.ratePerGram}
+                  onChange={(e) => setPaymentForm((p) => ({ ...p, ratePerGram: e.target.value }))}
+                  placeholder="e.g. 8500"
+                  required
+                />
+                {Number(paymentForm.goldWeight) > 0 && Number(paymentForm.ratePerGram) > 0 && (
+                  <div className="rounded-lg bg-gray-50 p-3 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Gold Value</span>
+                      <span className="font-bold text-gray-900">
+                        {formatCurrency(Number(paymentForm.goldWeight) * (Number(paymentForm.goldKarat) / 24) * Number(paymentForm.ratePerGram))}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </>
+           )}
+           <FormInput
+             label="Note"
+             name="note"
+             value={paymentForm.note}
+             onChange={(e) => setPaymentForm((p) => ({ ...p, note: e.target.value }))}
+             placeholder="Optional note"
+           />
+           <div className="flex items-center justify-end gap-3 pt-2">
+             <Button variant="ghost" onClick={() => setPaymentModalOpen(false)} disabled={submitting}>
+               Cancel
+             </Button>
+             <Button type="submit" loading={submitting}>
+               Save Payment
+             </Button>
+           </div>
+         </form>
+       </Modal>
 
-export default KarigarDetail
+       <Modal
+         isOpen={goldModalOpen}
+         onClose={() => setGoldModalOpen(false)}
+         title="Record Gold Taken from Karigar"
+       >
+         <form onSubmit={handleRecordGold} className="space-y-4">
+           <FormSelect
+             label="Material"
+              name="materialIndex"
+               options={(karigar.materials || []).map((m, i) => ({ value: i, label: `${m.itemName} (${m.grossWeight}g)` }))}
+              value={goldForm.materialIndex}
+             onChange={(e) => setGoldForm((f) => ({ ...f, materialIndex: e.target.value }))}
+             required
+           />
+           <FormInput
+             label="Gold Weight (g)"
+             name="weight"
+             type="number"
+             step="0.001"
+             value={goldForm.weight}
+             onChange={(e) => setGoldForm((f) => ({ ...f, weight: e.target.value }))}
+             placeholder="e.g. 1.5"
+             required
+           />
+           <FormSelect
+             label="Gold Karat"
+             name="karat"
+             options={[{ value: '24', label: '24K' }, { value: '22', label: '22K' }, { value: '21', label: '21K' }, { value: '18', label: '18K' }, { value: '14', label: '14K' }]}
+             value={goldForm.karat}
+             onChange={(e) => setGoldForm((f) => ({ ...f, karat: e.target.value }))}
+           />
+           <FormSelect
+             label="Gold Purity"
+             name="purity"
+             options={[{ value: '999', label: '999' }, { value: '995', label: '995' }, { value: '916', label: '916' }, { value: '875', label: '875' }, { value: '750', label: '750' }]}
+             value={goldForm.purity}
+             onChange={(e) => setGoldForm((f) => ({ ...f, purity: e.target.value }))}
+           />
+           <FormInput
+             label="Value (Rs.)"
+             name="value"
+             type="number"
+             step="1"
+             value={goldForm.value}
+             onChange={(e) => setGoldForm((f) => ({ ...f, value: e.target.value }))}
+             placeholder="e.g. 50000"
+             required
+           />
+           <FormInput
+             label="Note"
+             name="note"
+             value={goldForm.note}
+             onChange={(e) => setGoldForm((f) => ({ ...f, note: e.target.value }))}
+             placeholder="Optional note"
+           />
+           <div className="flex items-center justify-end gap-3 pt-2">
+             <Button variant="ghost" onClick={() => setGoldModalOpen(false)} disabled={submitting}>
+               Cancel
+             </Button>
+             <Button type="submit" loading={submitting}>
+               Save Gold Record
+             </Button>
+           </div>
+         </form>
+       </Modal>
+
+       <ConfirmDialog
+         isOpen={deleteOpen}
+         onClose={() => setDeleteOpen(false)}
+         onConfirm={handleDelete}
+         title="Delete Karigar"
+         message="Are you sure you want to delete this karigar? This action cannot be undone."
+         confirmText="Delete"
+         variant="danger"
+       />
+     </div>
+   )
+ }
+
+ export default KarigarDetail

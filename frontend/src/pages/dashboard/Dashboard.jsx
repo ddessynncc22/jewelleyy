@@ -5,6 +5,8 @@ import { Gem, Wrench, Package, TrendingUp, Activity, Grid3X3, Layers, Shield, Pl
 
 import { getDashboardStats } from '../../services/dashboardService'
 
+import { applyTransportRate, getTransportCharges } from '../../utils/helpers'
+
 import StatCard from '../../components/ui/StatCard'
 
 import Card from '../../components/ui/Card'
@@ -78,11 +80,14 @@ export default function Dashboard() {
   const maxStatusCount = Math.max(...byStatus.map((s) => s.count), 1)
   const maxMetalCount = Math.max(...byMetal.map((m) => m.count), 1)
 
-  const goldRate = stats.goldRate?.rate || 0
-  const goldUnit = stats.goldRate?.unit || 'tola'
+  const charges = getTransportCharges()
+  const effGoldRate = applyTransportRate(stats.goldRate, charges.gold)
+  const effSilverRate = applyTransportRate(stats.silverRate, charges.silver)
+  const goldRate = effGoldRate?.rate || 0
+  const goldUnit = effGoldRate?.unit || 'tola'
   const goldPerGram = goldUnit === 'gram' ? goldRate : Math.round(goldRate / TOLA_TO_GRAM)
-  const silverRate = stats.silverRate?.rate || 0
-  const silverUnit = stats.silverRate?.unit || 'tola'
+  const silverRate = effSilverRate?.rate || 0
+  const silverUnit = effSilverRate?.unit || 'tola'
   const silverPerGram = silverUnit === 'gram' ? silverRate : Math.round(silverRate / TOLA_TO_GRAM)
 
   const recentCols = [

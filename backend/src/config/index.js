@@ -3,6 +3,15 @@ const path = require('path');
 
 dotenv.config({ path: path.join(__dirname, '..', '..', '.env') });
 
+// Some networks (e.g. VPN/CGNAT DNS, as on this dev machine) refuse Node's
+// SRV/TXT DNS queries, which breaks mongodb+srv:// connection strings. When
+// DNS_OVERRIDE is set, pin the resolver to public servers before mongoose boots.
+if (process.env.DNS_OVERRIDE) {
+  const dns = require('dns');
+  dns.setServers(process.env.DNS_OVERRIDE.split(',').map((s) => s.trim()));
+  console.log(`DNS overridden to: ${process.env.DNS_OVERRIDE}`);
+}
+
 const nodeEnv = process.env.NODE_ENV || 'development';
 
 const jwtSecret = process.env.JWT_SECRET;

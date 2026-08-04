@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { TrendingUp, Gem, RefreshCw, Clock } from 'lucide-react'
 import { getLatestRates } from '../../services/rateService'
+import { applyTransportRate, getTransportCharges } from '../../utils/helpers'
 
 export default function TodaysRate() {
   const [data, setData] = useState(null)
@@ -26,8 +27,9 @@ export default function TodaysRate() {
     return () => clearInterval(interval)
   }, [])
 
-  const gold = data?.gold
-  const silver = data?.silver
+  const charges = getTransportCharges()
+  const gold = applyTransportRate(data?.gold, charges.gold)
+  const silver = applyTransportRate(data?.silver, charges.silver)
 
   const goldPerGram = gold?.unit === 'gram'
     ? gold.rate
@@ -100,6 +102,7 @@ export default function TodaysRate() {
               <p className="text-xs text-gray-400 mt-3 flex items-center gap-1 justify-center">
                 <Clock className="w-3 h-3" />
                 Updated {new Date(gold.date).toLocaleDateString('en-NP', { year: 'numeric', month: 'long', day: 'numeric' })}
+                {charges.gold > 0 && <span className="text-amber-500 font-medium">· incl. transport Rs {charges.gold}/tola</span>}
               </p>
             )}
           </div>
@@ -134,6 +137,7 @@ export default function TodaysRate() {
               <p className="text-xs text-gray-400 mt-3 flex items-center gap-1 justify-center">
                 <Clock className="w-3 h-3" />
                 Updated {new Date(silver.date).toLocaleDateString('en-NP', { year: 'numeric', month: 'long', day: 'numeric' })}
+                {charges.silver > 0 && <span className="text-gray-500 font-medium">· incl. transport Rs {charges.silver}/tola</span>}
               </p>
             )}
           </div>

@@ -80,10 +80,10 @@ async function scrapeRates() {
 
   // Fallback: compute per-gram from per-tola if scraping per-gram failed
   if (!rates.goldPerGram && rates.goldPerTola) {
-    rates.goldPerGram = Math.round(rates.goldPerTola / 11.6638);
+    rates.goldPerGram = Math.round(rates.goldPerTola / 11.664);
   }
   if (!rates.silverPerGram && rates.silverPerTola) {
-    rates.silverPerGram = Math.round(rates.silverPerTola / 11.6638);
+    rates.silverPerGram = Math.round(rates.silverPerTola / 11.664);
   }
 
   return rates;

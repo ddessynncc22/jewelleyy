@@ -16,6 +16,8 @@ import FormTextarea from '../../components/ui/FormTextarea'
 
 import Button from '../../components/ui/Button'
 
+import { gramsToLaal, laalToGrams } from '../../utils/helpers'
+
 
 
 const METAL_TYPE_OPTIONS = [
@@ -43,6 +45,23 @@ const KARAT_OPTIONS = [
   { value: '14K', label: '14K' },
   { value: '10K', label: '10K' },
 ]
+
+const PURITY_TO_KARAT = {
+  '999': '24K',
+  '995': '24K',
+  '916': '22K',
+  '875': '21K',
+  '750': '18K',
+  '585': '14K',
+}
+
+const KARAT_TO_PURITY = {
+  '24K': '999',
+  '22K': '916',
+  '21K': '875',
+  '18K': '750',
+  '14K': '585',
+}
 
 
 
@@ -97,6 +116,7 @@ const initialState = {
   designCode: '',
   description: '',
   grossWeight: '',
+  grossWeightLaal: '',
   stoneWeight: '0',
   quantity: '1',
   metalType: '',
@@ -112,9 +132,11 @@ const initialState = {
   costPrice: '',
   costMakingCharge: '',
   costWastagePercent: '',
+  costStonePrice: '',
   sellingPrice: '',
   sellingMakingCharge: '',
   sellingWastagePercent: '',
+  sellingStonePrice: '',
   makingCharge: '',
   wastagePercent: '',
 }
@@ -131,20 +153,6 @@ const validate = (values) => {
   }
   if (Number(values.stoneWeight) < 0) {
     errors.stoneWeight = 'Stone weight cannot be negative'
-  }
-  if (!values.costPrice) {
-    errors.costPrice = 'Cost price is required'
-  } else if (isNaN(values.costPrice) || Number(values.costPrice) <= 0) {
-    errors.costPrice = 'Enter a valid cost price'
-  }
-  if (!values.costMakingCharge && !values.costWastagePercent) {
-    errors.costPricing = 'Either making charge or wastage is required for cost'
-  }
-  if (values.sellingPrice && (isNaN(values.sellingPrice) || Number(values.sellingPrice) <= 0)) {
-    errors.sellingPrice = 'Enter a valid selling price'
-  }
-  if (values.sellingPrice && !values.sellingMakingCharge && !values.sellingWastagePercent) {
-    errors.sellingPricing = 'Either making charge or wastage is required for selling price'
   }
   return errors
 }
@@ -179,11 +187,16 @@ const ItemForm = ({ item, onClose, onSuccess }) => {
         designCode: item.designCode || '',
         description: item.description || '',
         grossWeight: item.grossWeight ?? '',
+        grossWeightLaal: item.grossWeight ? gramsToLaal(item.grossWeight) : '',
         stoneWeight: item.stoneWeight ?? '0',
         quantity: item.quantity ?? '1',
         metalType: item.metalType || '',
         purity: item.purity || '',
-        karat: item.karat || '',
+        karat: item.karat
+          ? String(item.karat).includes('K')
+            ? item.karat
+            : `${item.karat}K`
+          : '',
         karigarId: item.karigarId || '',
         stoneType: item.stoneType || '',
         carat: item.carat ?? '',
@@ -194,9 +207,11 @@ const ItemForm = ({ item, onClose, onSuccess }) => {
         costPrice: item.costPrice ?? '',
         costMakingCharge: item.costMakingCharge ?? '',
         costWastagePercent: item.costWastagePercent ?? '',
+        costStonePrice: item.costStonePrice ?? '',
         sellingPrice: item.sellingPrice ?? '',
         sellingMakingCharge: item.sellingMakingCharge ?? '',
         sellingWastagePercent: item.sellingWastagePercent ?? '',
+        sellingStonePrice: item.sellingStonePrice ?? '',
         makingCharge: item.makingCharge ?? '',
         wastagePercent: item.wastagePercent ?? '',
       })
@@ -228,6 +243,75 @@ const ItemForm = ({ item, onClose, onSuccess }) => {
   const handleImageInput = useCallback((e) => {
     setNewFiles((prev) => [...prev, ...Array.from(e.target.files)])
   }, [])
+
+  const handleGrossWeightChange = useCallback(
+    (e) => {
+      const { value } = e.target
+      handleChange(e)
+      if (value === '') {
+        setForm((prev) => ({ ...prev, grossWeightLaal: '' }))
+        return
+      }
+      const grams = Number(value)
+      if (!isNaN(grams)) {
+        setForm((prev) => ({ ...prev, grossWeightLaal: gramsToLaal(grams) }))
+      }
+    },
+    [handleChange],
+  )
+
+  const handleLaalChange = useCallback(
+    (e) => {
+      const { value } = e.target
+      handleChange(e)
+      if (value === '') {
+        setForm((prev) => ({ ...prev, grossWeight: '' }))
+        return
+      }
+      const laal = Number(value)
+      if (!isNaN(laal)) {
+        setForm((prev) => ({ ...prev, grossWeight: laalToGrams(laal) }))
+        setErrors((prev) => {
+          const next = { ...prev }
+          delete next.grossWeight
+          return next
+        })
+      }
+    },
+    [handleChange],
+  )
+
+  const handlePurityChange = useCallback(
+    (e) => {
+      handleChange(e)
+      const karat = PURITY_TO_KARAT[e.target.value]
+      if (karat) {
+        setForm((prev) => ({ ...prev, karat }))
+        setErrors((prev) => {
+          const next = { ...prev }
+          delete next.karat
+          return next
+        })
+      }
+    },
+    [handleChange],
+  )
+
+  const handleKaratChange = useCallback(
+    (e) => {
+      handleChange(e)
+      const purity = KARAT_TO_PURITY[e.target.value]
+      if (purity) {
+        setForm((prev) => ({ ...prev, purity }))
+        setErrors((prev) => {
+          const next = { ...prev }
+          delete next.purity
+          return next
+        })
+      }
+    },
+    [handleChange],
+  )
 
   const removeExistingImage = useCallback((index) => {
     setImages((prev) => prev.filter((_, i) => i !== index))
@@ -267,12 +351,14 @@ const ItemForm = ({ item, onClose, onSuccess }) => {
       formData.append('certificationNumber', form.certificationNumber)
       formData.append('status', form.status)
       formData.append('quantity', form.quantity || '1')
-       formData.append('costPrice', form.costPrice)
+       formData.append('costPrice', form.costPrice || '0')
        formData.append('costMakingCharge', form.costMakingCharge || '0')
        formData.append('costWastagePercent', form.costWastagePercent || '0')
-       formData.append('sellingPrice', form.sellingPrice)
+       formData.append('costStonePrice', form.costStonePrice || '0')
+       formData.append('sellingPrice', form.sellingPrice || '0')
        formData.append('sellingMakingCharge', form.sellingMakingCharge || '0')
        formData.append('sellingWastagePercent', form.sellingWastagePercent || '0')
+       formData.append('sellingStonePrice', form.sellingStonePrice || '0')
        formData.append('makingCharge', form.makingCharge || '0')
        formData.append('wastagePercent', form.wastagePercent || '0')
       if (isEditing) {
@@ -397,9 +483,18 @@ const ItemForm = ({ item, onClose, onSuccess }) => {
               type="number"
               step="0.001"
               value={form.grossWeight}
-              onChange={handleChange}
+              onChange={handleGrossWeightChange}
               error={errors.grossWeight}
               required
+              placeholder="0.000"
+            />
+            <FormInput
+              label="Gross Weight (laal)"
+              name="grossWeightLaal"
+              type="number"
+              step="0.001"
+              value={form.grossWeightLaal}
+              onChange={handleLaalChange}
               placeholder="0.000"
             />
             <FormInput
@@ -450,7 +545,7 @@ const ItemForm = ({ item, onClose, onSuccess }) => {
               label="Purity"
               name="purity"
               value={form.purity}
-              onChange={handleChange}
+              onChange={handlePurityChange}
               options={PURITY_OPTIONS}
               placeholder="Select purity"
               required
@@ -460,7 +555,7 @@ const ItemForm = ({ item, onClose, onSuccess }) => {
               label="Karat"
               name="karat"
               value={form.karat}
-              onChange={handleChange}
+              onChange={handleKaratChange}
               options={KARAT_OPTIONS}
               placeholder="Select karat"
               required
@@ -622,26 +717,10 @@ const ItemForm = ({ item, onClose, onSuccess }) => {
               <p className="text-sm text-red-700">{errors.costPricing}</p>
             </div>
           )}
-          {errors.sellingPricing && (
-            <div className="rounded-lg bg-red-50 border border-red-200 p-3 mb-3">
-              <p className="text-sm text-red-700">{errors.sellingPricing}</p>
-            </div>
-          )}
           <div className="space-y-6">
             <div>
               <h4 className="text-sm font-medium text-gray-700 mb-2">Cost</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <FormInput
-                  label="Cost Price ($)"
-                  name="costPrice"
-                  type="number"
-                  step="0.01"
-                  value={form.costPrice}
-                  onChange={handleChange}
-                  error={errors.costPrice}
-                  required
-                  placeholder="0.00"
-                />
                 <FormInput
                   label="Making Charge ($)"
                   name="costMakingCharge"
@@ -662,6 +741,16 @@ const ItemForm = ({ item, onClose, onSuccess }) => {
                   onChange={handleChange}
                   placeholder="0"
                 />
+                <FormInput
+                  label="Stone/Mala Price ($)"
+                  name="costStonePrice"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={form.costStonePrice}
+                  onChange={handleChange}
+                  placeholder="0.00"
+                />
                 <div className="flex items-end">
                   <p className="text-xs text-gray-500">
                     Either making charge or wastage is required
@@ -672,16 +761,6 @@ const ItemForm = ({ item, onClose, onSuccess }) => {
             <div>
               <h4 className="text-sm font-medium text-gray-700 mb-2">Selling</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <FormInput
-                  label="Selling Price ($)"
-                  name="sellingPrice"
-                  type="number"
-                  step="0.01"
-                  value={form.sellingPrice}
-                  onChange={handleChange}
-                  error={errors.sellingPrice}
-                  placeholder="0.00 (optional)"
-                />
                 <FormInput
                   label="Making Charge ($)"
                   name="sellingMakingCharge"
@@ -702,12 +781,18 @@ const ItemForm = ({ item, onClose, onSuccess }) => {
                   onChange={handleChange}
                   placeholder="0"
                 />
+                <FormInput
+                  label="Stone/Mala Price ($)"
+                  name="sellingStonePrice"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={form.sellingStonePrice}
+                  onChange={handleChange}
+                  placeholder="0.00"
+                />
                 <div className="flex items-end">
-                  {form.sellingPrice && !form.sellingMakingCharge && !form.sellingWastagePercent ? (
-                    <p className="text-xs text-red-500">Either making charge or wastage is required</p>
-                  ) : (
-                    <p className="text-xs text-gray-500">Either making charge or wastage is required</p>
-                  )}
+                  <p className="text-xs text-gray-500">Either making charge or wastage is required</p>
                 </div>
               </div>
             </div>

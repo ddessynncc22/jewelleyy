@@ -25,64 +25,51 @@ export default function Settings() {
     address: "",
     phone: "",
     email: "",
+    panNumber: "",
     currency: "NPR",
     defaultPurity: "916",
     defaultKarat: "22K",
     lowStockThreshold: "5",
+    goldTransportCharge: "0",
+    silverTransportCharge: "0",
   });
   useEffect(() => {
     getSettings()
       .then((s) => {
-        const nepal = s.nepalTaxSettings || {};
         setForm({
           storeName: s.storeName || "",
           address: s.address || "",
           phone: s.phone || "",
           email: s.email || "",
+          panNumber: s.panNumber || "",
           currency: s.currency || "NPR",
           defaultPurity: String(s.defaultPurity || "916"),
           defaultKarat: s.defaultKarat ? `${s.defaultKarat}K` : "22K",
           lowStockThreshold: String(s.lowStockThreshold || "5"),
-          nepalTaxSettings_luxuryTax: nepal.luxuryTax || '',
-          nepalTaxSettings_vatRate: nepal.vatRate || '13',
-          nepalTaxSettings_vatEnabled: String(nepal.vatEnabled !== false),
-          nepalTaxSettings_irdPrintEnabled: String(nepal.irdPrintEnabled !== false),
-          nepalTaxSettings_fiscalYearStart: nepal.fiscalYearStart || '04',
-          nepalTaxSettings_panNumber: nepal.panNumber || '',
-          nepalTaxSettings_includeInInvoice: String(nepal.includeInInvoice !== false),
+          goldTransportCharge: String(s.goldTransportCharge || "0"),
+          silverTransportCharge: String(s.silverTransportCharge || "0"),
         });
-        setShowNepalTax(nepal.enabled !== false);
       })
       .catch(() => toast.error("Failed to load settings"))
       .finally(() => setLoading(false));
   }, []);
   const set = (field) => (e) => setForm((prev) => ({ ...prev, [field]: e.target.value }));
-  const setNepal = (field) => (e) => setForm((prev) => ({ ...prev, [`nepalTaxSettings.${field}`]: e.target.value }));
-  const [showNepalTax, setShowNepalTax] = useState(false);
   const onSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
     try {
-      const nepalTaxSettings = showNepalTax ? {
-        enabled: true,
-        luxuryTax: Number(form.nepalTaxSettings_luxuryTax) || 0,
-        vatRate: Number(form.nepalTaxSettings_vatRate) || 13,
-        vatEnabled: form.nepalTaxSettings_vatEnabled !== 'false',
-        irdPrintEnabled: form.nepalTaxSettings_irdPrintEnabled !== 'false',
-        fiscalYearStart: form.nepalTaxSettings_fiscalYearStart || '04',
-        panNumber: form.nepalTaxSettings_panNumber || '',
-        includeInInvoice: form.nepalTaxSettings_includeInInvoice !== 'false',
-      } : { enabled: false };
       await updateSettings({
         storeName: form.storeName,
         address: form.address,
         phone: form.phone,
         email: form.email,
+        panNumber: form.panNumber,
         currency: form.currency,
         defaultPurity: Number(form.defaultPurity),
         defaultKarat: Number(form.defaultKarat.replace("K", "")),
         lowStockThreshold: Number(form.lowStockThreshold),
-        nepalTaxSettings,
+        goldTransportCharge: Number(form.goldTransportCharge),
+        silverTransportCharge: Number(form.silverTransportCharge),
       });
       toast.success("Settings saved successfully");
     } catch (err) {
@@ -127,6 +114,40 @@ export default function Settings() {
               type="email"
               value={form.email}
               onChange={set("email")}
+            />{" "}
+            <FormInput
+              label="PAN Number"
+              name="panNumber"
+              value={form.panNumber}
+              onChange={set("panNumber")}
+              placeholder="Shop PAN number shown on the bill"
+            />{" "}
+          </div>{" "}
+        </Card>{" "}
+        <Card title="Rate Transport Charge">
+          {" "}
+          <p className="text-sm text-gray-500 mb-4">
+            Rates are scraped from hamropatro.com. Add your one-time per-tola
+            transport charge and it is always added on top of the scraped rate —
+            even when the daily rate changes.
+          </p>
+          <div className="space-y-4">
+            {" "}
+            <FormInput
+              label="Gold Transport Charge (per tola, NPR)"
+              name="goldTransportCharge"
+              type="number"
+              value={form.goldTransportCharge}
+              onChange={set("goldTransportCharge")}
+              placeholder="e.g. 500"
+            />{" "}
+            <FormInput
+              label="Silver Transport Charge (per tola, NPR)"
+              name="silverTransportCharge"
+              type="number"
+              value={form.silverTransportCharge}
+              onChange={set("silverTransportCharge")}
+              placeholder="e.g. 100"
             />{" "}
           </div>{" "}
         </Card>{" "}
@@ -180,64 +201,6 @@ export default function Settings() {
               value={form.lowStockThreshold}
               onChange={set("lowStockThreshold")}
             />{" "}
-          </div>{" "}
-        </Card>{" "}
-        <Card title="Nepali Tax Settings">
-          {" "}
-          <div className="space-y-4">
-            {" "}
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-gray-700">Enable Nepali Tax (Luxury Tax & VAT)</span>
-              <button
-                type="button"
-                onClick={() => setShowNepalTax(!showNepalTax)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${showNepalTax ? 'bg-amber-600' : 'bg-gray-300'}`}
-              >
-                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${showNepalTax ? 'translate-x-6' : 'translate-x-1'}`} />
-              </button>
-            </div>
-            {showNepalTax && (
-              <>
-                <FormInput
-                  label="Luxury Tax Rate (%)"
-                  name="nepalTaxSettings_luxuryTax"
-                  type="number"
-                  step="0.1"
-                  value={form.nepalTaxSettings_luxuryTax || ''}
-                  onChange={setNepal('luxuryTax')}
-                  placeholder="e.g. 5 for 5%"
-                />
-                <FormInput
-                  label="VAT Rate (%)"
-                  name="nepalTaxSettings_vatRate"
-                  type="number"
-                  step="0.1"
-                  value={form.nepalTaxSettings_vatRate || '13'}
-                  onChange={setNepal('vatRate')}
-                />
-                <FormSelect
-                  label="VAT Enabled"
-                  name="nepalTaxSettings_vatEnabled"
-                  value={form.nepalTaxSettings_vatEnabled || 'true'}
-                  onChange={setNepal('vatEnabled')}
-                  options={[{ value: 'true', label: 'Yes' }, { value: 'false', label: 'No' }]}
-                />
-                <FormInput
-                  label="PAN Number"
-                  name="nepalTaxSettings_panNumber"
-                  value={form.nepalTaxSettings_panNumber || ''}
-                  onChange={setNepal('panNumber')}
-                  placeholder="Nepali PAN number for IRD"
-                />
-                <FormSelect
-                  label="Include in Invoice"
-                  name="nepalTaxSettings_includeInInvoice"
-                  value={form.nepalTaxSettings_includeInInvoice || 'true'}
-                  onChange={setNepal('includeInInvoice')}
-                  options={[{ value: 'true', label: 'Yes' }, { value: 'false', label: 'No' }]}
-                />
-              </>
-            )}
           </div>{" "}
         </Card>{" "}
         <div className="flex justify-end">

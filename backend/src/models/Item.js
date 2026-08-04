@@ -148,6 +148,11 @@ const itemSchema = new mongoose.Schema(
       min: 0,
       max: 100,
     },
+    costStonePrice: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     sellingPrice: {
       type: Number,
       default: 0,
@@ -163,6 +168,11 @@ const itemSchema = new mongoose.Schema(
       default: 0,
       min: 0,
       max: 100,
+    },
+    sellingStonePrice: {
+      type: Number,
+      default: 0,
+      min: 0,
     },
     makingCharge: {
       type: Number,
@@ -196,7 +206,7 @@ const itemSchema = new mongoose.Schema(
     ],
     priceHistory: [
       {
-        field: { type: String, enum: ['costPrice', 'sellingPrice'], required: true },
+        field: { type: String, enum: ['costPrice', 'sellingPrice', 'costStonePrice', 'sellingStonePrice'], required: true },
         oldValue: { type: Number },
         newValue: { type: Number },
         changedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },

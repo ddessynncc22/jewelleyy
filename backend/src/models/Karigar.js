@@ -58,10 +58,106 @@ const karigarSchema = new mongoose.Schema(
           type: Number,
           default: 0,
         },
+        finalWeight: {
+          type: Number,
+          default: 0,
+        },
         wastage: {
           type: Number,
           default: 0,
         },
+        jartiPercent: {
+          type: Number,
+          default: 0,
+        },
+        jartiAmount: {
+          type: Number,
+          default: 0,
+        },
+        payment: {
+          type: Number,
+          default: 0,
+        },
+        paymentDue: {
+          type: Number,
+          default: 0,
+        },
+        paymentReceived: {
+          type: Number,
+          default: 0,
+        },
+        paymentStatus: {
+          type: String,
+          enum: ['pending', 'partial', 'paid'],
+          default: 'pending',
+        },
+        goldReceived: [
+          {
+            date: {
+              type: Date,
+              default: Date.now,
+            },
+            weight: {
+              type: Number,
+              required: true,
+              min: 0,
+            },
+            karat: {
+              type: Number,
+              default: 24,
+            },
+            purity: {
+              type: Number,
+              default: 999,
+            },
+            value: {
+              type: Number,
+              default: 0,
+            },
+            note: {
+              type: String,
+              default: '',
+            },
+          },
+        ],
+        paymentHistory: [
+          {
+            date: {
+              type: Date,
+              default: Date.now,
+            },
+            amount: {
+              type: Number,
+              required: true,
+              min: 0,
+            },
+            type: {
+              type: String,
+              enum: ['cash', 'gold', 'mixed'],
+              default: 'cash',
+            },
+            goldWeight: {
+              type: Number,
+              default: 0,
+            },
+            goldKarat: {
+              type: Number,
+              default: 24,
+            },
+            goldPurity: {
+              type: Number,
+              default: 999,
+            },
+            goldValue: {
+              type: Number,
+              default: 0,
+            },
+            note: {
+              type: String,
+              default: '',
+            },
+          },
+        ],
         status: {
           type: String,
           enum: ['Issued', 'In Progress', 'Completed', 'Returned'],

@@ -404,9 +404,11 @@ const ItemDetail = () => {
             <DetailRow label="Cost Price" value={formatCurrency(item.costPrice)} />
             <DetailRow label="Cost Making Charge" value={formatCurrency(item.costMakingCharge)} />
             <DetailRow label="Cost Wastage" value={item.costWastagePercent != null ? `${item.costWastagePercent}%` : '-'} />
+            <DetailRow label="Cost Stone/Mala Price" value={formatCurrency(item.costStonePrice)} />
             <DetailRow label="Selling Price" value={formatCurrency(item.sellingPrice)} />
             <DetailRow label="Selling Making Charge" value={formatCurrency(item.sellingMakingCharge)} />
             <DetailRow label="Selling Wastage" value={item.sellingWastagePercent != null ? `${item.sellingWastagePercent}%` : '-'} />
+            <DetailRow label="Stone/Mala Price" value={formatCurrency(item.sellingStonePrice)} />
           </Section>
 
           {item.certificates?.length > 0 && (

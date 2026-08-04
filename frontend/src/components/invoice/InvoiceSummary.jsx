@@ -1,93 +1,138 @@
+const fmt = (n) =>
+  Number(n || 0).toLocaleString('en-NP', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 export default function InvoiceSummary({
+  words,
   subtotal,
-  makingChargeTotal,
-  stoneTotal,
   discount,
   taxableAmount,
-  taxes,
-  vatTotal,
+  totalTax,
+  roundOff,
   grandTotal,
+  paymentType,
   paidAmount,
-  dueAmount,
-  currency,
-  actualAmountReceived,
+  oldGoldWeight,
+  oldGoldAmount,
+  oldGoldPurity,
+  oldGoldDeductionPercent,
+  oldGoldGrossWeight,
+  oldGoldNetWeight,
 }) {
-  const hasDiscount = discount > 0;
-  const hasTax = taxes.length > 0 || vatTotal > 0;
-
+  const grossWeight = Number(oldGoldGrossWeight) || Number(oldGoldWeight) || 0;
+  const netWeight = Number(oldGoldNetWeight) || Number(oldGoldWeight) || 0;
+  const karat = Math.round(Number(oldGoldPurity) || 0);
   return (
-    <div className="mt-3">
-      <div className="flex justify-end">
-        <div className="w-64 text-[9px]">
-          <table className="w-full border border-gray-300">
-            <tbody>
-              <tr>
-                <td className="border border-gray-300 px-1 py-0.5 font-medium">Subtotal</td>
-                <td className="border border-gray-300 px-1 py-0.5 text-right">{currency} {subtotal.toLocaleString('en-NP', { minimumFractionDigits: 2 })}</td>
-              </tr>
-              {makingChargeTotal > 0 && (
-                <tr>
-                  <td className="border border-gray-300 px-1 py-0.5 font-medium">Making Charges Total</td>
-                  <td className="border border-gray-300 px-1 py-0.5 text-right">{currency} {makingChargeTotal.toLocaleString('en-NP', { minimumFractionDigits: 2 })}</td>
-                </tr>
-              )}
-              {stoneTotal > 0 && (
-                <tr>
-                  <td className="border border-gray-300 px-1 py-0.5 font-medium">Stone Charges Total</td>
-                  <td className="border border-gray-300 px-1 py-0.5 text-right">{currency} {stoneTotal.toLocaleString('en-NP', { minimumFractionDigits: 2 })}</td>
-                </tr>
-              )}
-              {hasDiscount && (
-                <tr>
-                  <td className="border border-gray-300 px-1 py-0.5 font-medium text-red-600">Discount (-)</td>
-                  <td className="border border-gray-300 px-1 py-0.5 text-right text-red-600">-{currency} {discount.toLocaleString('en-NP', { minimumFractionDigits: 2 })}</td>
-                </tr>
-              )}
-              <tr>
-                <td className="border border-gray-300 px-1 py-0.5 font-medium">Taxable Amount</td>
-                <td className="border border-gray-300 px-1 py-0.5 text-right">{currency} {taxableAmount.toLocaleString('en-NP', { minimumFractionDigits: 2 })}</td>
-              </tr>
-              {hasTax && (
-                <>
-                  {taxes.map((tax, idx) => (
-                    <tr key={idx}>
-                      <td className="border border-gray-300 px-1 py-0.5 font-medium">{tax.name} ({tax.rate}%)</td>
-                      <td className="border border-gray-300 px-1 py-0.5 text-right">{currency} {tax.amount.toLocaleString('en-NP', { minimumFractionDigits: 2 })}</td>
-                    </tr>
-                  ))}
-                  <tr>
-                    <td className="border border-gray-300 px-1 py-0.5 font-medium text-blue-600">VAT ({vatTotal > 0 ? (vatTotal / taxableAmount * 100).toFixed(1) : 0}%)</td>
-                    <td className="border border-gray-300 px-1 py-0.5 text-right text-blue-600">{currency} {vatTotal.toLocaleString('en-NP', { minimumFractionDigits: 2 })}</td>
-                  </tr>
-                </>
-              )}
-              <tr>
-                <td className="border border-gray-300 px-1 py-1 font-bold text-lg">TOTAL AMOUNT</td>
-                <td className="border border-gray-300 px-1 py-1 text-right font-bold text-lg">{currency} {grandTotal.toLocaleString('en-NP', { minimumFractionDigits: 2 })}</td>
-              </tr>
-              <tr>
-                <td className="border border-gray-300 px-1 py-0.5 font-medium">Amount Paid</td>
-                <td className="border border-gray-300 px-1 py-0.5 text-right">{currency} {(paidAmount || 0).toLocaleString('en-NP', { minimumFractionDigits: 2 })}</td>
-              </tr>
-              {actualAmountReceived != null && actualAmountReceived > 0 && actualAmountReceived !== grandTotal && (
-                <tr>
-                  <td className="border border-gray-300 px-1 py-0.5 font-medium text-green-600">Actual Amount Received</td>
-                  <td className="border border-gray-300 px-1 py-0.5 text-right text-green-600">{currency} {actualAmountReceived.toLocaleString('en-NP', { minimumFractionDigits: 2 })}</td>
-                </tr>
-              )}
-              {dueAmount !== 0 && (
-                <tr>
-                  <td className={`border border-gray-300 px-1 py-0.5 font-medium ${dueAmount > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                    {dueAmount > 0 ? 'Amount Due' : 'Change/Balance'}
-                  </td>
-                  <td className={`border border-gray-300 px-1 py-0.5 text-right ${dueAmount > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                    {currency} {Math.abs(dueAmount).toLocaleString('en-NP', { minimumFractionDigits: 2 })}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+    <div className="grid grid-cols-[1.6fr_1fr_1fr] gap-1 mb-0.5 text-[10px]">
+      <div>
+        <div className="border border-black px-2 py-1">
+          <b>In Words:</b> {words}
         </div>
+      </div>
+      <div>
+        <table className="w-full border-collapse text-[10px]">
+          <tbody>
+            <tr>
+              <th className="border border-black px-1 py-0.5 font-bold">Payment Mode</th>
+              <th className="border border-black px-1 py-0.5 font-bold">Amount</th>
+            </tr>
+            {oldGoldAmount > 0 ? (
+              <>
+                <tr>
+                  <td className="border border-black px-1 py-0.5">Old Gold Exchange</td>
+                  <td className="border border-black px-1 py-0.5 text-right">{fmt(oldGoldAmount)}</td>
+                </tr>
+                {paidAmount > oldGoldAmount && (
+                  <tr>
+                    <td className="border border-black px-1 py-0.5">Cash</td>
+                    <td className="border border-black px-1 py-0.5 text-right">{fmt(paidAmount - oldGoldAmount)}</td>
+                  </tr>
+                )}
+              </>
+            ) : (
+              <tr>
+                <td className="border border-black px-1 py-0.5">{paymentType || ''}</td>
+                <td className="border border-black px-1 py-0.5 text-right">{fmt(paidAmount)}</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+        <table className="w-full border-collapse text-[11px] -mt-px">
+          <tbody>
+            <tr>
+              <th colSpan="2" className="border border-black px-1 py-0.5 font-bold">बेपत्ता सुन (Old Gold)</th>
+            </tr>
+            <tr>
+              <th className="border border-black px-1 py-0.5 font-bold">Gross Wt (g)</th>
+              <th className="border border-black px-1 py-0.5 font-bold">Net Wt (g)</th>
+            </tr>
+            <tr>
+              <td className="border border-black px-1 py-0.5 text-center">{grossWeight ? grossWeight.toFixed(3) : ''}</td>
+              <td className="border border-black px-1 py-0.5 text-center">{netWeight ? netWeight.toFixed(3) : ''}</td>
+            </tr>
+            {karat ? (
+              <tr>
+                <td className="border border-black px-1 py-0.5 text-center">{karat}K</td>
+                <td className="border border-black px-1 py-0.5 text-center">{Number(oldGoldDeductionPercent) || 0}% off</td>
+              </tr>
+            ) : null}
+            <tr>
+              <td className="border border-black px-1 py-0.5 text-center" colSpan="2">Value: {formatCurrency(oldGoldAmount)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <table className="w-full border-collapse text-[10px]">
+          <tbody>
+            <tr>
+              <td className="border border-black px-1.5 py-0.5 font-bold text-left">जम्मा रकम (Total Amount)</td>
+              <td className="border border-black px-1.5 py-0.5 font-bold text-right">{fmt(subtotal)}</td>
+            </tr>
+            <tr>
+              <td className="border border-black px-1.5 py-0.5 text-left">छुट रु. (Discount)</td>
+              <td className="border border-black px-1.5 py-0.5 text-right">-{fmt(discount)}</td>
+            </tr>
+            {oldGoldAmount > 0 ? (
+              <>
+                <tr>
+                  <td className="border border-black px-1.5 py-0.5 text-left">शुल्क नलाग्ने मूल्य (Non-taxable Value)</td>
+                  <td className="border border-black px-1.5 py-0.5 text-right">{fmt(oldGoldAmount)}</td>
+                </tr>
+                <tr>
+                  <td className="border border-black px-1.5 py-0.5 text-left">
+                    बेपत्ता सुन (Old Gold Exchange)
+                    <br />
+                    <span className="text-[8px] text-gray-500">
+                      {grossWeight.toFixed(3)}g · {karat}K · {Number(oldGoldDeductionPercent) || 0}% off → {netWeight.toFixed(3)}g net
+                    </span>
+                  </td>
+                  <td className="border border-black px-1.5 py-0.5 text-right">{fmt(oldGoldAmount)}</td>
+                </tr>
+              </>
+            ) : (
+              <tr>
+                <td className="border border-black px-1.5 py-0.5 text-left">शुल्क नलाग्ने मूल्य (Non-taxable Value)</td>
+                <td className="border border-black px-1.5 py-0.5 text-right">0.00</td>
+              </tr>
+            )}
+            <tr>
+              <td className="border border-black px-1.5 py-0.5 text-left">शुल्क लाग्ने मूल्य (Taxable Value)</td>
+              <td className="border border-black px-1.5 py-0.5 text-right">{fmt(taxableAmount)}</td>
+            </tr>
+            <tr>
+              <td className="border border-black px-1.5 py-0.5 text-left">शिप प्र.शु. ०.५% (Fee @ 0.5%)</td>
+              <td className="border border-black px-1.5 py-0.5 text-right">{fmt(totalTax)}</td>
+            </tr>
+            <tr>
+              <td className="border border-black px-1.5 py-0.5 text-left">Round Off</td>
+              <td className="border border-black px-1.5 py-0.5 text-right">{fmt(roundOff)}</td>
+            </tr>
+            <tr>
+              <td className="border-t-2 border-black px-1.5 py-0.5 text-left font-bold text-[11px]">कुल जम्मा रकम (Grand Total)</td>
+              <td className="border-t-2 border-black px-1.5 py-0.5 text-right font-bold text-[11px]">{fmt(grandTotal)}</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   );

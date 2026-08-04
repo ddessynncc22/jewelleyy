@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 
 import toast from 'react-hot-toast'
 
-import { Eye, ShoppingCart } from 'lucide-react'
+import { Eye, Printer, ReceiptText, ShoppingCart } from 'lucide-react'
 
 import { getSales } from '../../services/posService'
 
@@ -186,17 +186,41 @@ const SaleList = () => {
       label: 'Actions',
       sortable: false,
       render: (val) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          icon={Eye}
-          onClick={(e) => {
-            e.stopPropagation()
-            navigate(`/pos/sales/${val}`)
-          }}
-        >
-          View
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={Eye}
+            onClick={(e) => {
+              e.stopPropagation()
+              navigate(`/pos/sales/${val}`)
+            }}
+          >
+            View
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={ReceiptText}
+            onClick={(e) => {
+              e.stopPropagation()
+              navigate(`/pos/print-invoice/${val}`)
+            }}
+          >
+            Preview
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={Printer}
+            onClick={(e) => {
+              e.stopPropagation()
+              navigate(`/pos/print-invoice/${val}?print=1`)
+            }}
+          >
+            Print
+          </Button>
+        </div>
       ),
     },
   ]

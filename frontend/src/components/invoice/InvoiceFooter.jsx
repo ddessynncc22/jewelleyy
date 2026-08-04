@@ -1,55 +1,62 @@
-export default function InvoiceFooter({
-  companyName,
-  thankYouMessage = 'Thank You for Your Purchase!',
-  returnPolicy = 'Items can be returned within 7 days of purchase with original bill and tag.',
-  softwareVersion = 'v1.0.0',
-  qrData,
-  barcodeData,
-}) {
+const TERMS_LEFT = `१. ग्राहकले खरिद गरेको गहना फिर्ता बिक्रि गर्नुपर्ने भएमा बिल अनिवार्य हुने भएकाले, कृपया बिल सुरक्षित राख्नु सूचित गरिन्छ। गहना फिर्ता गर्दा बिल बमोजिमको सम्पूर्ण विवरण मिलेको खण्डमा ......................... संघ वा बिक्रेता पसल आबद्ध भएको अन्य संघ संस्थाले तोकेको खरिद दर अनुसार फिर्ता खरिद गर्न सकिने छ।
+
+२. ग्राहकले गहना फिर्ता बिक्रि गर्दा मैलो सफा गरि, ज्याला-जर्ती कट्टा गरी, सुनको तौलअनुसार .....................संघ वा बिक्रेता पसल आबद्ध भएको अन्य संघ संस्थाले ग्राहकले फिर्ता बिक्रि गर्न ल्याएको दिनको लागि तोकेको खरिद दर अनुसार फिर्ता खरिद गर्न सकिने छ। गहना प्रयोग गर्दा तौलमा केही क्षय(खीएको) हुन सक्ने हुँदा, फिर्ता खरिद गर्दा सोही बमोजिम तौल गरेर लिईनेछ।
+
+३. ग्राहकले सामान फिर्ता बिक्रि गर्नु परेमा, सार्वजनिक बिदा र शनिबार बाहेकका दिनहरूमा दिउँसो २:०० बजेपछि बिल र परिचय खुल्ने कागजातको साथ उपस्थित भएमा मात्र खरिद गर्न सकिनेछ।
+
+४. फिर्ता प्रक्रिया, मूल्यांकन र भुक्तानीमा लाग्ने समय, कम्पनीको नीति र व्यस्तताको आधारमा फरक पर्न सक्छ। गहना फिर्ता गर्दा नगदमा रकम फिर्ता हुनसक्दैन। ग्राहकको बैंक खातामा वा मूल्य बराबरको सामान साटासाटको रूपमा फिर्ता खरिद गर्न सकिनेछ।
+
+५. ग्राहकले सामान खरिद गर्दा बैंक चेक, क्रेडिट वा डेबिट कार्डबाट भुक्तानी गरिएको भएमा, सामान एक हप्ता पछि मात्र फिर्ता बिक्रि गर्न सकिनेछ र बैंक चार्ज समेत कट्टा गरिनेछ।
+
+६. ग्राहकले सुन तथा हिराको गहना फिर्ता बिक्रि गर्दा खरिदमा लागेको ज्याला, जर्ती, कुनै पनि किसिमका पत्थर, मिना, रोडीयम, TAX, VAT वा अन्य कुनै सरकारी शुल्क फिर्ता हुने छैन। यस्ता शुल्कहरू गैह-फिर्ता योग्य (non-refundable) हुन्।
+
+७. ग्राहकले गहना फिर्ता बिक्रि गर्दा कुनै प्रकारका सरकारी कर वा प्रशासनिक शुल्क लाग्ने भएमा, नियमानुसार लाग्ने शुल्क कट्टा गरिनेछ।`;
+
+const TERMS_RIGHT = `८. डयामेज भएको वा गलाइएको हिरासहितको गहना फिर्ता खरिद गरिने छैन र हिराको गहनामा ज्याला-जर्ती साथै खरिदको समयमा लागेको कर तथा अन्य सरकारी दस्तुर पूरै कट्टा गरी, साथै हिराको मूल्यमा १०% वा रू. १०००- जुन बढी हुन्छ, सो रकम कट्टा गरी फिर्ता खरिद गर्न सकिनेछ।
+
+९. ग्राहक स्वयम् ले अर्डर गरी बनाएको Customized डिजाइनको हिराको गहनाको हकमा भने, ज्याला-जर्ती साथै खरिदको समयमा लागेको कर तथा अन्य सरकारी दस्तुर पूरै कट्टा गरी, हिराको मूल्यमा २०% वा रू. २०००- जुन बढी हुन्छ, कट्टा गरी फिर्ता खरिद गर्न सकिनेछ।
+
+१०. गहना मर्मत गर्नुपरेमा बिल अनिवार्य रूपमा ल्याउनु पर्नेछ र सोमा लाग्ने मर्मत शुल्क र सुन थप भएमा थप सुनको मूल्य ग्राहकले तिर्नु पर्ने छ।
+
+११. स्प्रिंग, हुक, जोइन्ट तथा जोडमा र स्टोन जडान भएको गहनाको हकमा शुद्धता केही फरक हुन सक्ने पूर्व जानकारी गराईन्छ। ग्राहकले खरिद गरेको गहना अन्य ठाउँमा ठुलो वा सानो, जोडाई, घोटाई, पोलाई, गलाई इत्यादि गरि ल्याएमा गुणस्तर र तौलमा फरक पर्न सक्ने हुँदा फिर्ता खरिद गरिने छैन।
+
+१२. ग्राहकले गहनाको तौल, डिजाइन लगायत बिलमा उल्लेखित सम्पूर्ण विवरण खरिदको समयमा नै जाँच गरि लिनु पर्ने छ, पछि फरक परेमा, हिरा वा स्टोन झरेमा, टुटफुट भएमा वा अन्य कुनै भित्रता देखिएमा बिक्रेता जवाफदेही हुने छैन।
+
+१३. कुनै पनि प्रकारको महामारी, युद्ध, कर्फ्यु, वा राष्ट्रिय वा अन्तराष्ट्रिय प्रतिकुल अवस्था र आर्थिक संकटको वा मूल्यमा अस्वाभाविक उतार-चढाव भएको समयमा कुनै पनि खरिद वा बिक्रि कारोबार गर्न बिक्रेता बाध्य हुने छैन।
+
+१४. खरिदकर्ता र बिक्रेता बीच कुनै बिबाद उत्पन्न भएमा...................... संघ वा बिक्रेता पसल आबद्ध भएको अन्य संघ संस्थाको मध्यस्तता दुवै पक्षलाई मान्य हुनेछ।
+
+१५. यस बिलमा उल्लेख कारोबार र कुनै पनि बिषयमा ................. क्षेत्रमा रहेको तथा क............ अधिकार क्षेत्र हेर्ने अड्डा अदालतमा बाहेक अन्य ठाउँको अड्डा अदालतमा मुद्दा लाग्ने छैन।`;
+
+export default function InvoiceFooter({ companyName, cashier }) {
   return (
-    <div className="pt-4 border-t-2 border-gray-800 text-[8px] text-gray-600">
-      <div className="flex justify-between items-end mb-2">
-        <div className="w-1/2">
-          <p className="text-xs font-bold text-gray-900 mb-1">Thank You!</p>
-          <p className="text-[9px] text-gray-700">{thankYouMessage}</p>
+    <div>
+      <div className="font-bold text-xs my-1 border-b border-black inline-block">नियम र शर्तहरु</div>
+      <div className="grid grid-cols-2 gap-0 text-[8px] leading-tight text-justify border border-black p-1">
+        <div className="pr-1.5">{TERMS_LEFT}</div>
+        <div className="pl-1.5 border-l border-black">{TERMS_RIGHT}</div>
+      </div>
+      <div className="grid grid-cols-4 gap-2 mt-3 text-[10px] text-center">
+        <div>
+          <div className="h-9 flex flex-col justify-end items-center italic text-xs">
+            {cashier}
+          </div>
+          <div className="border-t border-black pt-0.5">Cashier</div>
         </div>
-        <div className="flex items-end gap-2">
-          {barcodeData && (
-            <div className="text-center">
-              <div className="barcode-svg-container">
-                <svg xmlns="http://www.w3.org/2000/svg" width="80" height="30" viewBox="0 0 100 30">
-                  {Array.from({ length: 20 }, (_, i) => {
-                    const h = Math.random() * 15 + 10;
-                    const x = i * 5;
-                    return <rect key={i} x={x} y={30 - h} width="3" height={h} fill="#000" />;
-                  })}
-                  <text x="50" y="26" fontSize="4" textAnchor="middle" fill="#000" fontFamily="monospace">{barcodeData.substring(0, 8)}</text>
-                </svg>
-              </div>
-              <p className="text-[7px] text-gray-500 mt-0.5 font-mono">{barcodeData}</p>
-            </div>
-          )}
-          {qrData && (
-            <div className="w-12 h-12 border-2 border-gray-800 flex items-center justify-center">
-              <div className="w-10 h-10 flex items-center justify-center">
-                <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
-                  <path fill="#000" d="M0 0h40v40H0z" />
-                  <path fill="#fff" d="M2 2h6v6H2zM32 2h6v6h-6zM2 32h6v6H2zM32 32h6v6h-30zM16 16h8v8h-8z" />
-                </svg>
-              </div>
-            </div>
-          )}
+        <div>
+          <div className="h-9" />
+          <div className="border-t border-black pt-0.5">&nbsp;</div>
+        </div>
+        <div>
+          <div className="h-9" />
+          <div className="border-t border-black pt-0.5">Customer</div>
+        </div>
+        <div>
+          <div className="h-9" />
+          <div className="border-t border-black pt-0.5">For: {companyName}</div>
         </div>
       </div>
-      <div className="flex justify-between items-end">
-        <div className="w-1/2">
-          <p className="text-[8px] text-gray-500 break-words">{returnPolicy}</p>
-        </div>
-        <div className="text-right text-[8px]">
-          <p>{companyName}</p>
-          <p>{softwareVersion}</p>
-        </div>
-      </div>
+      <div className="text-right font-bold text-green-700 text-[10px]">Jewellery OS</div>
     </div>
   );
 }

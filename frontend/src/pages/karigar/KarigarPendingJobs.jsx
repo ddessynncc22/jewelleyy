@@ -138,7 +138,7 @@ const KarigarPendingJobs = () => {
     {
       key: 'purity',
       label: 'Purity',
-      render: (val) => (val ? `${val}%` : '-'),
+      render: (val) => (val ? val : '-'),
     },
     {
       key: 'karat',
@@ -150,25 +150,40 @@ const KarigarPendingJobs = () => {
       label: 'Labour Charge',
       render: (val) => (val ? formatCurrency(val) : '-'),
     },
-    {
-      key: 'status',
-      label: 'Status',
-      render: (val, row) => (
-        <select
-          value={val}
-          disabled={updating === `${row.karigar?._id}-${row._index}`}
-          onChange={(e) => handleStatusChange(row.karigar?._id, row._index, e.target.value)}
-          className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-60 ${STATUS_STYLES[val] || 'bg-gray-50 text-gray-700 border-gray-200'}`}
-        >
-          {STATUS_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-      ),
-    },
-  ]
+       {
+       key: 'paymentStatus',
+       label: 'Payment',
+       render: (val, row) => {
+         const payment = row.payment || 0
+         const paymentStatus = row.paymentStatus || 'pending'
+         const statusColors = { pending: 'bg-red-100 text-red-700', partial: 'bg-yellow-100 text-yellow-700', paid: 'bg-green-100 text-green-700' }
+         return (
+           <div className="text-xs">
+             <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[paymentStatus] || 'bg-gray-100 text-gray-700'}`}>{paymentStatus}</span>
+             {payment > 0 && <span className="block text-gray-500 mt-0.5">{formatCurrency(payment)}</span>}
+           </div>
+         )
+       },
+     },
+     {
+       key: 'status',
+       label: 'Status',
+       render: (val, row) => (
+         <select
+           value={val}
+           disabled={updating === `${row.karigar?._id}-${row._index}`}
+           onChange={(e) => handleStatusChange(row.karigar?._id, row._index, e.target.value)}
+           className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-60 ${STATUS_STYLES[val] || 'bg-gray-50 text-gray-700 border-gray-200'}`}
+         >
+           {STATUS_OPTIONS.map((opt) => (
+             <option key={opt.value} value={opt.value}>
+               {opt.label}
+             </option>
+           ))}
+         </select>
+       ),
+     },
+   ]
 
   if (error) {
     return <ErrorState message={error} onRetry={fetchPendingJobs} />

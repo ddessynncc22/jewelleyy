@@ -66,7 +66,7 @@ const createItemWithRetry = async (data, retries = 3) => {
 
 exports.createItem = async (req, res) => {
   try {
-    const { category, metalType, purity, karat, itemName, grossWeight, stoneWeight, netMetalWeight, designCode, description, stoneType, carat, cut, clarity, certificationNumber, costPrice, costMakingCharge, costWastagePercent, sellingPrice, sellingMakingCharge, sellingWastagePercent, makingCharge, wastagePercent, tags, status, currentLocation, quantity, karigarId } = req.body;
+    const { category, metalType, purity, karat, itemName, grossWeight, stoneWeight, netMetalWeight, designCode, description, stoneType, carat, cut, clarity, certificationNumber, costPrice, costMakingCharge, costWastagePercent, costStonePrice, sellingPrice, sellingMakingCharge, sellingWastagePercent, sellingStonePrice, makingCharge, wastagePercent, tags, status, currentLocation, quantity, karigarId } = req.body;
     if (!category || !metalType || !purity || !itemName || !grossWeight) {
       return errorResponse(res, 'Category, metalType, purity, itemName, and grossWeight are required', 400);
     }
@@ -76,7 +76,7 @@ exports.createItem = async (req, res) => {
     }
     if (!req.tenantId) return errorResponse(res, 'Tenant context required to create item', 400);
     const item = await createItemWithRetry({
-      tenantId: req.tenantId, category, metalType, purity, karat, itemName, grossWeight, stoneWeight, netMetalWeight, designCode, description, stoneType, carat, cut, clarity, certificationNumber, costPrice, costMakingCharge: costMakingCharge || 0, costWastagePercent: costWastagePercent || 0, sellingPrice, sellingMakingCharge: sellingMakingCharge || 0, sellingWastagePercent: sellingWastagePercent || 0, makingCharge: makingCharge || 0, wastagePercent: wastagePercent || 0, tags: tags || [], images, status: status || 'In Stock', currentLocation, quantity: quantity || 1, karigarId: karigarId || null,
+      tenantId: req.tenantId, category, metalType, purity, karat, itemName, grossWeight, stoneWeight, netMetalWeight, designCode, description, stoneType, carat, cut, clarity, certificationNumber, costPrice, costMakingCharge: costMakingCharge || 0, costWastagePercent: costWastagePercent || 0, costStonePrice: costStonePrice || 0, sellingPrice, sellingMakingCharge: sellingMakingCharge || 0, sellingWastagePercent: sellingWastagePercent || 0, sellingStonePrice: sellingStonePrice || 0, makingCharge: makingCharge || 0, wastagePercent: wastagePercent || 0, tags: tags || [], images, status: status || 'In Stock', currentLocation, quantity: quantity || 1, karigarId: karigarId || null,
     });
     await StockMovement.create({
       item: item._id,
@@ -109,19 +109,19 @@ exports.updateItem = async (req, res) => {
     if (!item) {
       return errorResponse(res, 'Item not found', 404);
     }
-    const allowedFields = ['category', 'metalType', 'purity', 'karat', 'itemName', 'grossWeight', 'stoneWeight', 'netMetalWeight', 'designCode', 'description', 'stoneType', 'carat', 'cut', 'clarity', 'certificationNumber', 'costPrice', 'costMakingCharge', 'costWastagePercent', 'sellingPrice', 'sellingMakingCharge', 'sellingWastagePercent', 'makingCharge', 'wastagePercent', 'tags', 'status', 'currentLocation', 'quantity', 'karigarId'];
+    const allowedFields = ['category', 'metalType', 'purity', 'karat', 'itemName', 'grossWeight', 'stoneWeight', 'netMetalWeight', 'designCode', 'description', 'stoneType', 'carat', 'cut', 'clarity', 'certificationNumber', 'costPrice', 'costMakingCharge', 'costWastagePercent', 'costStonePrice', 'sellingPrice', 'sellingMakingCharge', 'sellingWastagePercent', 'sellingStonePrice', 'makingCharge', 'wastagePercent', 'tags', 'status', 'currentLocation', 'quantity', 'karigarId'];
     const previousStatus = item.status;
     const previousQuantity = item.quantity || 0;
     allowedFields.forEach((field) => {
       if (req.body[field] !== undefined) {
-        if (field === 'costPrice' || field === 'sellingPrice') {
+        if (field === 'costPrice' || field === 'sellingPrice' || field === 'costStonePrice' || field === 'sellingStonePrice') {
           const oldVal = item[field];
           const newVal = Number(req.body[field]);
           if (oldVal !== newVal) {
             item.priceHistory.push({ field, oldValue: oldVal, newValue: newVal, changedBy: req.user._id, changedAt: new Date() });
           }
         }
-        item[field] = req.body[field];
+        item[field] = field === 'karigarId' ? req.body[field] || null : req.body[field];
       }
     });
     if (req.files && req.files.length > 0) {

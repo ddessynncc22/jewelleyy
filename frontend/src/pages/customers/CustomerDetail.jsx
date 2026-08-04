@@ -4,7 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 
 import toast from 'react-hot-toast'
 
-import { ArrowLeft, User, Plus, DollarSign, Edit, CreditCard, FileText, MapPin, Phone, Mail, Trash2, MessageCircle, Printer, Banknote, Package, ClipboardList, CheckCircle2, Wallet } from 'lucide-react'
+import { ArrowLeft, User, Plus, DollarSign, Edit, CreditCard, FileText, Phone, MessageCircle, Printer, Banknote, Package, ClipboardList, CheckCircle2, Wallet, Trash2 } from 'lucide-react'
 
 import { getCustomer, getCustomerLedger, addLedgerEntry, deleteCustomer } from '../../services/customerService'
 
@@ -406,9 +406,6 @@ const CustomerDetail = () => {
     },
   ]
 
-  const balanceValue = ledgerSummary.totalBalance || 0
-  const balanceTrend = balanceValue > 0 ? 'down' : balanceValue < 0 ? 'up' : 'neutral'
-
   const ACTIVE_ORDER_STATUSES = ['booked', 'material_issued', 'in_progress', 'ready']
 
   const customOrderColumns = [
@@ -564,62 +561,47 @@ const CustomerDetail = () => {
         />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          title="Current Balance"
-          value={formatCurrency(balanceValue)}
-          icon={<DollarSign size={20} />}
-          color={balanceValue > 0 ? 'red' : balanceValue < 0 ? 'green' : 'blue'}
-          trend={balanceTrend}
-          trendValue={balanceValue > 0 ? 'Owes you' : balanceValue < 0 ? 'You owe' : 'Settled'}
-        />
-        <StatCard title="Phone" value={customer.phone || '-'} icon={<Phone size={20} />} color="cyan" />
-        <StatCard title="Email" value={customer.email || '-'} icon={<Mail size={20} />} color="purple" />
-        <StatCard
-          title="Address"
-          value={
-            customer.address
-              ? customer.address.length > 30
-                ? customer.address.substring(0, 30) + '...'
-                : customer.address
-              : '-'
-          }
-          icon={<MapPin size={20} />}
-          color="orange"
-        />
-      </div>
-
       <Tabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
 
       {activeTab === 'info' && (
         <Card title="Customer Details" icon={<User size={18} />}>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            <div className="space-y-1">
-              <p className="text-xs font-medium text-gray-500 uppercase">Name</p>
-              <p className="text-sm font-medium text-gray-900">{customer.name}</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-xs font-medium text-gray-500 uppercase">Customer Code</p>
-              <p className="text-sm text-gray-600">{customer.customerCode || '-'}</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-xs font-medium text-gray-500 uppercase">Phone</p>
-              <p className="text-sm text-gray-600">{customer.phone || '-'}</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-xs font-medium text-gray-500 uppercase">Email</p>
-              <p className="text-sm text-gray-600">{customer.email || '-'}</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-xs font-medium text-gray-500 uppercase">Address</p>
-              <p className="text-sm text-gray-600">{customer.address || '-'}</p>
-            </div>
-            {customer.gstNo && (
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-gray-500 uppercase">GST No</p>
-                <p className="text-sm text-gray-600">{customer.gstNo}</p>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-gray-500 uppercase">Name</p>
+                <p className="text-xl font-bold text-gray-900">{customer.name}</p>
               </div>
-            )}
+              <div className="text-right">
+                <p className="text-xs font-medium text-gray-500 uppercase">Current Balance</p>
+                <p className={`text-2xl font-bold ${ledgerSummary.totalBalance > 0 ? 'text-red-600' : ledgerSummary.totalBalance < 0 ? 'text-green-600' : 'text-gray-600'}`}>
+                  {formatCurrency(ledgerSummary.totalBalance || 0)}
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+              <div className="space-y-0.5">
+                <p className="text-xs font-medium text-gray-500 uppercase">Customer Code</p>
+                <p className="text-gray-900">{customer.customerCode || '-'}</p>
+              </div>
+              <div className="space-y-0.5">
+                <p className="text-xs font-medium text-gray-500 uppercase">Phone</p>
+                <p className="text-gray-900">{customer.phone || '-'}</p>
+              </div>
+              <div className="space-y-0.5">
+                <p className="text-xs font-medium text-gray-500 uppercase">Email</p>
+                <p className="text-gray-900">{customer.email || '-'}</p>
+              </div>
+              <div className="space-y-0.5 sm:col-span-2 lg:col-span-1">
+                <p className="text-xs font-medium text-gray-500 uppercase">Address</p>
+                <p className="text-gray-900 break-words">{customer.address || '-'}</p>
+              </div>
+              {customer.gstNo && (
+                <div className="space-y-0.5">
+                  <p className="text-xs font-medium text-gray-500 uppercase">GST No</p>
+                  <p className="text-gray-900">{customer.gstNo}</p>
+                </div>
+              )}
+            </div>
           </div>
         </Card>
       )}

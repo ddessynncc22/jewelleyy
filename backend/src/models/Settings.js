@@ -11,17 +11,9 @@ const settingsSchema = new mongoose.Schema({
   defaultKarat: { type: Number, default: 22 },
   lowStockThreshold: { type: Number, default: 5 },
   businessStartDate: { type: Date, default: Date.now },
-  taxSettings: { type: mongoose.Schema.Types.Mixed, default: {} },
-  nepalTaxSettings: {
-    enabled: { type: Boolean, default: false },
-    luxuryTax: { type: Number, default: 0 },
-    vatRate: { type: Number, default: 13 },
-    vatEnabled: { type: Boolean, default: true },
-    irdPrintEnabled: { type: Boolean, default: true },
-    fiscalYearStart: { type: String, default: '04' },
-    panNumber: { type: String, default: '' },
-    includeInInvoice: { type: Boolean, default: true },
-  },
+  panNumber: { type: String, default: '' },
+  goldTransportCharge: { type: Number, default: 0, min: 0 },
+  silverTransportCharge: { type: Number, default: 0, min: 0 },
 }, { timestamps: true });
 
 settingsSchema.post('save', async function () {
@@ -37,8 +29,6 @@ settingsSchema.post('save', async function () {
     if (this.defaultPurity !== undefined) fields.defaultPurity = this.defaultPurity;
     if (this.defaultKarat !== undefined) fields.defaultKarat = this.defaultKarat;
     if (this.lowStockThreshold !== undefined) fields.lowStockThreshold = this.lowStockThreshold;
-    if (this.taxSettings !== undefined) fields.taxSettings = this.taxSettings;
-    if (this.nepalTaxSettings !== undefined) fields.nepalTaxSettings = this.nepalTaxSettings;
     if (Object.keys(fields).length > 0) {
       await Tenant.findOneAndUpdate({ tenantNumber: this.tenantId }, { $set: fields });
     }

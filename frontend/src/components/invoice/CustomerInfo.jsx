@@ -2,33 +2,31 @@ export default function CustomerInfo({
   customerName,
   customerPhone,
   customerAddress,
-  paymentMethod,
+  customerCode,
+  salesPerson,
+  panNumber,
+  invoiceNumber,
+  dateTime,
+  dateAD,
+  dateBS,
 }) {
   return (
-    <div className="py-3 border-b border-gray-200">
-      <h2 className="text-xs font-bold text-gray-600 mb-2 uppercase tracking-wider">
-        Customer Information
-      </h2>
-      <table className="w-full text-[10px]">
-        <tbody>
-          <tr>
-            <td className="py-0.5 font-medium w-1/4">Name:</td>
-            <td className="py-0.5">{customerName || 'Walk-in Customer'}</td>
-            <td className="py-0.5 font-medium w-1/4 pl-4">Mobile:</td>
-            <td className="py-0.5">{customerPhone || '-'}</td>
-          </tr>
-          <tr>
-            <td className="py-0.5 font-medium">Address:</td>
-            <td className="py-0.5" colSpan={3}>{customerAddress || '-'}</td>
-          </tr>
-          <tr>
-            <td className="py-0.5 font-medium">Payment Method:</td>
-            <td className="py-0.5">{paymentMethod || '-'}</td>
-            <td className="py-0.5 font-medium w-1/4 pl-4">Invoice To:</td>
-            <td className="py-0.5">Customer</td>
-          </tr>
-        </tbody>
-      </table>
+    <div className="grid grid-cols-3 border-2 border-t-0 border-black mb-0.5 text-[10px]">
+      <div className="px-2 py-1 border-r border-black">
+        <div><span className="font-bold inline-block w-[80px]">Customer :</span> {customerName}</div>
+        <div><span className="font-bold inline-block w-[80px]">Address :</span> {customerAddress}</div>
+        <div><span className="font-bold inline-block w-[80px]">Phone :</span> {customerPhone}</div>
+      </div>
+      <div className="px-2 py-1 border-r border-black">
+        <div><span className="font-bold inline-block w-[80px]">Sales Person :</span> {salesPerson}</div>
+        <div><span className="font-bold inline-block w-[80px]">Customer Id :</span> {customerCode}</div>
+        <div><span className="font-bold inline-block w-[80px]">Pan No. :</span> {panNumber || 'n/a'}</div>
+      </div>
+      <div className="px-2 py-1">
+        <div><span className="font-bold inline-block w-[80px]">Bill No. :</span> {invoiceNumber}</div>
+        <div><span className="font-bold inline-block w-[80px]">Bill Date :</span> {dateTime}</div>
+        <div><span className="font-bold inline-block w-[80px]">Tran Date :</span> {dateAD} ({dateBS})</div>
+      </div>
     </div>
   );
 }

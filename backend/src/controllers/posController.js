@@ -4,65 +4,7 @@ const StockMovement = require('../models/StockMovement');
 const ActivityLog = require('../models/ActivityLog');
 const Customer = require('../models/Customer');
 const CustomerLedger = require('../models/CustomerLedger');
-const Settings = require('../models/Settings');
 const { successResponse, errorResponse, paginatedResponse } = require('../utils/response');
-
-function getTaxSettings(settings) {
-  const ts = settings?.taxSettings || {};
-  if (!ts.enabled && ts.enabled !== undefined) return null;
-  return ts;
-}
-
-function getNepalTaxSettings(settings) {
-  const ns = settings?.nepalTaxSettings || {};
-  if (!ns.enabled) return null;
-  return ns;
-}
-
-function calculateTaxes(totalAmount, taxSettings) {
-  if (!taxSettings || !taxSettings.taxes || !Array.isArray(taxSettings.taxes) || taxSettings.taxes.length === 0) {
-    return { taxes: [], totalTax: 0 };
-  }
-  const taxes = [];
-  let totalTax = 0;
-  for (const t of taxSettings.taxes) {
-    const rate = Number(t.rate) || 0;
-    const taxableAmount = totalAmount;
-    const amount = Number((taxableAmount * rate / 100).toFixed(2));
-    taxes.push({ name: t.name || 'Tax', rate, amount });
-    totalTax += amount;
-  }
-  totalTax = Number(totalTax.toFixed(2));
-  return { taxes, totalTax: Number(totalTax.toFixed(2)) };
-}
-
-function calculateNepalTaxes(totalAmount, nepalTaxSettings) {
-  if (!nepalTaxSettings) {
-    return { taxes: [], totalTax: 0, luxuryTax: 0, vatAmount: 0 };
-  }
-  const taxes = [];
-  let totalTax = 0;
-  let luxuryTax = 0;
-  let vatAmount = 0;
-  const luxuryRate = Number(nepalTaxSettings.luxuryTax) || 0;
-  const vatRate = Number(nepalTaxSettings.vatRate) || 0;
-  const vatEnabled = nepalTaxSettings.vatEnabled !== false;
-  if (luxuryRate > 0) {
-    const ltAmount = Number((totalAmount * luxuryRate / 100).toFixed(2));
-    taxes.push({ name: 'Luxury Tax', rate: luxuryRate, amount: ltAmount });
-    luxuryTax = ltAmount;
-    totalTax += ltAmount;
-  }
-  if (vatEnabled && vatRate > 0) {
-    const vatBase = totalAmount + luxuryTax;
-    const vatAmt = Number((vatBase * vatRate / 100).toFixed(2));
-    taxes.push({ name: 'VAT', rate: vatRate, amount: vatAmt });
-    vatAmount = vatAmt;
-    totalTax += vatAmt;
-  }
-  totalTax = Number(totalTax.toFixed(2));
-  return { taxes, totalTax, luxuryTax, vatAmount };
-}
 
 exports.createSale = async (req, res) => {
   try {
@@ -98,7 +40,7 @@ exports.createSale = async (req, res) => {
       }
       await item.save();
       updatedItems.push(item);
-      saleItems.push({ item: item._id, quantity: qty, weight: si.weight || item.grossWeight || 0, price: si.price || item.sellingPrice || 0, purity: si.purity || item.purity || 0, makingCharge: si.makingCharge || si.sellingMakingCharge || 0, wastagePercent: si.wastagePercent || si.sellingWastagePercent || 5, ratePerGram: si.ratePerGram || 0, metalValue: si.metalValue || 0 });
+      saleItems.push({ item: item._id, quantity: qty, weight: si.weight || item.grossWeight || 0, price: si.price || item.sellingPrice || 0, purity: si.purity || item.purity || 0, makingCharge: si.makingCharge || si.sellingMakingCharge || 0, wastagePercent: si.wastagePercent || si.sellingWastagePercent || 5, ratePerGram: si.ratePerGram || 0, metalValue: si.metalValue || 0, stonePrice: si.stonePrice || 0 });
       await StockMovement.create({
         item: item._id,
         type: 'stockOut',
@@ -112,15 +54,9 @@ exports.createSale = async (req, res) => {
       });
     }
     const ogd = oldGoldDetails || paymentBreakdown?.oldGold || null;
-    const settings = await Settings.getSettings();
-    const taxSettings = getTaxSettings(settings);
-    const nepalTaxSettings = getNepalTaxSettings(settings);
-    const { taxes, totalTax } = calculateTaxes(totalAmount, taxSettings);
-    const { taxes: nepalTaxes, totalTax: nepalTotalTax, luxuryTax, vatAmount } = calculateNepalTaxes(totalAmount, nepalTaxSettings);
-    const allTaxes = [...taxes, ...nepalTaxes];
-    const totalTaxAmount = Number((totalTax + nepalTotalTax).toFixed(2));
+    const totalTaxAmount = 0;
     let discount = Number(discountAmount) || 0;
-    if (actualAmountReceived !== undefined && actualAmountReceived !== null && Number(actualAmountReceived) >= 0) {
+    if (!discount && actualAmountReceived !== undefined && actualAmountReceived !== null && Number(actualAmountReceived) >= 0) {
       const received = Number(actualAmountReceived);
       const billTotal = Number(totalAmount) + totalTaxAmount;
       if (received < billTotal) {
@@ -136,14 +72,11 @@ exports.createSale = async (req, res) => {
       paymentType,
       cashAmount: cash,
       khaataAmount: khaata,
-      oldGoldDetails: ogd ? { description: '', weight: ogd.weight || 0, purity: ogd.purity || 0, deductibleAmount: ogd.deduction || ogd.deductibleAmount || 0 } : { description: '', weight: 0, purity: 0, deductibleAmount: 0 },
+      oldGoldDetails: ogd ? { description: '', weight: ogd.weight || 0, purity: ogd.purity || 0, deductionPercent: ogd.deductionPercent || 0, netWeight: ogd.netWeight || 0, deductibleAmount: ogd.deduction || ogd.deductibleAmount || 0 } : { description: '', weight: 0, purity: 0, deductionPercent: 0, netWeight: 0, deductibleAmount: 0 },
       taxDetails: {
         totalTax: totalTaxAmount,
         discountAmount: discount,
-        taxes: allTaxes,
-        luxuryTax,
-        vatAmount,
-        nepalTaxEnabled: !!nepalTaxSettings,
+        taxes: [],
       },
       totalAmount,
       paidAmount: paidAmount !== undefined ? paidAmount : (paymentType === 'cash' ? adjustedTotal : 0),
@@ -228,7 +161,7 @@ exports.getSales = async (req, res) => {
 
 exports.getSale = async (req, res) => {
   try {
-    const sale = await Sale.findById(req.params.id).populate('items.item', 'SKU itemName category metalType purity grossWeight images').populate('customer', 'name phone customerCode address').populate('soldBy', 'name email');
+    const sale = await Sale.findById(req.params.id).populate('items.item', 'SKU itemName category metalType purity grossWeight netMetalWeight stoneWeight karat hsCode carat images').populate('customer', 'name phone customerCode address').populate('soldBy', 'name email');
     if (!sale) {
       return errorResponse(res, 'Sale not found', 404);
     }

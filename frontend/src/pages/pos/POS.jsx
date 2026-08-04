@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useContext } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { X, Plus, Minus, ShoppingCart, Package, TrendingUp, Printer } from 'lucide-react'
@@ -7,11 +7,14 @@ import { getCustomers, createCustomer } from '../../services/customerService'
 import { getLatestRates } from '../../services/rateService'
 import { createSale } from '../../services/posService'
 import { getCachedSettings } from '../../services/settingsService'
+import { AuthContext } from '../../context/AuthContext'
 import Button from '../../components/ui/Button'
 import SearchInput from '../../components/ui/SearchInput'
 import ConfirmDialog from '../../components/ui/ConfirmDialog'
 import Modal from '../../components/ui/Modal'
-import { formatCurrency, formatDate, formatWeight, formatWeightLaal, getImageSrc } from '../../utils/helpers'
+import InvoiceDocument from '../../components/invoice/InvoiceDocument'
+import { buildInvoiceItems, getBSDate } from '../../components/invoice/invoiceUtils'
+import { formatCurrency, formatDate, formatWeight, formatWeightLaal, getImageSrc, numberToWords, applyTransportRate, getTransportCharges } from '../../utils/helpers'
 
 const PAYMENT_TYPES = [
   { value: 'cash', label: 'Cash' },
@@ -20,24 +23,56 @@ const PAYMENT_TYPES = [
   { value: 'oldGoldExchange', label: 'Old Gold Exchange' },
 ]
 
-function isPrintAvailable() {
-  const s = (() => { try { return localStorage.getItem('settings') } catch { return null } })()
-  if (!s) return false
-  try { return JSON.parse(s).nepalTaxSettings?.irdPrintEnabled !== false } catch { return false }
+const OLD_GOLD_KARAT_OPTIONS = [
+  { value: '24', label: '24K' },
+  { value: '22', label: '22K' },
+  { value: '21', label: '21K' },
+  { value: '18', label: '18K' },
+  { value: '14', label: '14K' },
+  { value: '10', label: '10K' },
+]
+
+const OLD_GOLD_PURITY_OPTIONS = [
+  { value: '999', label: '999' },
+  { value: '995', label: '995' },
+  { value: '916', label: '916' },
+  { value: '875', label: '875' },
+  { value: '750', label: '750' },
+  { value: '585', label: '585' },
+  { value: '375', label: '375' },
+]
+
+const OLD_GOLD_KARAT_TO_PURITY = {
+  '24': '999',
+  '22': '916',
+  '21': '875',
+  '18': '750',
+  '14': '585',
+  '10': '375',
+}
+
+const OLD_GOLD_PURITY_TO_KARAT = {
+  '999': '24',
+  '995': '24',
+  '916': '22',
+  '875': '21',
+  '750': '18',
+  '585': '14',
+  '375': '10',
 }
 
 function getRatePerGram(rateObj) {
   if (!rateObj) return 0
   const rate = rateObj.rate || 0
-  return rateObj.unit === 'tola' ? rate / 11.6638 : rate
+  return rateObj.unit === 'tola' ? rate / 11.664 : rate
 }
 
-function calcItemTotal(item, makingCharge, wastagePercent, ratePerGram) {
+function calcItemTotal(item, makingCharge, wastagePercent, ratePerGram, stonePrice) {
   const netWeight = item.netMetalWeight || item.grossWeight || 0
   const purity = item.purity || 0
   const metalValue = netWeight * ratePerGram * (purity / 1000)
   const wastageAmt = metalValue * (wastagePercent / 100)
-  return metalValue + makingCharge + wastageAmt
+  return metalValue + makingCharge + wastageAmt + (stonePrice || 0)
 }
 
 const POS = () => {
@@ -76,8 +111,10 @@ const POS = () => {
   const [customerPhone, setCustomerPhone] = useState('')
   const [customerAddress, setCustomerAddress] = useState('')
   const [oldGoldWeight, setOldGoldWeight] = useState('')
-  const [oldGoldPurity, setOldGoldPurity] = useState('')
-  const [oldGoldDeduction, setOldGoldDeduction] = useState('')
+  const [oldGoldKarat, setOldGoldKarat] = useState('24')
+  const [oldGoldPurity, setOldGoldPurity] = useState('999')
+  const [oldGoldDeductionPercent, setOldGoldDeductionPercent] = useState('')
+  const [oldGoldCash, setOldGoldCash] = useState('')
   const [showConfirm, setShowConfirm] = useState(false)
   const [showCustomerModal, setShowCustomerModal] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -132,10 +169,13 @@ const POS = () => {
     return () => clearTimeout(timer)
   }, [customerSearch, searchCustomers])
 
+  const effectiveGoldRate = applyTransportRate(rates.gold, getTransportCharges().gold)
+  const effectiveSilverRate = applyTransportRate(rates.silver, getTransportCharges().silver)
+
   const getRateForItem = (item) => {
     const metal = (item.metalType || '').toLowerCase()
-    if (metal === 'gold') return getRatePerGram(rates.gold)
-    if (metal === 'silver') return getRatePerGram(rates.silver)
+    if (metal === 'gold') return getRatePerGram(effectiveGoldRate)
+    if (metal === 'silver') return getRatePerGram(effectiveSilverRate)
     return 0
   }
 
@@ -149,6 +189,7 @@ const POS = () => {
         qty: 1,
         makingCharge: Number(item.sellingMakingCharge || item.makingCharge) || 0,
         wastagePercent: Number(item.sellingWastagePercent || item.wastagePercent) || 0,
+        stonePrice: Number(item.sellingStonePrice || item.stonePrice) || 0,
         ratePerGram,
       }]
     })
@@ -173,44 +214,50 @@ const POS = () => {
   }
 
   const cartTotal = cart.reduce((sum, c) => {
-    const itemTotal = calcItemTotal(c.item, c.makingCharge, c.wastagePercent, c.ratePerGram)
+    const itemTotal = calcItemTotal(c.item, c.makingCharge, c.wastagePercent, c.ratePerGram, c.stonePrice)
     return sum + itemTotal * c.qty
   }, 0)
 
-  const settings = getCachedSettings() || {}
-  const taxSettings = settings.taxSettings || {}
-  const taxEnabled = taxSettings.enabled && taxSettings.taxes && taxSettings.taxes.length > 0
-  const taxTaxes = taxEnabled ? taxSettings.taxes : []
-  const taxTotal = taxEnabled
-    ? taxTaxes.reduce((sum, t) => sum + (cartTotal * (Number(t.rate) || 0) / 100), 0)
-    : 0
+  const feeRate = 0.5
 
-  const nepalTaxSettings = settings.nepalTaxSettings || {}
-  const nepalTaxEnabled = nepalTaxSettings.enabled !== false
-  const luxuryTaxRate = Number(nepalTaxSettings.luxuryTax) || 0
-  const vatRate = Number(nepalTaxSettings.vatRate) || 0
-  const vatEnabled = nepalTaxSettings.vatEnabled !== false
-  const luxuryTaxAmount = luxuryTaxRate > 0 ? Number((cartTotal * luxuryTaxRate / 100).toFixed(2)) : 0
-  const vatBase = cartTotal + luxuryTaxAmount
-  const vatAmount = (vatEnabled && vatRate > 0) ? Number((vatBase * vatRate / 100).toFixed(2)) : 0
-  const nepalTaxTotal = Number((luxuryTaxAmount + vatAmount).toFixed(2))
+  // Old gold brought in for exchange is NON-taxable — the fee (0.5%) is only
+  // charged on the net amount the customer actually pays for the new item.
+  const goldPerGram = getRatePerGram(effectiveGoldRate)
+  const oldGoldWeightNum = Number(oldGoldWeight) || 0
+  const oldGoldDeductionPercentNum = Number(oldGoldDeductionPercent) || 0
+  const oldGoldNetWeight = oldGoldWeightNum > 0 ? oldGoldWeightNum * (1 - oldGoldDeductionPercentNum / 100) : 0
+  const oldGoldKaratNum = Number(oldGoldKarat) || 24
+  const oldGoldValue = oldGoldNetWeight * (oldGoldKaratNum / 24) * goldPerGram
+  const oldGoldValueForTax =
+    paymentType === 'oldGoldExchange' ? Math.min(oldGoldValue, cartTotal) : 0
 
-  const allTaxes = [...taxTaxes]
-  if (luxuryTaxAmount > 0) allTaxes.push({ name: 'Luxury Tax', rate: luxuryTaxRate, amount: luxuryTaxAmount })
-  if (vatAmount > 0) allTaxes.push({ name: 'VAT', rate: vatRate, amount: vatAmount })
+  // Full (undiscounted) bill
+  const fullFeeAmount = Number((cartTotal * feeRate / 100).toFixed(2))
+  const fullBill = Number((cartTotal + fullFeeAmount).toFixed(2))
 
-  const taxTotalRounded = Number((taxTotal + nepalTaxTotal).toFixed(2))
-
+  // If the customer pays less than the bill, the shortfall becomes a discount.
+  // It is applied to the subtotal BEFORE tax, so the 0.5% fee is charged on
+  // the discounted amount and the customer pays less tax.
   let computedDiscount = 0
-  if (actualAmountReceived && Number(actualAmountReceived) > 0) {
-    const billWithTax = Number((cartTotal + taxTotalRounded).toFixed(2))
-    const received = Number(actualAmountReceived)
-    if (received < billWithTax) {
-      computedDiscount = Number((billWithTax - received).toFixed(2))
-    }
+  const receivedAmount = Number(actualAmountReceived) || 0
+  if (paymentType !== 'oldGoldExchange' && receivedAmount > 0 && receivedAmount < fullBill) {
+    computedDiscount = Number((fullBill - receivedAmount).toFixed(2))
   }
 
-  const billTotal = Number((cartTotal + taxTotalRounded - computedDiscount).toFixed(2))
+  const taxableAmount = Math.max(0, cartTotal - computedDiscount - oldGoldValueForTax)
+  const feeAmount = Number((taxableAmount * feeRate / 100).toFixed(2))
+  const rawTotal = Number((taxableAmount + feeAmount + oldGoldValueForTax).toFixed(2))
+  let billTotal = Math.round(rawTotal)
+  let roundOff = Number((billTotal - rawTotal).toFixed(2))
+
+  // Reconcile the grand total to the exact amount the customer pays
+  if (computedDiscount > 0) {
+    billTotal = Math.round(receivedAmount)
+    roundOff = Number((billTotal - rawTotal).toFixed(2))
+  }
+
+
+  const changeDue = receivedAmount > 0 ? Number((receivedAmount - billTotal).toFixed(2)) : 0
 
   const ensureCustomer = async () => {
     if (selectedCustomer) return selectedCustomer._id
@@ -246,6 +293,9 @@ const POS = () => {
     if (paymentType === 'oldGoldExchange' && !Number(oldGoldWeight)) {
       toast.error('Enter old gold weight'); return
     }
+    if (paymentType === 'oldGoldExchange' && oldGoldDeductionPercentNum >= 100) {
+      toast.error('Deduction percent must be less than 100'); return
+    }
     let customerId = selectedCustomer?._id || null
     if (!customerId && (customerName.trim() || customerPhone.trim())) {
       customerId = await ensureCustomer()
@@ -254,7 +304,7 @@ const POS = () => {
     const breakdown = getPaymentBreakdown()
     const payload = {
       items: cart.map((c) => {
-        const itemTotal = calcItemTotal(c.item, c.makingCharge, c.wastagePercent, c.ratePerGram)
+        const itemTotal = calcItemTotal(c.item, c.makingCharge, c.wastagePercent, c.ratePerGram, c.stonePrice)
          return {
           item: c.item._id,
           quantity: c.qty,
@@ -264,26 +314,23 @@ const POS = () => {
           sellingMakingCharge: c.makingCharge,
           sellingWastagePercent: c.wastagePercent,
           ratePerGram: c.ratePerGram,
+          stonePrice: c.stonePrice,
           metalValue: (c.item.netMetalWeight || c.item.grossWeight || 0) * c.ratePerGram * ((c.item.purity || 0) / 1000),
         }
       }),
       paymentType,
       totalAmount: cartTotal,
-      actualAmountReceived: actualAmountReceived || null,
+      actualAmountReceived: paymentType === 'oldGoldExchange' ? null : (actualAmountReceived || null),
       discountAmount: computedDiscount,
       paidAmount: paymentType === 'cash' ? billTotal : (breakdown.oldGold ? (breakdown.oldGold.deduction || 0) + (breakdown.cash || 0) : (breakdown.cash || 0)),
       customerId,
       cashAmount: breakdown.cash || 0,
       khaataAmount: breakdown.khaata || 0,
-      nepalTaxSettings: {
-        enabled: nepalTaxEnabled,
-        luxuryTax: luxuryTaxRate,
-        vatRate: vatRate,
-        vatEnabled: vatEnabled,
-      },
       oldGoldDetails: breakdown.oldGold ? {
         weight: breakdown.oldGold.weight,
         purity: breakdown.oldGold.purity,
+        deductionPercent: breakdown.oldGold.deductionPercent,
+        netWeight: breakdown.oldGold.netWeight,
         deductibleAmount: breakdown.oldGold.deduction,
       } : null,
     }
@@ -302,17 +349,15 @@ const POS = () => {
       setCustomerPhone('')
       setCustomerAddress('')
       setOldGoldWeight('')
-      setOldGoldPurity('')
-      setOldGoldDeduction('')
+      setOldGoldKarat('24')
+      setOldGoldPurity('999')
+      setOldGoldDeductionPercent('')
+      setOldGoldCash('')
       setShowConfirm(false)
       const saleId = res.data?.data?._id || res.data?._id
       if (saleId) {
-        if (isPrintAvailable()) {
-          setCompletedSaleId(saleId)
-          setShowPrintDialog(true)
-        } else {
-          navigate(`/pos/sales/${saleId}`)
-        }
+        setCompletedSaleId(saleId)
+        setShowPrintDialog(true)
       }
     } catch (err) {
       toast.error(err?.response?.data?.message || 'Failed to complete sale')
@@ -338,10 +383,12 @@ const POS = () => {
        customerName,
        customerPhone,
        customerAddress,
-       oldGoldWeight,
-       oldGoldPurity,
-       oldGoldDeduction,
-       customerId: selectedCustomer?._id || null,
+        oldGoldWeight,
+        oldGoldKarat,
+        oldGoldPurity,
+        oldGoldDeductionPercent,
+        oldGoldCash,
+        customerId: selectedCustomer?._id || null,
        heldAt: new Date().toISOString(),
      }
      const existing = JSON.parse(localStorage.getItem('heldBills') || '[]')
@@ -360,9 +407,11 @@ const POS = () => {
      setCustomerName(heldBill.customerName || '')
      setCustomerPhone(heldBill.customerPhone || '')
      setCustomerAddress(heldBill.customerAddress || '')
-     setOldGoldWeight(heldBill.oldGoldWeight || '')
-     setOldGoldPurity(heldBill.oldGoldPurity || '')
-     setOldGoldDeduction(heldBill.oldGoldDeduction || '')
+      setOldGoldWeight(heldBill.oldGoldWeight || '')
+      setOldGoldKarat(heldBill.oldGoldKarat || '24')
+      setOldGoldPurity(heldBill.oldGoldPurity || '999')
+      setOldGoldDeductionPercent(heldBill.oldGoldDeductionPercent || '')
+      setOldGoldCash(heldBill.oldGoldCash || '')
      if (heldBill.customerId) {
        setSelectedCustomer({ _id: heldBill.customerId })
      }
@@ -379,21 +428,72 @@ const POS = () => {
 
    const getPaymentBreakdown = () => {
     switch (paymentType) {
-      case 'cash': return { cash: Number(cashAmount) || cartTotal, khaata: 0 }
+      case 'cash': return { cash: Number(cashAmount) || billTotal, khaata: 0 }
       case 'khaata': return { cash: 0, khaata: Number(khaataAmount) || cartTotal }
       case 'partial': return { cash: Number(cashAmount) || 0, khaata: Number(khaataAmount) || 0 }
       case 'oldGoldExchange': return {
-        cash: 0, khaata: 0,
-        oldGold: { weight: Number(oldGoldWeight) || 0, purity: Number(oldGoldPurity) || 0, deduction: Number(oldGoldDeduction) || 0 },
+        cash: Number(oldGoldCash) > 0 ? Number(oldGoldCash) : oldGoldAmountToPay, khaata: 0,
+        oldGold: {
+          weight: oldGoldWeightNum,
+          purity: oldGoldKaratNum,
+          deductionPercent: oldGoldDeductionPercentNum,
+          netWeight: oldGoldNetWeight,
+          deduction: Math.round(oldGoldCredit),
+          value: oldGoldValue,
+          amountToPay: oldGoldAmountToPay,
+          change: oldGoldChange,
+        },
       }
       default: return { cash: cartTotal, khaata: 0 }
     }
   }
 
-  const goldRate = rates.gold
-  const silverRate = rates.silver
-  const goldPerGram = getRatePerGram(rates.gold)
-  const silverPerGram = getRatePerGram(rates.silver)
+  const goldRate = effectiveGoldRate
+  const silverRate = effectiveSilverRate
+  const silverPerGram = getRatePerGram(effectiveSilverRate)
+
+  const oldGoldCredit = Math.min(oldGoldValue, billTotal)
+  const oldGoldAmountToPay = Math.max(0, billTotal - oldGoldValue)
+  const oldGoldChange = Math.max(0, oldGoldValue - billTotal)
+
+  const handleOldGoldKaratChange = (value) => {
+    setOldGoldKarat(value)
+    const purity = OLD_GOLD_KARAT_TO_PURITY[value]
+    if (purity) setOldGoldPurity(purity)
+  }
+
+  const handleOldGoldPurityChange = (value) => {
+    setOldGoldPurity(value)
+    const karat = OLD_GOLD_PURITY_TO_KARAT[value]
+    if (karat) setOldGoldKarat(karat)
+  }
+
+  const { user } = useContext(AuthContext)
+  const previewItems = buildInvoiceItems(cart.map((c) => ({
+    item: c.item,
+    qty: c.qty,
+    ratePerGram: c.ratePerGram,
+    makingCharge: c.makingCharge,
+    wastagePercent: c.wastagePercent,
+    stonePrice: c.stonePrice,
+  })))
+  const previewSubtotal = previewItems.reduce((sum, it) => sum + it._total, 0)
+  const previewBreakdown = getPaymentBreakdown()
+  const previewPaidAmount =
+    paymentType === 'cash'
+      ? billTotal
+      : previewBreakdown.oldGold
+        ? (previewBreakdown.oldGold.deduction || 0) + (previewBreakdown.cash || 0)
+        : previewBreakdown.cash || 0
+  const storeSettings = getCachedSettings() || {}
+  const previewDate = new Date()
+  const previewDateAD = formatDate(previewDate, 'd/M/yyyy')
+  const previewDateBS = getBSDate(previewDate)
+  const previewTime = formatDate(previewDate, 'hh:mm a')
+  const previewDateTime = `${previewDateAD}-${previewTime}`
+  const previewWords = `${numberToWords(billTotal)} only`
+  const previewOldGold = previewBreakdown.oldGold || {}
+  const previewPaymentLabel = PAYMENT_TYPES.find((p) => p.value === paymentType)?.label || paymentType
 
   return (
     <div className="flex flex-col lg:flex-row gap-4">
@@ -503,7 +603,7 @@ const POS = () => {
             </div>
           ) : (
             cart.map((c) => {
-              const itemTotal = calcItemTotal(c.item, c.makingCharge, c.wastagePercent, c.ratePerGram)
+              const itemTotal = calcItemTotal(c.item, c.makingCharge, c.wastagePercent, c.ratePerGram, c.stonePrice)
               const netWt = c.item.netMetalWeight || c.item.grossWeight || 0
               const metalVal = netWt * c.ratePerGram * ((c.item.purity || 0) / 1000)
               const wastageAmt = metalVal * (c.wastagePercent / 100)
@@ -532,6 +632,10 @@ const POS = () => {
                       <input type="number" value={c.wastagePercent} onChange={(e) => updateCartField(c.item._id, 'wastagePercent', Number(e.target.value))} className="w-full rounded border border-gray-200 px-2 py-1 text-sm" />
                     </div>
                     <div>
+                      <label className="text-gray-500">Stone/Mala Price</label>
+                      <input type="number" value={c.stonePrice} onChange={(e) => updateCartField(c.item._id, 'stonePrice', Number(e.target.value))} className="w-full rounded border border-gray-200 px-2 py-1 text-sm" />
+                    </div>
+                    <div>
                       <label className="text-gray-500">Qty</label>
                       <div className="flex items-center gap-1">
                         <button onClick={() => updateQty(c.item._id, -1)} className="p-1 rounded hover:bg-gray-100 text-gray-600"><Minus className="h-3 w-3" /></button>
@@ -544,6 +648,9 @@ const POS = () => {
                     <div className="flex justify-between"><span>Metal Value (×{c.qty})</span><span>{formatCurrency(metalVal * c.qty)}</span></div>
                     <div className="flex justify-between"><span>Making Charge (×{c.qty})</span><span>{formatCurrency(c.makingCharge * c.qty)}</span></div>
                     <div className="flex justify-between"><span>Wastage ({c.wastagePercent}%)</span><span>{formatCurrency(wastageAmt * c.qty)}</span></div>
+                    {Number(c.stonePrice) > 0 && (
+                      <div className="flex justify-between"><span>Stone/Mala Price (×{c.qty})</span><span>{formatCurrency(c.stonePrice * c.qty)}</span></div>
+                    )}
                     <div className="flex justify-between font-bold text-gray-900 pt-1"><span>Item Total</span><span>{formatCurrency(itemTotal * c.qty)}</span></div>
                   </div>
                 </div>
@@ -557,30 +664,20 @@ const POS = () => {
               <span className="text-sm text-gray-600">Subtotal</span>
               <span>{formatCurrency(cartTotal)}</span>
             </div>
-            {taxEnabled && (
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-gray-600">Taxes</span>
-                <span>{formatCurrency(taxTotalRounded)}</span>
-              </div>
-            )}
-            {luxuryTaxAmount > 0 && (
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-gray-600">Luxury Tax ({luxuryTaxRate}%)</span>
-                <span>{formatCurrency(luxuryTaxAmount)}</span>
-              </div>
-            )}
-            {vatAmount > 0 && (
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-gray-600">VAT ({vatRate}%)</span>
-                <span>{formatCurrency(vatAmount)}</span>
-              </div>
-            )}
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-gray-600">Fee ({feeRate}%)</span>
+              <span>{formatCurrency(feeAmount)}</span>
+            </div>
             {computedDiscount > 0 && (
               <div className="flex justify-between items-center text-sm text-green-600">
                 <span>Discount</span>
                 <span>- {formatCurrency(computedDiscount)}</span>
               </div>
             )}
+            <div className="flex justify-between items-center text-sm text-gray-500">
+              <span>Round Off</span>
+              <span>{roundOff >= 0 ? '+' : ''}{formatCurrency(roundOff)}</span>
+            </div>
             <div className="flex justify-between items-center">
               <span className="text-sm font-semibold text-gray-900">Grand Total</span>
               <span className="text-xl font-bold text-amber-700">{formatCurrency(billTotal)}</span>
@@ -592,12 +689,17 @@ const POS = () => {
               type="number"
               value={actualAmountReceived}
               onChange={(e) => setActualAmountReceived(e.target.value)}
-              placeholder={`Enter actual amount received (min ${formatCurrency(billTotal)})`}
+              placeholder={`Enter amount received (bill ${formatCurrency(fullBill)})`}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
             />
             {computedDiscount > 0 && (
               <p className="text-xs text-green-600 font-medium mt-1">
-                Discount applied: {formatCurrency(computedDiscount)}
+                Discount applied: {formatCurrency(computedDiscount)} — tax charged on {formatCurrency(taxableAmount)}
+              </p>
+            )}
+            {changeDue > 0 && (
+              <p className="text-xs text-green-600 font-medium mt-1">
+                Change due: {formatCurrency(changeDue)}
               </p>
             )}
           </div>
@@ -633,8 +735,55 @@ const POS = () => {
           {paymentType === 'oldGoldExchange' && (
             <div className="space-y-2">
               <input type="number" value={oldGoldWeight} onChange={(e) => setOldGoldWeight(e.target.value)} placeholder="Old gold weight (g)" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-              <input type="number" value={oldGoldPurity} onChange={(e) => setOldGoldPurity(e.target.value)} placeholder="Karat / purity" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-              <input type="number" value={oldGoldDeduction} onChange={(e) => setOldGoldDeduction(e.target.value)} placeholder="Deduction amount" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Karat</label>
+                  <select value={oldGoldKarat} onChange={(e) => handleOldGoldKaratChange(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white">
+                    {OLD_GOLD_KARAT_OPTIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Purity</label>
+                  <select value={oldGoldPurity} onChange={(e) => handleOldGoldPurityChange(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white">
+                    {OLD_GOLD_PURITY_OPTIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
+                  </select>
+                </div>
+              </div>
+              <input type="number" value={oldGoldDeductionPercent} onChange={(e) => setOldGoldDeductionPercent(e.target.value)} placeholder="Deduction (%)" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              {oldGoldNetWeight > 0 && (
+                <p className="text-xs text-gray-600">
+                  Gold weight after {oldGoldDeductionPercentNum}% deduction: <b>{formatWeight(oldGoldNetWeight)}</b> ({oldGoldKaratNum}K pure equivalent: {formatWeight(oldGoldNetWeight * (oldGoldKaratNum / 24))}g)
+                </p>
+              )}
+              {oldGoldValue > 0 && (
+                <p className="text-xs text-green-600 font-medium">
+                  Old gold value: {formatCurrency(Math.round(oldGoldValue))}
+                </p>
+              )}
+              {oldGoldAmountToPay < billTotal && oldGoldValue > 0 && (
+                <p className="text-xs text-blue-600 font-medium">
+                  Amount to pay after exchange: {formatCurrency(oldGoldAmountToPay)}
+                </p>
+              )}
+              {oldGoldChange > 0 && (
+                <p className="text-xs text-purple-600 font-medium">
+                  Old gold value exceeds bill — change/credit due: {formatCurrency(Math.round(oldGoldChange))}
+                </p>
+              )}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Cash Paid</label>
+                <input type="number" value={oldGoldCash} onChange={(e) => setOldGoldCash(e.target.value)} placeholder={`Cash paid (due ${formatCurrency(oldGoldAmountToPay)})`} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+                {Number(oldGoldCash) > 0 && Number(oldGoldCash) > oldGoldAmountToPay && (
+                  <p className="text-xs text-green-600 font-medium mt-1">
+                    Change due: {formatCurrency(Number(oldGoldCash) - oldGoldAmountToPay)}
+                  </p>
+                )}
+                {Number(oldGoldCash) > 0 && Number(oldGoldCash) < oldGoldAmountToPay && oldGoldAmountToPay > 0 && (
+                  <p className="text-xs text-orange-600 font-medium mt-1">
+                    Remaining balance: {formatCurrency(oldGoldAmountToPay - Number(oldGoldCash))}
+                  </p>
+                )}
+              </div>
             </div>
           )}
           <div>
@@ -705,11 +854,16 @@ const POS = () => {
             <p>Are you sure you want to complete this sale?</p>
             <div className="mt-2 space-y-0.5 text-right">
               <div><span className="font-medium">Subtotal:</span> {formatCurrency(cartTotal)}</div>
-              {taxEnabled && <div><span className="font-medium">Taxes:</span> {formatCurrency(taxTotalRounded)}</div>}
-              {luxuryTaxAmount > 0 && <div><span className="font-medium">Luxury Tax:</span> {formatCurrency(luxuryTaxAmount)}</div>}
-              {vatAmount > 0 && <div><span className="font-medium">VAT:</span> {formatCurrency(vatAmount)}</div>}
+              <div><span className="font-medium">Fee ({feeRate}%):</span> {formatCurrency(feeAmount)}</div>
               {computedDiscount > 0 && <div className="text-green-600"><span className="font-medium">Discount:</span> -{formatCurrency(computedDiscount)}</div>}
               <div className="font-bold pt-1 border-t"><span className="font-medium">Bill Total:</span> {formatCurrency(billTotal)}</div>
+              {paymentType === 'oldGoldExchange' && oldGoldValue > 0 && (
+                <>
+                  <div className="text-green-600"><span className="font-medium">Old Gold Credit:</span> {formatCurrency(Math.round(oldGoldCredit))}</div>
+                  <div className="text-blue-600"><span className="font-medium">Cash Paid:</span> {formatCurrency(Number(oldGoldCash) > 0 ? Number(oldGoldCash) : oldGoldAmountToPay)}</div>
+                  {oldGoldChange > 0 && <div className="text-purple-600"><span className="font-medium">Change/Credit Due:</span> {formatCurrency(Math.round(oldGoldChange))}</div>}
+                </>
+              )}
               {actualAmountReceived && <div className="text-blue-600"><span className="font-medium">Amount Received:</span> {formatCurrency(Number(actualAmountReceived))}</div>}
             </div>
           </div>
@@ -755,68 +909,49 @@ const POS = () => {
           </div>
         </div>
        </Modal>
-       <Modal
-         isOpen={showPreviewDialog}
-         onClose={() => setShowPreviewDialog(false)}
-         title="Preview Bill"
-         size="xl"
-       >
-         <div className="bg-white text-black p-4 max-h-[80vh] overflow-y-auto" style={{ fontFamily: 'monospace' }}>
-           <div className="text-center mb-4">
-             <h2 className="text-lg font-bold">BILL PREVIEW</h2>
-             <p className="text-xs text-gray-500">Review before completing the sale</p>
-           </div>
-           <div className="border-2 border-gray-800 p-3 text-xs">
-             <div className="flex justify-between items-start mb-2">
-               <div>
-                 <p className="font-bold">{(() => { try { return JSON.parse(localStorage.getItem('settings') || '{}').storeName || 'My Jewellery Store' } catch { return 'My Jewellery Store' } })()}</p>
-                 <p className="text-[10px] text-gray-600">{(() => { try { return JSON.parse(localStorage.getItem('settings') || '{}').address || '' } catch { return '' } })()}</p>
-               </div>
-               <div className="text-right text-[10px]">
-                 <p className="font-bold">TAX INVOICE</p>
-                 <p>Date: {formatDate(new Date(), 'dd/MM/yyyy')}</p>
-               </div>
-             </div>
-             <div className="border-t border-gray-300 my-2" />
-             <table className="w-full text-[10px] border border-gray-300">
-               <thead className="bg-gray-100">
-                 <tr>
-                   <th className="border border-gray-300 px-1 py-0.5">#</th>
-                   <th className="border border-gray-300 px-1 py-0.5 text-left">Item</th>
-                   <th className="border border-gray-300 px-1 py-0.5 text-right">Qty</th>
-                   <th className="border border-gray-300 px-1 py-0.5 text-right">Rate</th>
-                   <th className="border border-gray-300 px-1 py-0.5 text-right">Making</th>
-                   <th className="border border-gray-300 px-1 py-0.5 text-right">Wastage</th>
-                   <th className="border border-gray-300 px-1 py-0.5 text-right">Total</th>
-                 </tr>
-               </thead>
-               <tbody>
-                  {cart.map((c, idx) => {
-                    const itemTotal = calcItemTotal(c.item, c.makingCharge, c.wastagePercent, c.ratePerGram)
-                    return (
-                     <tr key={c.item._id}>
-                       <td className="border border-gray-300 px-1 py-0.5 text-center">{idx + 1}</td>
-                       <td className="border border-gray-300 px-1 py-0.5">{c.item.itemName || c.item.name}</td>
-                       <td className="border border-gray-300 px-1 py-0.5 text-center">{c.qty}</td>
-                       <td className="border border-gray-300 px-1 py-0.5 text-right">{formatCurrency(itemTotal)}</td>
-                       <td className="border border-gray-300 px-1 py-0.5 text-right">{formatCurrency(c.makingCharge * c.qty)}</td>
-                       <td className="border border-gray-300 px-1 py-0.5 text-right">{c.wastagePercent}%</td>
-                       <td className="border border-gray-300 px-1 py-0.5 text-right font-bold">{formatCurrency(itemTotal * c.qty)}</td>
-                     </tr>
-                   )
-                 })}
-               </tbody>
-             </table>
-             <div className="border-t border-gray-300 mt-2 pt-2 space-y-1 text-right text-[10px]">
-               <div className="flex justify-between"><span>Subtotal:</span><span>{formatCurrency(cartTotal)}</span></div>
-               {taxEnabled && <div className="flex justify-between"><span>Taxes:</span><span>{formatCurrency(taxTotalRounded)}</span></div>}
-               {luxuryTaxAmount > 0 && <div className="flex justify-between"><span>Luxury Tax:</span><span>{formatCurrency(luxuryTaxAmount)}</span></div>}
-               {vatAmount > 0 && <div className="flex justify-between"><span>VAT:</span><span>{formatCurrency(vatAmount)}</span></div>}
-               {computedDiscount > 0 && <div className="flex justify-between text-green-600"><span>Discount:</span><span>-{formatCurrency(computedDiscount)}</span></div>}
-               <div className="flex justify-between font-bold text-sm"><span>Grand Total:</span><span>{formatCurrency(billTotal)}</span></div>
-             </div>
-           </div>
-         </div>
+        <Modal
+          isOpen={showPreviewDialog}
+          onClose={() => setShowPreviewDialog(false)}
+          title="Preview Bill"
+          size="5xl"
+        >
+          <div className="mx-auto max-w-[1050px]">
+            <InvoiceDocument
+              logoUrl={storeSettings.logoUrl}
+              companyName={storeSettings.storeName || 'My Jewellery Store'}
+              tagline="AN EXCLUSIVE GOLD & DIAMOND JEWELLERY SHOWROOM"
+              address={storeSettings.address || ''}
+              phone={storeSettings.phone || ''}
+              panNumber={storeSettings.panNumber || ''}
+              invoiceNumber="Draft"
+              dateAD={previewDateAD}
+              dateBS={previewDateBS}
+              dateTime={previewDateTime}
+              title="Estimate"
+              customerName={customerName.trim() || 'Walk-in Customer'}
+              customerPhone={customerPhone}
+              customerAddress={customerAddress}
+              customerCode={selectedCustomer?.customerCode || ''}
+              salesPerson={user?.name || ''}
+              items={previewItems}
+              words={previewWords}
+              subtotal={previewSubtotal}
+              discount={computedDiscount}
+              taxableAmount={taxableAmount}
+              totalTax={feeAmount}
+              roundOff={roundOff}
+              grandTotal={billTotal}
+              paymentType={previewPaymentLabel}
+              paidAmount={previewPaidAmount}
+              oldGoldWeight={previewOldGold.netWeight || previewOldGold.weight}
+              oldGoldAmount={previewOldGold.deduction}
+              oldGoldPurity={previewOldGold.purity}
+              oldGoldDeductionPercent={previewOldGold.deductionPercent}
+              oldGoldGrossWeight={previewOldGold.weight}
+              oldGoldNetWeight={previewOldGold.netWeight || previewOldGold.weight}
+              cashier={user?.name || ''}
+            />
+          </div>
          <div className="flex justify-end gap-2 mt-4">
            <Button variant="outline" onClick={() => setShowPreviewDialog(false)}>Close</Button>
            <Button variant="primary" onClick={() => { setShowPreviewDialog(false); setShowConfirm(true) }}>

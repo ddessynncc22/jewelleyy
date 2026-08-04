@@ -7,7 +7,7 @@ const stockMovementSchema = new mongoose.Schema(
     item: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Item',
-      required: [true, 'Item reference is required'],
+      default: null,
     },
     type: {
       type: String,

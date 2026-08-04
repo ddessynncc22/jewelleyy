@@ -42,6 +42,8 @@ import CustomOrderForm from "./pages/customOrders/CustomOrderForm";
 
 import CustomOrderDetail from "./pages/customOrders/CustomOrderDetail";
 
+import CustomOrderBill from "./pages/customOrders/CustomOrderBill";
+
 import PawnList from "./pages/pawn/PawnList";
 
 import PawnForm from "./pages/pawn/PawnForm";
@@ -199,13 +201,13 @@ export default function App() {
         <Route path="/custom-orders" element={<CustomOrderList />} />
         <Route path="/custom-orders/new" element={<CustomOrderForm />} />
         <Route path="/custom-orders/:id" element={<CustomOrderDetail />} />
+        <Route path="/custom-orders/bill/:id" element={<CustomOrderBill />} />
         <Route path="/pawn" element={<PawnList />} />
         <Route path="/pawn/new" element={<PawnForm />} />
         <Route path="/pawn/:id" element={<PawnDetail />} />
         <Route path="/pos" element={<POS />} />
         <Route path="/pos/sales" element={<SaleList />} />
         <Route path="/pos/sales/:id" element={<SaleDetail />} />
-        <Route path="/pos/print-invoice/:id" element={<PrintInvoice />} />
         <Route path="/customers" element={<CustomerList />} />
         <Route path="/customers/new" element={<CustomerForm />} />
         <Route path="/customers/:id" element={<CustomerDetail />} />
@@ -230,6 +232,7 @@ export default function App() {
         <Route path="/admin/broadcast" element={<SuperadminRoute><BroadcastNotification /></SuperadminRoute>} />
         <Route path="/admin/rates" element={<SuperadminRoute><RateHistory /></SuperadminRoute>} />
       </Route>
+      <Route path="/pos/print-invoice/:id" element={<ProtectedRoute><PrintInvoice /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

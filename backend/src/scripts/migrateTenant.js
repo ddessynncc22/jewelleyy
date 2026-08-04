@@ -50,8 +50,6 @@ async function migrate() {
       defaultKarat: settingsDoc?.defaultKarat || 22,
       lowStockThreshold: settingsDoc?.lowStockThreshold || 5,
       businessStartDate: settingsDoc?.businessStartDate || new Date(),
-      taxSettings: settingsDoc?.taxSettings || {},
-      nepalTaxSettings: settingsDoc?.nepalTaxSettings || { enabled: false, luxuryTax: 0, vatRate: 13, vatEnabled: true, irdPrintEnabled: true, fiscalYearStart: '04', panNumber: '', includeInInvoice: true },
       isActive: true,
     });
     console.log(`Created tenant: ${tenant.name} (number ${tenant.tenantNumber})`);
