@@ -25,6 +25,7 @@ import ErrorState from '../../components/ui/ErrorState'
 import DataTable from '../../components/ui/DataTable'
 
 import { formatWeight, formatCurrency, formatDate, formatDateTime, getImageSrc } from '../../utils/helpers'
+import { printBarcodeLabels } from '../../utils/barcodeLabels'
 
 import { getActivityLogs } from '../../services/auditService'
 

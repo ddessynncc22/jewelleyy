@@ -29,7 +29,7 @@ export default function PrintInvoice() {
         const data = res.data?.data || res.data;
         setSale(data);
         if (autoPrint && data) {
-          setTimeout(() => window.print(), 400);
+          setTimeout(() => window.print(), 500);
         }
       } catch (err) {
         setError(err?.response?.data?.message || 'Failed to load sale');
@@ -122,13 +122,50 @@ export default function PrintInvoice() {
     <div className="bg-white text-black">
       <style>{`
         @media print {
-          body { background: #fff !important; }
+          body { 
+            background: #fff !important; 
+            color: #000 !important;
+          }
           .no-print { display: none !important; }
+          .invoice-printable {
+            background: #fff !important;
+            box-shadow: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            max-height: none !important;
+          }
+          .invoice-header {
+            background: #fef3c7 !important; /* amber-100 */
+            border-bottom: 3px solid #fbbf24 !important; /* amber-400 */
+            color: #92400e !important; /* amber-800 */
+          }
+          .invoice-section-title {
+            background: #fffbeb !important; /* amber-50 */
+            color: #78350f !important; /* amber-800 */
+            border-left: 4px solid #fbbf24 !important; /* amber-400 */
+          }
+          .invoice-table {
+            border-collapse: collapse !important;
+          }
+          .invoice-table th {
+            background: #fef3c7 !important; /* amber-100 */
+            color: #92400e !important; /* amber-800 */
+            font-weight: bold !important;
+            border: 1px solid #fbbf24 !important; /* amber-400 */
+          }
+          .invoice-table td {
+            border: 1px solid #fbbf24 !important; /* amber-400 */
+          }
+          .invoice-total-row td {
+            background: #fffbeb !important; /* amber-50 */
+            font-weight: bold !important;
+            color: #78350f !important; /* amber-800 */
+          }
+          .invoice-signature-line {
+            border-top: 1px solid #d97706 !important; /* amber-600 */
+          }
         }
         @page { size: A4; margin: 4mm; }
-        @media print {
-          .invoice-printable { max-height: 100%; }
-        }
       `}</style>
 
       <div className="p-6 max-w-[1050px] mx-auto print:p-0">

@@ -57,8 +57,8 @@ import {
   formatCurrency,
   getImageSrc,
 } from '../../utils/helpers'
-import { getCachedSettings } from '../../services/settingsService'
 import { getCategories } from '../../services/categoryService'
+import { printBarcodeLabels } from '../../utils/barcodeLabels'
 
 import ItemForm from './ItemForm'
 
@@ -515,72 +515,7 @@ const ItemList = () => {
   const handleBulkPrint = (size) => {
     const selected = items.filter((i) => selectedIds.includes(i._id))
     if (selected.length === 0) return
-    const storeName = getCachedSettings()?.storeName || ''
-    const isLoop = size === 'loop'
-
-    const printWindow = window.open('', '_blank')
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Barcode Labels</title>
-          <style>
-            ${isLoop ? `@page { size: 90mm 15mm; margin: 0; }
-            * { box-sizing: border-box; margin: 0; padding: 0; }
-            body { font-family: Arial; width: 90mm; height: 15mm; }
-            .labels { display: flex; flex-direction: column; }
-            .label { width: 90mm; height: 15mm; display: flex; flex-direction: row; align-items: center; justify-content: space-between; page-break-after: always; border: none; padding: 0.5mm 3mm; overflow: hidden; }
-            .left { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; flex: 1; min-width: 0; }
-            .right { display: flex; flex-direction: column; align-items: flex-end; justify-content: center; text-align: right; flex-shrink: 0; }
-            .item-name { font-size: 11px; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-            .sku { letter-spacing: 0.5px; font-size: 9px; line-height: 1.25; }
-            .info { color: #000; font-weight: bold; font-size: 10px; line-height: 1.15; }
-            .weight { color: #333; font-weight: bold; font-size: 11px; line-height: 1.15; }
-            .store-name { color: #000; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; font-size: 11px; line-height: 1.1; }
-            .barcode { color: #888; letter-spacing: 0.5px; font-size: 9px; line-height: 1.1; }`
-            : `
-            body { font-family: Arial; margin: 20px; }
-            .labels { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; }
-            .label { border: 2px dashed #ccc; padding: 15px 30px; border-radius: 8px; text-align: center; width: 250px; page-break-inside: avoid; }
-            h3 { margin: 0 0 3px; font-size: 14px; }
-            .sku { font-size: 20px; font-weight: bold; letter-spacing: 2px; margin: 5px 0; }
-            .info { font-size: 11px; color: #666; margin: 2px 0; }
-            .store-name { font-size: 9px; color: #999; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 1px; }
-            .barcode { font-size: 10px; color: #999; margin-top: 4px; letter-spacing: 1px; }`}
-            @media print { ${!isLoop ? '.label { border: 1px solid #ccc; }' : ''} }
-          </style>
-        </head>
-        <body>
-          <div class="labels">
-            ${selected.map((item) => isLoop ? `
-              <div class="label">
-                <div class="left">
-                  ${storeName ? `<div class="store-name">${storeName}</div>` : ''}
-                  <div class="item-name">${item.itemName || ''}</div>
-                  <div class="sku">${item.SKU || ''}</div>
-                </div>
-                <div class="right">
-                  <div class="info">${item.metalType || ''}${item.karat ? ` ${item.karat}K` : ''}${item.purity ? ` ${item.purity}` : ''}</div>
-                  <div class="weight">Gross: ${item.grossWeight || 0}g / ${formatWeightTolaLaal(item.grossWeight)}</div>
-                  <div class="weight">Stone: ${item.stoneWeight || 0}g | Net: ${item.netMetalWeight || 0}g</div>
-                  <div class="barcode">${item.barcode || item.SKU || ''}</div>
-                </div>
-              </div>
-            ` : `
-              <div class="label">
-                ${storeName ? `<div class="store-name">${storeName}</div>` : ''}
-                <h3>${item.itemName || ''}</h3>
-                <div class="sku">${item.SKU || ''}</div>
-                <div class="info">${item.metalType || ''} / ${item.karat ? `${item.karat}K` : ''} / ${item.purity || ''}</div>
-                <div class="info">Gross: ${item.grossWeight || 0}g | Stone: ${item.stoneWeight || 0}g | Net: ${item.netMetalWeight || 0}g</div>
-                <div class="barcode">${item.barcode || item.SKU || ''}</div>
-              </div>
-            `).join('')}
-          </div>
-          <script>window.print()</script>
-        </body>
-      </html>
-    `)
-    printWindow.document.close()
+    printBarcodeLabels({ items: selected, size, title: 'Barcode Labels' })
   }
 
   const columns = [
