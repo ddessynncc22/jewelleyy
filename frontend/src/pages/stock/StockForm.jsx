@@ -14,8 +14,10 @@ import FormSelect from '../../components/ui/FormSelect'
 
 import FormTextarea from '../../components/ui/FormTextarea'
 
+import FormField from '../../components/ui/FormField'
+
 import Button from '../../components/ui/Button'
-import { formatWeight, formatDate } from '../../utils/helpers'
+import { formatWeight } from '../../utils/helpers'
 
 const STOCK_IN_TYPES = [
   { value: 'Purchase', label: 'Purchase' },
@@ -200,7 +202,6 @@ const StockForm = ({ mode, onClose, onSuccess }) => {
             error={errors.category}
             required
           />
-          <div></div>
 
           <div className="sm:col-span-2">
             <FormField label="Item" name="itemId" error={errors.itemId} required>
@@ -219,40 +220,40 @@ const StockForm = ({ mode, onClose, onSuccess }) => {
                   }}
                   onBlur={() => setTimeout(() => setShowItemDropdown(false), 200)}
                   placeholder="Search by item name or SKU..."
-                  className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  className={`w-full rounded-xl border px-3.5 py-2.5 text-sm bg-[var(--color-card)] text-[var(--color-text)] placeholder-[var(--color-text-secondary)] transition-all focus:outline-none focus:ring-2 ${
                     errors.itemId
-                      ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
-                      : 'border-gray-300 focus:border-blue-500'
+                      ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20'
+                      : 'border-[var(--color-border)] focus:border-[var(--color-primary)] focus:ring-[var(--color-primary)]/20'
                   }`}
                 />
                 {showItemDropdown && (
-                  <div className="absolute z-10 mt-1 w-full rounded-lg border border-gray-200 bg-white shadow-lg max-h-48 overflow-y-auto">
+                  <div className="absolute z-10 mt-1 w-full overflow-y-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] shadow-lg max-h-48">
                     {itemsLoading ? (
-                      <div className="px-3 py-2 text-sm text-gray-500">Loading...</div>
+                      <div className="px-3.5 py-2 text-sm text-[var(--color-text-secondary)]">Loading...</div>
                     ) : items.length === 0 ? (
-                      <div className="px-3 py-2 text-sm text-gray-500">No items found</div>
+                      <div className="px-3.5 py-2 text-sm text-[var(--color-text-secondary)]">No items found</div>
                     ) : (
                       items.map((item) => (
                         <button
                           key={item._id}
                           type="button"
                           onMouseDown={() => handleSelectItem(item)}
-                          className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 focus:bg-gray-50 transition-colors"
+                          className="w-full text-left px-3.5 py-2 text-sm transition-colors hover:bg-[var(--color-primary-light)] focus:bg-[var(--color-primary-light)]"
                         >
-                          <span className="font-medium text-gray-900">
+                          <span className="font-medium text-[var(--color-text)]">
                             {item.itemName || item.name}
                           </span>
                           {(item.SKU || item.sku) && (
-                            <span className="ml-2 text-xs text-gray-500">
+                            <span className="ml-2 text-xs text-[var(--color-text-secondary)]">
                               SKU: {item.SKU || item.sku}
                             </span>
                           )}
                           {item.grossWeight && (
-                            <span className="ml-2 text-xs text-gray-400">
+                            <span className="ml-2 text-xs text-[var(--color-text-secondary)]">
                               ({formatWeight(item.grossWeight)})
                             </span>
                           )}
-                          <span className="ml-2 text-xs text-gray-400">
+                          <span className="ml-2 text-xs text-[var(--color-text-secondary)]">
                             Qty: {item.quantity ?? '-'}
                           </span>
                         </button>
@@ -262,11 +263,11 @@ const StockForm = ({ mode, onClose, onSuccess }) => {
                 )}
                 {selectedItem && (
                   <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-[var(--color-primary-light)] text-[var(--color-primary)]">
                       {selectedItem.itemName || selectedItem.name}
                       {selectedItem.SKU && <span className="ml-1">({selectedItem.SKU})</span>}
                     </span>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-[var(--color-surface)] text-[var(--color-text-secondary)]">
                       Current stock: {selectedItem.quantity ?? '-'}
                     </span>
                   </div>
@@ -342,7 +343,7 @@ const StockForm = ({ mode, onClose, onSuccess }) => {
           rows={3}
         />
 
-        <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
+        <div className="flex items-center justify-end gap-3 pt-4 border-t border-[var(--color-border)]">
           <Button variant="ghost" onClick={onClose} disabled={loading}>
             Cancel
           </Button>
@@ -352,23 +353,6 @@ const StockForm = ({ mode, onClose, onSuccess }) => {
         </div>
       </form>
     </Modal>
-  )
-}
-
-const FormField = ({ label, name, error, required, children }) => {
-  return (
-    <div>
-      <label htmlFor={name} className="block text-sm font-medium text-gray-700 mb-1">
-        {label}
-        {required && <span className="text-red-500 ml-0.5">*</span>}
-      </label>
-      {children}
-      {error && (
-        <p id={`${name}-error`} className="mt-1 text-xs text-red-600" role="alert">
-          {error}
-        </p>
-      )}
-    </div>
   )
 }
 

@@ -1,4 +1,5 @@
 const Item = require('../models/Item');
+const LooseLot = require('../models/LooseLot');
 const PawnLoan = require('../models/PawnLoan');
 const Karigar = require('../models/Karigar');
 const StockMovement = require('../models/StockMovement');
@@ -13,7 +14,7 @@ exports.getDashboardStats = async (req, res) => {
     const settings = await Settings.getSettings();
     const lowThreshold = settings?.lowStockThreshold || 5;
     const [totalInventory, latestGold, latestSilver, activePawnLoans, pendingKarigarJobs, lowStockItems, recentActivities, itemsByStatus, itemsByMetal] = await Promise.all([
-      Item.countDocuments({ status: 'In Stock', isDeleted: false }),
+      Item.aggregate(scopeAggregate([{ $match: { status: 'In Stock', isDeleted: false } }, { $group: { _id: null, total: { $sum: '$quantity' } } }])),
       Rate.findOne({ metalType: 'gold' }).sort({ date: -1 }),
       Rate.findOne({ metalType: 'silver' }).sort({ date: -1 }),
       PawnLoan.countDocuments({ status: { $in: ['Active', 'Renewed'] }, isDeleted: false }),
@@ -26,12 +27,19 @@ exports.getDashboardStats = async (req, res) => {
     const allItems = await Item.find({ status: 'In Stock' }).lean();
     const goldRate = { rate: toPerGramRate(latestGold), unit: 'gram' };
     const silverRate = { rate: toPerGramRate(latestSilver), unit: 'gram' };
+    const looseWeightByItem = await getLooseStockMap(allItems);
     const totalValue = allItems.reduce((sum, item) => {
+      if (item.itemType === 'loose') {
+        const info = looseWeightByItem.get(String(item._id));
+        const weight = (info?.remainingWeight ?? item.grossWeight) || 0;
+        const rate = item.metalType === 'gold' ? goldRate.rate : silverRate.rate;
+        return sum + weight * rate * ((item.purity || 0) / 1000);
+      }
       const rate = item.metalType === 'gold' ? goldRate.rate : silverRate.rate;
-      return sum + ((item.netMetalWeight || 0) * rate * ((item.purity || 0) / 1000));
+      return sum + ((item.netMetalWeight || 0) * rate * ((item.purity || 0) / 1000)) * (item.quantity || 1);
     }, 0);
     return successResponse(res, {
-      totalInventory,
+      totalInventory: totalInventory[0]?.total || 0,
       totalValue,
       goldRate,
       silverRate,
@@ -48,12 +56,42 @@ exports.getDashboardStats = async (req, res) => {
   }
 };
 
-function itemValue(item, goldRate, silverRate) {
+async function getLooseStockMap(items) {
+  const looseIds = items.filter((i) => i.itemType === 'loose').map((i) => i._id);
+  if (looseIds.length === 0) return new Map();
+  const lotAgg = await LooseLot.aggregate(scopeAggregate([
+    { $match: { item: { $in: looseIds }, isDeleted: false } },
+    {
+      $group: {
+        _id: '$item',
+        remainingPieces: { $sum: '$remainingPieces' },
+        remainingWeight: { $sum: '$remainingWeight' },
+      },
+    },
+  ]));
+  return new Map(lotAgg.map((r) => [String(r._id), r]));
+}
+
+function itemValue(item, goldRate, silverRate, looseMap) {
   const rate = item.metalType === 'gold' ? goldRate.rate : silverRate.rate;
+  if (item.itemType === 'loose') {
+    const info = looseMap.get(String(item._id));
+    const weight = (info?.remainingWeight ?? item.grossWeight) || 0;
+    const pieces = (info?.remainingPieces ?? item.quantity) || 0;
+    return {
+      ...item,
+      rate,
+      weight,
+      pieces,
+      value: weight * rate * ((item.purity || 0) / 1000),
+    };
+  }
   return {
     ...item,
     rate,
-    value: (item.netMetalWeight || 0) * rate * ((item.purity || 0) / 1000),
+    weight: (item.netMetalWeight || 0) * (item.quantity || 1),
+    pieces: item.quantity || 0,
+    value: (item.netMetalWeight || 0) * rate * ((item.purity || 0) / 1000) * (item.quantity || 1),
   };
 }
 
@@ -67,24 +105,27 @@ exports.getInventoryValue = async (req, res) => {
     const silverRate = { rate: toPerGramRate(latestSilver), unit: 'gram' };
 
     const allItems = await Item.find({ status: 'In Stock' }).lean();
+    const looseMap = await getLooseStockMap(allItems);
     const goldItems = allItems
       .filter((i) => i.metalType === 'gold' && i.stoneType !== 'diamond')
-      .map((i) => itemValue(i, goldRate, silverRate));
+      .map((i) => itemValue(i, goldRate, silverRate, looseMap));
     const goldDiamondItems = allItems
       .filter((i) => i.metalType === 'gold' && i.stoneType === 'diamond')
-      .map((i) => itemValue(i, goldRate, silverRate));
+      .map((i) => itemValue(i, goldRate, silverRate, looseMap));
     const silverItems = allItems
       .filter((i) => i.metalType === 'silver')
-      .map((i) => itemValue(i, goldRate, silverRate));
+      .map((i) => itemValue(i, goldRate, silverRate, looseMap));
     const otherItems = allItems
       .filter((i) => i.metalType !== 'gold' && i.metalType !== 'silver')
-      .map((i) => itemValue(i, goldRate, silverRate));
+      .map((i) => itemValue(i, goldRate, silverRate, looseMap));
 
     const buildGroup = (key, label, items, rate) => ({
       key,
       label,
       count: items.length,
-      totalWeight: items.reduce((s, i) => s + (i.netMetalWeight || 0), 0),
+      totalItems: items.reduce((s, i) => s + i.pieces, 0),
+      totalQuantity: items.reduce((s, i) => s + i.pieces, 0),
+      totalWeight: items.reduce((s, i) => s + i.weight, 0),
       rate,
       totalValue: items.reduce((s, i) => s + i.value, 0),
       items,

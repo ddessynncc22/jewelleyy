@@ -100,6 +100,13 @@ const saleSchema = new mongoose.Schema(
       required: [true, 'Total amount is required'],
       min: 0,
     },
+    diamondAmount: {
+      // Diamond portion (Rs) of this sale, tracked so the tenant's annual
+      // diamond sales can be tallied against the 13% VAT threshold.
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     actualAmountReceived: {
       type: Number,
       default: null,

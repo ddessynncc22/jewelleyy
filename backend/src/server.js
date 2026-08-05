@@ -25,29 +25,21 @@ for (const expr of SCRAPE_CRON_TIMES) {
   );
 }
 
-// Catch-up scrape on boot: if no rate was stored for today yet (server was down
-// at 11:30 NPT, process restarted late, or the cron was missed), scrape now.
-// saveRates() is idempotent per day, so this cannot duplicate today's entry.
+// Run once on boot so data is available immediately and any missed daily run
+// is recovered.
 async function runScraperIfMissing() {
   try {
-    const exists = await hasRatesForToday();
-    if (!exists) {
-      console.log('[RateScraper] No rates stored for today yet — running catch-up scrape');
-      await runScraper();
-    } else {
-      console.log('[RateScraper] Today\'s rates already stored — skipping catch-up scrape');
-    }
+    console.log('[RateScraper] Running catch-up scrape at boot');
+    await runScraper();
   } catch (err) {
-    console.error('[RateScraper] Catch-up check failed:', err.message);
+    console.error('[RateScraper] Catch-up scrape failed:', err.message);
   }
 }
 
-// Run once on boot so data is available immediately and any missed daily run
-// is recovered.
 runScraperIfMissing();
 
 const PORT = config.port;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Server running on port ${PORT} in ${config.nodeEnv} mode`);
   // Stated explicitly at boot because the difference is invisible until a user
   // is unexpectedly locked out.
@@ -57,3 +49,12 @@ app.listen(PORT, () => {
     console.log('Host enforcement OFF — single domain, tenant resolved from JWT only');
   }
 });
+
+// Vite's http-proxy pools keep-alive sockets for far longer than Node's default
+// 5s server keepAliveTimeout. When the server closes an idle socket that the
+// proxy still holds, a concurrent request burst (e.g. opening a form that fires
+// several parallel calls) can land on the dead socket and surface as an
+// intermittent 502 through the proxy. Raising the timeout keeps the pool aligned.
+server.keepAliveTimeout = 65000;
+server.headersTimeout = 66000;
+server.requestTimeout = 0;

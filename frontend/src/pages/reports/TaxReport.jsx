@@ -79,7 +79,9 @@ export default function TaxReport() {
   const monthly = body.monthly || []
   const byPaymentType = body.byPaymentType || []
   const sales = body.sales || []
-  const taxableBase = Number(summary.serviceFeeBase || 0) + Number(summary.vatBase || 0)
+  const taxableBase = Number(summary.serviceFeeBase || 0) + Number(summary.diamondFeeBase || 0) + Number(summary.vatBase || 0)
+  const diamondFeeRate = summary.diamondFeeRate || 0.5
+  const diamondVatRate = summary.diamondVatRate || 13
 
   const saleColumns = [
     { key: 'saleNumber', label: 'Sale', render: (v) => <span className="font-medium text-[var(--color-text)]">{v || '-'}</span> },
@@ -94,8 +96,13 @@ export default function TaxReport() {
       render: (v) => (v > 0 ? <span className="font-medium text-amber-600">{fmtMoney(v)}</span> : <span className="text-gray-300">-</span>),
     },
     {
+      key: 'diamondFee',
+      label: `Diamond Service Fee (${diamondFeeRate}%)`,
+      render: (v) => (v > 0 ? <span className="font-medium text-amber-500">{fmtMoney(v)}</span> : <span className="text-gray-300">-</span>),
+    },
+    {
       key: 'diamondVat',
-      label: 'VAT (Diamond)',
+      label: `VAT (Diamond) ${diamondVatRate}%`,
       render: (v) => (v > 0 ? <span className="font-medium text-cyan-600">{fmtMoney(v)}</span> : <span className="text-gray-300">-</span>),
     },
     { key: 'totalTax', label: 'Total Tax', render: (v) => <span className="font-semibold text-[var(--color-text)]">{fmtMoney(v)}</span> },
@@ -107,7 +114,8 @@ export default function TaxReport() {
     { key: 'count', label: 'Sales' },
     { key: 'revenue', label: 'Revenue', render: fmtMoney },
     { key: 'serviceFee', label: 'Service Fee', render: fmtMoney },
-    { key: 'diamondVat', label: 'VAT (Diamond)', render: fmtMoney },
+    { key: 'diamondFee', label: `Diamond Service Fee (${diamondFeeRate}%)`, render: fmtMoney },
+    { key: 'diamondVat', label: `VAT (Diamond) ${diamondVatRate}%`, render: fmtMoney },
     { key: 'totalTax', label: 'Total Tax', render: (v) => <span className="font-semibold text-[var(--color-text)]">{fmtMoney(v)}</span> },
   ]
 
@@ -154,7 +162,10 @@ export default function TaxReport() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard title="Total Tax Collected" value={fmtMoney(summary.totalTax)} icon={Receipt} color="gold" subtitle={`${summary.totalSales || 0} sales`} />
         <StatCard title="Service Fee (0.5%)" value={fmtMoney(summary.serviceFee)} icon={Percent} color="yellow" subtitle={`Base ${fmtMoney(summary.serviceFeeBase)}`} />
-        <StatCard title="VAT (Diamond) 13%" value={fmtMoney(summary.diamondVat)} icon={Gem} color="cyan" subtitle={`Base ${fmtMoney(summary.vatBase)}`} />
+        {Number(summary.diamondFee || 0) > 0 && (
+          <StatCard title={`Diamond Service Fee (${diamondFeeRate}%)`} value={fmtMoney(summary.diamondFee)} icon={Gem} color="indigo" subtitle={`Base ${fmtMoney(summary.diamondFeeBase)}`} />
+        )}
+        <StatCard title={`VAT (Diamond) ${diamondVatRate}%`} value={fmtMoney(summary.diamondVat)} icon={Gem} color="cyan" subtitle={`Base ${fmtMoney(summary.vatBase)}`} />
         <StatCard title="Taxable Sales" value={fmtMoney(taxableBase)} icon={Banknote} color="blue" subtitle="Sum of tax bases" />
         <StatCard title="Avg Tax / Sale" value={fmtMoney(summary.avgTaxPerSale)} icon={ShoppingBag} color="green" subtitle="Per transaction" />
       </div>
@@ -162,13 +173,13 @@ export default function TaxReport() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {breakdown.map((t) => {
           const share = summary.totalTax > 0 ? (t.amount / summary.totalTax) * 100 : 0
-          const isService = t.type === 'serviceFee'
+          const isFee = t.type !== 'diamondVat'
           return (
-            <Card key={t.type} title={t.label}>
+            <Card key={t.type} title={t.label} icon={<Gem size={16} />}>
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${isService ? 'bg-amber-50 text-amber-600' : 'bg-cyan-50 text-cyan-600'}`}>
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${isFee ? 'bg-amber-50 text-amber-600' : 'bg-cyan-50 text-cyan-600'}`}>
                       Rate {t.rate}
                     </span>
                     <span className="text-xs text-[var(--color-text-secondary)]">{t.count} sale(s)</span>
@@ -177,12 +188,12 @@ export default function TaxReport() {
                   <p className="mt-1 text-xs text-[var(--color-text-secondary)]">Taxable base {fmtMoney(t.taxableBase)}</p>
                 </div>
                 <div className="shrink-0 rounded-xl px-3 py-2 text-right">
-                  <p className={`text-xl font-bold ${isService ? 'text-amber-600' : 'text-cyan-600'}`}>{share.toFixed(1)}%</p>
+                  <p className={`text-xl font-bold ${isFee ? 'text-amber-600' : 'text-cyan-600'}`}>{share.toFixed(1)}%</p>
                   <p className="text-[10px] text-[var(--color-text-secondary)]">of total tax</p>
                 </div>
               </div>
               <div className="mt-4 h-2 rounded-full bg-gray-100 overflow-hidden">
-                <div className={`h-full rounded-full transition-all duration-500 ${isService ? 'bg-amber-400' : 'bg-cyan-400'}`} style={{ width: `${share}%` }} />
+                <div className={`h-full rounded-full transition-all duration-500 ${isFee ? 'bg-amber-400' : 'bg-cyan-400'}`} style={{ width: `${share}%` }} />
               </div>
             </Card>
           )
@@ -202,7 +213,8 @@ export default function TaxReport() {
                 <Tooltip formatter={(value) => fmtMoney(value)} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
                 <Bar dataKey="serviceFee" name="Service Fee (0.5%)" stackId="tax" fill="#f59e0b" />
-                <Bar dataKey="diamondVat" name="VAT (Diamond) 13%" stackId="tax" fill="#06b6d4" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="diamondFee" name={`Diamond Service Fee (${diamondFeeRate}%)`} stackId="tax" fill="#f97316" />
+                <Bar dataKey="diamondVat" name={`VAT (Diamond) ${diamondVatRate}%`} stackId="tax" fill="#06b6d4" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

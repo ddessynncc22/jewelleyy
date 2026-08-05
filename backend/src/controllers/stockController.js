@@ -197,17 +197,17 @@ exports.getStockSummary = async (req, res) => {
     const [byStatus, byMetalType, byCategory] = await Promise.all([
       Item.aggregate(scopeAggregate([
         { $match: { isDeleted: false } },
-        { $group: { _id: '$status', count: { $sum: 1 }, totalWeight: { $sum: '$grossWeight' } } },
+        { $group: { _id: '$status', count: { $sum: '$quantity' }, totalWeight: { $sum: { $multiply: ['$grossWeight', '$quantity'] } } } },
         { $sort: { _id: 1 } },
       ])),
       Item.aggregate(scopeAggregate([
         { $match: { isDeleted: false } },
-        { $group: { _id: '$metalType', count: { $sum: 1 }, totalWeight: { $sum: '$grossWeight' } } },
+        { $group: { _id: '$metalType', count: { $sum: '$quantity' }, totalWeight: { $sum: { $multiply: ['$grossWeight', '$quantity'] } } } },
         { $sort: { _id: 1 } },
       ])),
       Item.aggregate(scopeAggregate([
         { $match: { isDeleted: false } },
-        { $group: { _id: '$category', count: { $sum: 1 }, totalWeight: { $sum: '$grossWeight' }, totalCost: { $sum: '$costPrice' } } },
+        { $group: { _id: '$category', count: { $sum: '$quantity' }, totalWeight: { $sum: { $multiply: ['$grossWeight', '$quantity'] } }, totalCost: { $sum: { $multiply: ['$costPrice', '$quantity'] } } } },
         { $sort: { _id: 1 } },
       ])),
     ]);

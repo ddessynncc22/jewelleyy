@@ -93,10 +93,6 @@ export default function InvoiceSummary({
             {oldGoldAmount > 0 ? (
               <>
                 <tr>
-                  <td className="border border-black px-1.5 py-0.5 text-left">शुल्क नलाग्ने मूल्य (Non-taxable Value)</td>
-                  <td className="border border-black px-1.5 py-0.5 text-right">{fmt(oldGoldAmount)}</td>
-                </tr>
-                <tr>
                   <td className="border border-black px-1.5 py-0.5 text-left">
                     बेपत्ता सुन (Old Gold Exchange)
                     <br />
@@ -107,12 +103,7 @@ export default function InvoiceSummary({
                   <td className="border border-black px-1.5 py-0.5 text-right">{fmt(oldGoldAmount)}</td>
                 </tr>
               </>
-            ) : (
-              <tr>
-                <td className="border border-black px-1.5 py-0.5 text-left">शुल्क नलाग्ने मूल्य (Non-taxable Value)</td>
-                <td className="border border-black px-1.5 py-0.5 text-right">0.00</td>
-              </tr>
-            )}
+            ) : null}
             <tr>
               <td className="border border-black px-1.5 py-0.5 text-left">शुल्क लाग्ने मूल्य (Taxable Value)</td>
               <td className="border border-black px-1.5 py-0.5 text-right">{fmt(taxableAmount)}</td>

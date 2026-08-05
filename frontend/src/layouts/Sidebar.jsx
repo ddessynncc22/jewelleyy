@@ -23,6 +23,7 @@ import {
   Megaphone,
   History,
   ClipboardList,
+  Layers,
 } from 'lucide-react'
 import { getCachedSettings } from '../services/settingsService'
 import { useAuth } from '../hooks/useAuth'
@@ -37,6 +38,14 @@ const tenantSections = [
     items: [
       { to: '/items', label: 'Items', icon: Gem },
       { to: '/stock', label: 'Stock Movement', icon: ArrowLeftRight },
+    ],
+  },
+  {
+    label: 'Loose Items',
+    items: [
+      { to: '/loose-lots', label: 'Lots', icon: Layers, end: true },
+      { to: '/loose-lots/reports/stock', label: 'Stock & Value', icon: BarChart3 },
+      { to: '/loose-lots/reports/day-end', label: 'Day-End Report', icon: History },
     ],
   },
   {

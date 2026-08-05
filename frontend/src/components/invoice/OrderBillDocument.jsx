@@ -131,10 +131,6 @@ export default function OrderBillDocument({
                     <td className="border border-black px-2 py-1 text-right">-{fmt(oldGoldAmount)}</td>
                   </tr>
                 ) : null}
-                <tr>
-                  <td className="border border-black px-2 py-1 text-left">शुल्क नलाग्ने मूल्य (Non-taxable Value)</td>
-                  <td className="border border-black px-2 py-1 text-right">{fmt(oldGoldAmount)}</td>
-                </tr>
               <tr>
                 <td className="border border-black px-2 py-1 text-left">शुल्क लाग्ने मूल्य (Taxable Value)</td>
                 <td className="border border-black px-2 py-1 text-right">{fmt(taxableAmount)}</td>

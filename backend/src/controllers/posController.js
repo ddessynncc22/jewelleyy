@@ -1,10 +1,22 @@
 const Sale = require('../models/Sale');
 const Item = require('../models/Item');
+const LooseLotSale = require('../models/LooseLotSale');
 const StockMovement = require('../models/StockMovement');
 const ActivityLog = require('../models/ActivityLog');
 const Customer = require('../models/Customer');
 const CustomerLedger = require('../models/CustomerLedger');
 const { successResponse, errorResponse, paginatedResponse } = require('../utils/response');
+const {
+  processLotLine,
+  getTolerancePercent,
+  getLiveRatePerGram,
+  syncParentItemStock,
+  diamondRateFor,
+  computeTaxes,
+  getDiamondVatStatus,
+} = require('./looseLotController');
+
+exports.getDiamondVatStatus = getDiamondVatStatus;
 
 exports.createSale = async (req, res) => {
   try {
@@ -16,6 +28,7 @@ exports.createSale = async (req, res) => {
     const saleNumber = `SALE-${String(saleCount + 1).padStart(5, '0')}`;
     const saleItems = [];
     const updatedItems = [];
+    let diamondAmount = 0;
     for (const si of items) {
       const itemId = si.itemId || si.item;
       if (!itemId) {
@@ -41,6 +54,7 @@ exports.createSale = async (req, res) => {
       await item.save();
       updatedItems.push(item);
       saleItems.push({ item: item._id, quantity: qty, weight: si.weight || item.grossWeight || 0, price: si.price || item.sellingPrice || 0, purity: si.purity || item.purity || 0, makingCharge: si.makingCharge || si.sellingMakingCharge || 0, wastagePercent: si.wastagePercent || si.sellingWastagePercent || 5, ratePerGram: si.ratePerGram || 0, metalValue: si.metalValue || 0, stonePrice: si.stonePrice || 0 });
+      if (item.metalType === 'diamond') diamondAmount += qty * (si.price || item.sellingPrice || 0);
       await StockMovement.create({
         item: item._id,
         type: 'stockOut',
@@ -54,12 +68,9 @@ exports.createSale = async (req, res) => {
       });
     }
     const ogd = oldGoldDetails || paymentBreakdown?.oldGold || null;
-    const serviceFee = Number(taxAmount) || 0;
-    const diamondVat = Number(diamondTaxAmount) || 0;
-    const totalTaxAmount = Number((serviceFee + diamondVat).toFixed(2));
-    const taxes = [];
-    if (serviceFee > 0) taxes.push({ name: 'Service Fee', rate: 0.5, amount: Number(serviceFee.toFixed(2)) });
-    if (diamondVat > 0) taxes.push({ name: 'VAT (Diamond)', rate: 13, amount: Number(diamondVat.toFixed(2)) });
+    const diamondRate = await diamondRateFor(diamondAmount);
+    const goldAmount = Number((Number(totalAmount) - diamondAmount).toFixed(2));
+    const { serviceFee, diamondVat, totalTaxAmount, taxes } = computeTaxes(goldAmount, diamondAmount, diamondRate);
     let discount = Number(discountAmount) || 0;
     if (!discount && actualAmountReceived !== undefined && actualAmountReceived !== null && Number(actualAmountReceived) >= 0) {
       const received = Number(actualAmountReceived);
@@ -84,6 +95,7 @@ exports.createSale = async (req, res) => {
         taxes,
       },
       totalAmount,
+      diamondAmount: Number(diamondAmount.toFixed(2)),
       paidAmount: paidAmount !== undefined ? paidAmount : (paymentType === 'cash' ? adjustedTotal : 0),
       actualAmountReceived: actualAmountReceived !== undefined ? Number(actualAmountReceived) : undefined,
       discountAmount: discount,
@@ -237,5 +249,210 @@ exports.deleteSale = async (req, res) => {
     return successResponse(res, null, 'Sale deleted and inventory reversed');
   } catch (error) {
     return errorResponse(res, error.message, 500);
+  }
+};
+
+// Unified POS checkout: accepts BOTH tagged items[] and loose lot lotLines[] in
+// one request and records them as a single Sale. Tagged items are sold exactly
+// as in createSale; loose lots go through the shared processLotLine pipeline
+// (tolerance gate + stock deduction + LooseLotSale records) so the loose-lot
+// reconciliation reports stay accurate.
+exports.createCombinedSale = async (req, res) => {
+  try {
+    const {
+      items, lotLines, paymentType, cashAmount, khaataAmount, oldGoldDetails,
+      paymentBreakdown, taxAmount, diamondTaxAmount, paidAmount,
+      actualAmountReceived, discountAmount, customerId, customer: customerField,
+      saleDate,
+    } = req.body;
+
+    if (!paymentType) return errorResponse(res, 'Payment type is required', 400);
+    const hasItems = Array.isArray(items) && items.length > 0;
+    const hasLines = Array.isArray(lotLines) && lotLines.length > 0;
+    if (!hasItems && !hasLines) {
+      return errorResponse(res, 'At least one item or loose lot line is required', 400);
+    }
+
+    const saleCount = await Sale.countDocuments({ isDeleted: false });
+    const saleNumber = `SALE-${String(saleCount + 1).padStart(5, '0')}`;
+
+    const saleItems = [];
+    let diamondAmount = 0;
+    if (hasItems) {
+      for (const si of items) {
+        const itemId = si.itemId || si.item;
+        if (!itemId) {
+          return errorResponse(res, 'Item ID is required for each item', 400);
+        }
+        const item = await Item.findById(itemId);
+        if (!item) {
+          return errorResponse(res, `Item ${itemId} not found`, 404);
+        }
+        if (item.status !== 'In Stock') {
+          return errorResponse(res, `Item ${item.SKU} is not in stock (status: ${item.status})`, 400);
+        }
+        const qty = si.quantity || si.qty || 1;
+        const availableQty = item.quantity || 1;
+        if (qty > availableQty) {
+          return errorResponse(res, `Item ${item.SKU} only has ${availableQty} in stock`, 400);
+        }
+        item.quantity = availableQty - qty;
+        if (item.quantity <= 0) {
+          item.quantity = 0;
+          item.status = 'Sold';
+        }
+        await item.save();
+        saleItems.push({
+          item: item._id,
+          quantity: qty,
+          weight: si.weight || item.grossWeight || 0,
+          price: si.price || item.sellingPrice || 0,
+          purity: si.purity || item.purity || 0,
+          makingCharge: si.makingCharge || si.sellingMakingCharge || 0,
+          wastagePercent: si.wastagePercent || si.sellingWastagePercent || 5,
+          ratePerGram: si.ratePerGram || 0,
+          metalValue: si.metalValue || 0,
+          stonePrice: si.stonePrice || 0,
+        });
+        if (item.metalType === 'diamond') diamondAmount += qty * (si.price || item.sellingPrice || 0);
+        await StockMovement.create({
+          item: item._id,
+          type: 'stockOut',
+          category: 'Sale',
+          quantity: qty,
+          weight: si.weight || item.grossWeight || 0,
+          purity: item.purity || 0,
+          reference: saleNumber,
+          notes: `Sold in sale ${saleNumber}`,
+          performedBy: req.user._id,
+        });
+      }
+    }
+
+    const tolerance = await getTolerancePercent();
+    const liveRates = {
+      gold: await getLiveRatePerGram('gold'),
+      silver: await getLiveRatePerGram('silver'),
+    };
+    const processed = [];
+    if (hasLines) {
+      for (const line of lotLines) {
+        if (!line.lotId) continue;
+        const result = await processLotLine(line, { saleNumber, performedBy: req.user._id, tolerance, liveRates });
+        processed.push(result);
+      }
+    }
+    if (saleItems.length === 0 && processed.length === 0) {
+      return errorResponse(res, 'No valid item or lot lines to bill', 400);
+    }
+
+    processed.forEach((r) => {
+      if (r.lot?.metalType === 'diamond') diamondAmount += r.price || 0;
+    });
+
+    const affectedItems = [...new Set(processed.map((r) => String(r.lot.item)).filter(Boolean))];
+    if (affectedItems.length) {
+      await Promise.all(affectedItems.map((id) => syncParentItemStock(id)));
+    }
+
+    const itemSubtotal = saleItems.reduce((s, si) => s + (Number(si.price) || 0) * (si.quantity || 1), 0);
+    const lotSubtotal = processed.reduce((s, r) => s + r.price, 0);
+    const subtotal = Number((itemSubtotal + lotSubtotal).toFixed(2));
+
+    const diamondRate = await diamondRateFor(diamondAmount);
+    const goldAmount = Number((subtotal - diamondAmount).toFixed(2));
+    const { serviceFee, diamondVat, totalTaxAmount, taxes } = computeTaxes(goldAmount, diamondAmount, diamondRate);
+
+    let discount = Number(discountAmount) || 0;
+    if (!discount && actualAmountReceived !== undefined && actualAmountReceived !== null && Number(actualAmountReceived) >= 0) {
+      const received = Number(actualAmountReceived);
+      const billTotal = subtotal + totalTaxAmount;
+      if (received < billTotal) discount = Number((billTotal - received).toFixed(2));
+    }
+    const adjustedTotal = Number((subtotal + totalTaxAmount - discount).toFixed(2));
+    const cash = Number(cashAmount || paymentBreakdown?.cash || 0);
+    const khaata = Number(khaataAmount || paymentBreakdown?.khaata || 0);
+    const ogd = oldGoldDetails || paymentBreakdown?.oldGold || null;
+    const resolvedCustomer = customerId || customerField || null;
+    const paid = paidAmount !== undefined ? Number(paidAmount) : (paymentType === 'cash' ? adjustedTotal : 0);
+
+    const sale = await Sale.create({
+      saleNumber,
+      items: [
+        ...saleItems,
+        ...processed.map((r) => ({
+          item: r.lot.item,
+          quantity: r.lotSale.piecesSold,
+          weight: r.lotSale.actualWeightSold,
+          price: r.price,
+          purity: r.purity,
+          makingCharge: r.makingCharge,
+          wastagePercent: 0,
+          ratePerGram: r.ratePerGram,
+          metalValue: r.metalValue,
+          stonePrice: 0,
+        })),
+      ],
+      paymentType,
+      cashAmount: cash,
+      khaataAmount: khaata,
+      oldGoldDetails: ogd
+        ? { description: '', weight: ogd.weight || 0, purity: ogd.purity || 0, deductionPercent: ogd.deductionPercent || 0, netWeight: ogd.netWeight || 0, deductibleAmount: ogd.deduction || ogd.deductibleAmount || 0 }
+        : { description: '', weight: 0, purity: 0, deductionPercent: 0, netWeight: 0, deductibleAmount: 0 },
+      taxDetails: { totalTax: totalTaxAmount, discountAmount: discount, taxes },
+      totalAmount: subtotal,
+      diamondAmount: Number(diamondAmount.toFixed(2)),
+      paidAmount: paid,
+      actualAmountReceived: actualAmountReceived !== undefined ? Number(actualAmountReceived) : undefined,
+      discountAmount: discount,
+      customer: resolvedCustomer,
+      soldBy: req.user._id,
+      saleDate: saleDate ? new Date(saleDate) : new Date(),
+    });
+
+    if (processed.length) {
+      await LooseLotSale.updateMany(
+        { saleNumber, invoice: null, _id: { $in: processed.map((r) => r.lotSale._id) } },
+        { $set: { invoice: sale._id } }
+      );
+    }
+
+    const outstanding = adjustedTotal - paid;
+    if ((paymentType === 'khaata' || paymentType === 'partial') && resolvedCustomer && outstanding > 0) {
+      const customer = await Customer.findById(resolvedCustomer);
+      if (customer) {
+        const lastLedger = await CustomerLedger.findOne({ customer: resolvedCustomer }).sort({ transactionDate: -1 });
+        const prevBalance = lastLedger ? lastLedger.balanceAfter : 0;
+        await CustomerLedger.create({
+          customer: resolvedCustomer,
+          transactionType: 'credit',
+          reference: saleNumber,
+          referenceModel: 'Sale',
+          referenceId: sale._id,
+          amount: outstanding,
+          balanceAfter: prevBalance + outstanding,
+          note: `Sale ${saleNumber} - ${paymentType} payment`,
+          transactionDate: new Date(),
+        });
+      }
+    }
+
+    await ActivityLog.create({
+      action: 'create',
+      module: 'pos',
+      description: `Sale ${saleNumber} created. Amount: ${subtotal}`,
+      performedBy: req.user._id,
+      referenceId: sale._id,
+      referenceModel: 'Sale',
+    });
+
+    return successResponse(
+      res,
+      { sale, lines: processed.map((r) => ({ lot: r.lot, lotSale: r.lotSale })) },
+      'Sale created successfully',
+      201
+    );
+  } catch (error) {
+    return errorResponse(res, error.message, error.status || 500);
   }
 };

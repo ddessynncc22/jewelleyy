@@ -11,6 +11,7 @@ const defaults = {
   currency: 'NPR', defaultPurity: 916, defaultKarat: 22,
   lowStockThreshold: 5, panNumber: '', logoUrl: '',
   goldTransportCharge: 0, silverTransportCharge: 0,
+  looseWeightTolerancePercent: 15,
 };
 
 router.get('/', protect, async (req, res, next) => {

@@ -10,6 +10,7 @@ const settingsSchema = new mongoose.Schema({
   defaultPurity: { type: Number, default: 916 },
   defaultKarat: { type: Number, default: 22 },
   lowStockThreshold: { type: Number, default: 5 },
+  looseWeightTolerancePercent: { type: Number, default: 15, min: 0, max: 100 },
   businessStartDate: { type: Date, default: Date.now },
   panNumber: { type: String, default: '' },
   goldTransportCharge: { type: Number, default: 0, min: 0 },

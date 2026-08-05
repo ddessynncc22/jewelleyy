@@ -4,6 +4,11 @@ const { GRAMS_PER_LAAL, gramsToLaal } = require('../utils/rates');
 
 const itemSchema = new mongoose.Schema(
   {
+    itemType: {
+      type: String,
+      enum: ['tagged', 'loose'],
+      default: 'tagged',
+    },
     SKU: {
       type: String,
       required: [true, 'SKU is required'],
@@ -101,6 +106,34 @@ const itemSchema = new mongoose.Schema(
     carat: {
       type: Number,
       default: 0,
+    },
+    stoneCarat: {
+      // Carats per stone (universal across all gemstones).
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    stoneWeightGram: {
+      // Pre-computed total stone weight in grams = stoneQuantity * stoneCarat * 0.2.
+      // Stored (not derived at query time) so downstream reports read it directly.
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    stoneQuantity: {
+      type: Number,
+      default: 1,
+      min: 1,
+    },
+    stoneRate: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    stoneAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
     },
     cut: {
       type: String,
@@ -236,6 +269,7 @@ const itemSchema = new mongoose.Schema(
 );
 
 itemSchema.index({ tenantId: 1, SKU: 1 }, { unique: true });
+itemSchema.index({ tenantId: 1, itemType: 1 });
 itemSchema.index({ tenantId: 1, category: 1, status: 1 });
 itemSchema.index({ tenantId: 1, status: 1, quantity: 1 });
 itemSchema.index({ tenantId: 1, metalType: 1, purity: 1 });

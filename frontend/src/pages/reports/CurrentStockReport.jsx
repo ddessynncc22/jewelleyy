@@ -37,8 +37,8 @@ export default function CurrentStockReport({ reportBody, onExport }) {
     filtered.forEach((i) => {
       const key = i.category || 'Uncategorized';
       const cur = map.get(key) || { category: key, count: 0, weight: 0, value: 0 };
-      cur.count += 1;
-      cur.weight += i.netMetalWeight || 0;
+      cur.count += i.quantity || 1;
+      cur.weight += (i.netMetalWeight || 0) * (i.quantity || 1);
       cur.value += i.estimatedValue || 0;
       map.set(key, cur);
     });
@@ -47,7 +47,16 @@ export default function CurrentStockReport({ reportBody, onExport }) {
 
   const columns = [
     { key: 'SKU', label: 'SKU', render: (val) => val || '-' },
-    { key: 'itemName', label: 'Item Name', render: (val) => val || '-' },
+    {
+      key: 'itemName',
+      label: 'Item Name',
+      render: (val, row) => (
+        <span className="inline-flex items-center gap-1.5">
+          {val || '-'}
+          {row.isLot && <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">Loose</span>}
+        </span>
+      ),
+    },
     {
       key: 'category',
       label: 'Category',
@@ -192,7 +201,7 @@ export default function CurrentStockReport({ reportBody, onExport }) {
           data={filtered}
           loading={false}
           rowClassName={rowClassName}
-          onRowClick={(row) => row._id && navigate(`/items/${row._id}`)}
+          onRowClick={(row) => row._id && navigate(row.isLot ? `/loose-lots/${row._id}` : `/items/${row._id}`)}
         />
         <p className="mt-2 text-xs text-gray-400">
           Low stock = quantity ≤ {lowStockThreshold} · Red rows: low/out of stock · Amber rows: missing purity or net weight

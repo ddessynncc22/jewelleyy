@@ -7,6 +7,7 @@ const Karigar = require('../models/Karigar');
 const CustomerLedger = require('../models/CustomerLedger');
 const Customer = require('../models/Customer');
 const Sale = require('../models/Sale');
+const LooseLot = require('../models/LooseLot');
 const Settings = require('../models/Settings');
 const { successResponse, errorResponse } = require('../utils/response');
 const { scopeAggregate } = require('../utils/tenant');
@@ -19,24 +20,55 @@ exports.getCurrentStock = async (req, res) => {
   try {
     const settings = await Settings.getSettings();
     const lowStockThreshold = settings?.lowStockThreshold || 5;
-    const [latestGold, latestSilver, items] = await Promise.all([
+    const [latestGold, latestSilver, items, lots] = await Promise.all([
       Rate.findOne({ metalType: 'gold' }).sort({ date: -1 }),
       Rate.findOne({ metalType: 'silver' }).sort({ date: -1 }),
-      Item.find({ status: 'In Stock' }).lean(),
+      // Loose parent Items are rollups only; their real stock lives on the lots,
+      // so they must not appear here (they have no netMetalWeight to value and
+      // would double-count with the lot rows below).
+      Item.find({ status: 'In Stock', itemType: { $ne: 'loose' } }).lean(),
+      LooseLot.find({ status: 'active' }).lean(),
     ]);
     const goldRatePerGram = toPerGramRate(latestGold);
     const silverRatePerGram = toPerGramRate(latestSilver);
-    const enriched = items.map((item) => {
-      const rate = item.metalType === 'gold' ? goldRatePerGram : silverRatePerGram;
-      const estimatedValue = (item.netMetalWeight || 0) * rate * ((item.purity || 0) / 1000);
+    const liveRateFor = (metalType) =>
+      metalType === 'gold' ? goldRatePerGram : metalType === 'silver' ? silverRatePerGram : 0;
+
+    const enrichedItems = items.map((item) => {
+      const rate = liveRateFor(item.metalType);
+      const qty = item.quantity || 1;
+      const estimatedValue = (item.netMetalWeight || 0) * rate * ((item.purity || 0) / 1000) * qty;
       return {
         ...item,
+        isLot: false,
         currentRate: rate,
         estimatedValue,
         isLowStock: (item.quantity ?? 0) <= lowStockThreshold,
         valuationIssue: !item.purity || !item.netMetalWeight,
       };
     });
+
+    const lotRows = lots.map((lot) => {
+      const rate = lot.ratePerGram || liveRateFor(lot.metalType);
+      const purity = lot.purity || 0;
+      const estimatedValue = (lot.remainingWeight || 0) * rate * (purity / 1000);
+      const lowByPieces = lot.lowStockPiecesThreshold > 0 && (lot.remainingPieces || 0) <= lot.lowStockPiecesThreshold;
+      const lowByWeight = lot.lowStockWeightThreshold > 0 && (lot.remainingWeight || 0) <= lot.lowStockWeightThreshold;
+      return {
+        ...lot,
+        isLot: true,
+        SKU: lot.lotBarcode,
+        barcode: lot.lotBarcode,
+        quantity: lot.remainingPieces,
+        netMetalWeight: lot.remainingWeight,
+        currentRate: rate,
+        estimatedValue,
+        isLowStock: lowByPieces || lowByWeight,
+        valuationIssue: !lot.purity || !rate,
+      };
+    });
+
+    const enriched = [...enrichedItems, ...lotRows];
     const totalValue = enriched.reduce((sum, item) => sum + item.estimatedValue, 0);
     const itemsWithShare = enriched.map((item) => ({
       ...item,
@@ -44,7 +76,12 @@ exports.getCurrentStock = async (req, res) => {
     }));
     const goldValue = itemsWithShare.filter((i) => i.metalType === 'gold').reduce((s, i) => s + i.estimatedValue, 0);
     const silverValue = itemsWithShare.filter((i) => i.metalType === 'silver').reduce((s, i) => s + i.estimatedValue, 0);
-    const totalWeight = itemsWithShare.reduce((s, i) => s + (i.netMetalWeight || 0), 0);
+    // Lot rows already carry total remaining weight; tagged item weights are per
+    // piece, so multiply by quantity for those.
+    const totalWeight = itemsWithShare.reduce(
+      (s, i) => s + (i.isLot ? (i.netMetalWeight || 0) : (i.netMetalWeight || 0) * (i.quantity || 1)),
+      0
+    );
     const zeroStockCount = itemsWithShare.filter((i) => (i.quantity ?? 0) === 0).length;
     return successResponse(res, {
       items: itemsWithShare,
@@ -52,7 +89,7 @@ exports.getCurrentStock = async (req, res) => {
       goldValue,
       silverValue,
       totalWeight,
-      totalItems: itemsWithShare.length,
+      totalItems: itemsWithShare.reduce((s, i) => s + (i.quantity || 0), 0),
       zeroStockCount,
       lowStockThreshold,
       goldRatePerGram,
@@ -67,9 +104,31 @@ exports.getCurrentStock = async (req, res) => {
   }
 };
 
+// Loose-lot movements reference no Item document, so surface their barcode from
+// the reference/notes fields and flag them for the UI badge.
+function decorateMovement(m) {
+  const item = m.item;
+  const isLoose = !item;
+  let itemSKU = item?.SKU || '';
+  let itemName = item?.itemName || '';
+  if (!item) {
+    const barcodeMatch = /\(([A-Za-z0-9][A-Za-z0-9-]*)\)/.exec(m.notes || '');
+    const refCode = (m.reference || '').match(/^[A-Za-z0-9][A-Za-z0-9-]*$/);
+    itemSKU = barcodeMatch ? barcodeMatch[1] : refCode ? refCode[0] : itemSKU;
+    itemName = itemSKU ? `Loose lot (${itemSKU})` : 'Loose / manual entry';
+  }
+  return {
+    ...m,
+    isLoose,
+    itemSKU: itemSKU || '-',
+    itemName: itemName || '-',
+    metalType: item?.metalType || 'gold',
+  };
+}
+
 exports.getStockMovement = async (req, res) => {
   try {
-    const { startDate, endDate, type, category } = req.query;
+    const { startDate, endDate, type, category, search } = req.query;
     const query = {};
     if (type) query.type = type;
     if (category) query.category = category;
@@ -79,12 +138,48 @@ exports.getStockMovement = async (req, res) => {
       if (endDate) query.movementDate.$lte = new Date(endDate);
     }
     const movements = await StockMovement.find(query).populate('item', 'SKU itemName category metalType purity').populate('performedBy', 'name').sort({ movementDate: -1 });
+
+    let decorated = movements.map(decorateMovement);
+    if (search) {
+      const needle = search.toLowerCase();
+      decorated = decorated.filter((m) =>
+        [m.itemName, m.itemSKU, m.category, m.notes, m.reference].some((v) => (v || '').toLowerCase().includes(needle))
+      );
+    }
+
+    const inRows = decorated.filter((m) => m.type === 'stockIn');
+    const outRows = decorated.filter((m) => m.type === 'stockOut');
+    const sum = (rows) => rows.reduce((s, m) => s + (m.weight || 0), 0);
+    const pieces = (rows) => rows.reduce((s, m) => s + (m.quantity || 0), 0);
+    const sumLaal = (rows) => rows.reduce((s, m) => s + (m.weightInLaal || 0), 0);
+
+    const countsByCategory = {};
+    decorated.forEach((m) => {
+      countsByCategory[m.category] = countsByCategory[m.category] || { stockIn: 0, stockOut: 0, weightIn: 0, weightOut: 0, piecesIn: 0, piecesOut: 0 };
+      const c = countsByCategory[m.category];
+      if (m.type === 'stockIn') {
+        c.stockIn += 1;
+        c.weightIn += m.weight || 0;
+        c.piecesIn += m.quantity || 0;
+      } else {
+        c.stockOut += 1;
+        c.weightOut += m.weight || 0;
+        c.piecesOut += m.quantity || 0;
+      }
+    });
+
     const summary = {
-      totalStockIn: movements.filter((m) => m.type === 'stockIn').reduce((s, m) => s + m.weight, 0),
-      totalStockOut: movements.filter((m) => m.type === 'stockOut').reduce((s, m) => s + m.weight, 0),
-      totalMovements: movements.length,
+      totalStockIn: sum(inRows),
+      totalStockOut: sum(outRows),
+      weightInLaalIn: sumLaal(inRows),
+      weightInLaalOut: sumLaal(outRows),
+      piecesIn: pieces(inRows),
+      piecesOut: pieces(outRows),
+      totalMovements: decorated.length,
+      looseCount: decorated.filter((m) => m.isLoose).length,
+      byCategory: countsByCategory,
     };
-    return successResponse(res, { movements, summary });
+    return successResponse(res, { movements: decorated, summary });
   } catch (error) {
     return errorResponse(res, error.message, 500);
   }
@@ -98,11 +193,11 @@ exports.getInventoryValuation = async (req, res) => {
     const silverRatePerGram = toPerGramRate(latestSilver);
     const goldItems = await Item.find({ metalType: 'gold', status: 'In Stock' }).lean();
     const silverItems = await Item.find({ metalType: 'silver', status: 'In Stock' }).lean();
-    const goldValue = goldItems.reduce((sum, item) => sum + ((item.netMetalWeight || 0) * goldRatePerGram * ((item.purity || 0) / 1000)), 0);
-    const silverValue = silverItems.reduce((sum, item) => sum + ((item.netMetalWeight || 0) * silverRatePerGram * ((item.purity || 0) / 1000)), 0);
+    const goldValue = goldItems.reduce((sum, item) => sum + ((item.netMetalWeight || 0) * goldRatePerGram * ((item.purity || 0) / 1000) * (item.quantity || 1)), 0);
+    const silverValue = silverItems.reduce((sum, item) => sum + ((item.netMetalWeight || 0) * silverRatePerGram * ((item.purity || 0) / 1000) * (item.quantity || 1)), 0);
     return successResponse(res, [
-      { metal: 'Gold', count: goldItems.length, totalWeight: goldItems.reduce((s, i) => s + (i.grossWeight || 0), 0), rate: goldRatePerGram, estimatedValue: goldValue },
-      { metal: 'Silver', count: silverItems.length, totalWeight: silverItems.reduce((s, i) => s + (i.grossWeight || 0), 0), rate: silverRatePerGram, estimatedValue: silverValue },
+      { metal: 'Gold', count: goldItems.reduce((s, i) => s + (i.quantity || 1), 0), totalWeight: goldItems.reduce((s, i) => s + (i.grossWeight || 0) * (i.quantity || 1), 0), rate: goldRatePerGram, estimatedValue: goldValue },
+      { metal: 'Silver', count: silverItems.reduce((s, i) => s + (i.quantity || 1), 0), totalWeight: silverItems.reduce((s, i) => s + (i.grossWeight || 0) * (i.quantity || 1), 0), rate: silverRatePerGram, estimatedValue: silverValue },
     ]);
   } catch (error) {
     return errorResponse(res, error.message, 500);
@@ -625,8 +720,8 @@ async function buildCustomerLedgerReport(query = {}) {
     if (startDate) saleMatch.saleDate.$gte = new Date(`${startDate}T00:00:00`);
     if (endDate) saleMatch.saleDate.$lte = new Date(`${endDate}T23:59:59.999`);
   }
-  const sales = await Sale.find(saleMatch).select('totalAmount paidAmount').lean();
-  const expected = sales.reduce((s, x) => s + ((x.totalAmount || 0) - (x.paidAmount || 0)), 0);
+  const sales = await Sale.find(saleMatch).select('balance').lean();
+  const expected = sales.reduce((s, x) => s + (x.balance || 0), 0);
   const saleSource = sourceBreakdown.find((s) => s.source === 'Sale');
   const actual = saleSource?.credit || 0;
   const difference = Number((expected - actual).toFixed(2));
@@ -862,20 +957,29 @@ exports.getProfitSummary = async (req, res) => {
 function extractSaleTax(sale) {
   const taxes = Array.isArray(sale.taxDetails?.taxes) ? sale.taxDetails.taxes : [];
   let serviceFee = 0;
+  let diamondFee = 0;
   let diamondVat = 0;
   let serviceBase = 0;
+  let diamondFeeBase = 0;
   let vatBase = 0;
+  let diamondFeeRate = 0;
+  let diamondVatRate = 0;
   taxes.forEach((t) => {
     const amt = Number(t.amount) || 0;
     const rate = Number(t.rate) || 0;
     const base = rate > 0 ? amt / (rate / 100) : 0;
     const name = String(t.name || '');
-    if (/service|fee/i.test(name)) {
-      serviceFee += amt;
-      serviceBase += base;
+    if (/service.*diamond|diamond.*service/i.test(name)) {
+      diamondFee += amt;
+      diamondFeeBase += base;
+      if (rate > diamondFeeRate) diamondFeeRate = rate;
     } else if (/vat|diamond/i.test(name)) {
       diamondVat += amt;
       vatBase += base;
+      if (rate > diamondVatRate) diamondVatRate = rate;
+    } else if (/service|fee/i.test(name)) {
+      serviceFee += amt;
+      serviceBase += base;
     } else {
       serviceFee += amt;
       serviceBase += base;
@@ -883,13 +987,17 @@ function extractSaleTax(sale) {
   });
   const totalTax =
     Number(sale.taxDetails?.totalTax) ||
-    Number(Number(serviceFee + diamondVat).toFixed(2)) ||
+    Number(Number(serviceFee + diamondFee + diamondVat).toFixed(2)) ||
     0;
   return {
     serviceFee: Number(serviceFee.toFixed(2)),
+    diamondFee: Number(diamondFee.toFixed(2)),
     diamondVat: Number(diamondVat.toFixed(2)),
     serviceBase: Number(serviceBase.toFixed(2)),
+    diamondFeeBase: Number(diamondFeeBase.toFixed(2)),
     vatBase: Number(vatBase.toFixed(2)),
+    diamondFeeRate,
+    diamondVatRate,
     totalTax,
   };
 }
@@ -923,11 +1031,15 @@ exports.getTaxReport = async (req, res) => {
         itemCount: (sale.items || []).length,
         revenue,
         discount,
-        taxableBase: Number((tax.serviceBase + tax.vatBase).toFixed(2)),
+        taxableBase: Number((tax.serviceBase + tax.diamondFeeBase + tax.vatBase).toFixed(2)),
         serviceFeeBase: tax.serviceBase,
+        diamondFeeBase: tax.diamondFeeBase,
         vatBase: tax.vatBase,
         serviceFee: tax.serviceFee,
+        diamondFee: tax.diamondFee,
         diamondVat: tax.diamondVat,
+        diamondFeeRate: tax.diamondFeeRate,
+        diamondVatRate: tax.diamondVatRate,
         totalTax: tax.totalTax,
         grandTotal: Number((revenue + tax.totalTax - discount).toFixed(2)),
       };
@@ -940,12 +1052,14 @@ exports.getTaxReport = async (req, res) => {
         acc.totalDiscount += s.discount;
         acc.totalTax += s.totalTax;
         acc.serviceFee += s.serviceFee;
+        acc.diamondFee += s.diamondFee;
         acc.diamondVat += s.diamondVat;
         acc.serviceFeeBase += s.serviceFeeBase;
+        acc.diamondFeeBase += s.diamondFeeBase;
         acc.vatBase += s.vatBase;
         return acc;
       },
-      { totalSales: 0, totalRevenue: 0, totalDiscount: 0, totalTax: 0, serviceFee: 0, diamondVat: 0, serviceFeeBase: 0, vatBase: 0 }
+      { totalSales: 0, totalRevenue: 0, totalDiscount: 0, totalTax: 0, serviceFee: 0, diamondFee: 0, diamondVat: 0, serviceFeeBase: 0, diamondFeeBase: 0, vatBase: 0 }
     );
 
     const monthMap = new Map();
@@ -953,10 +1067,11 @@ exports.getTaxReport = async (req, res) => {
       const d = new Date(s.saleDate);
       const key = `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
       const m =
-        monthMap.get(key) || { month: key, sortKey: d.getFullYear() * 12 + d.getMonth(), sales: 0, revenue: 0, serviceFee: 0, diamondVat: 0, totalTax: 0 };
+        monthMap.get(key) || { month: key, sortKey: d.getFullYear() * 12 + d.getMonth(), sales: 0, revenue: 0, serviceFee: 0, diamondFee: 0, diamondVat: 0, totalTax: 0 };
       m.sales += 1;
       m.revenue += s.revenue;
       m.serviceFee += s.serviceFee;
+      m.diamondFee += s.diamondFee;
       m.diamondVat += s.diamondVat;
       m.totalTax += s.totalTax;
       monthMap.set(key, m);
@@ -969,38 +1084,57 @@ exports.getTaxReport = async (req, res) => {
     rows.forEach((s) => {
       const key = s.paymentType || 'other';
       const p =
-        payMap.get(key) || { paymentType: key, count: 0, revenue: 0, serviceFee: 0, diamondVat: 0, totalTax: 0 };
+        payMap.get(key) || { paymentType: key, count: 0, revenue: 0, serviceFee: 0, diamondFee: 0, diamondVat: 0, totalTax: 0 };
       p.count += 1;
       p.revenue += s.revenue;
       p.serviceFee += s.serviceFee;
+      p.diamondFee += s.diamondFee;
       p.diamondVat += s.diamondVat;
       p.totalTax += s.totalTax;
       payMap.set(key, p);
     });
     const byPaymentType = [...payMap.values()];
 
-    const taxTypeBreakdown = [
-      {
+    const diamondFeeRate = totals.diamondFee > 0 ? (rows.find((r) => r.diamondFee > 0)?.diamondFeeRate ?? 0.5) : 0;
+    const diamondVatRate = totals.diamondVat > 0 ? (rows.find((r) => r.diamondVat > 0)?.diamondVatRate ?? 13) : 0;
+
+    const taxTypeBreakdown = [];
+    if (totals.serviceFee > 0) {
+      taxTypeBreakdown.push({
         type: 'serviceFee',
         label: 'Service Fee',
         rate: '0.5%',
         count: rows.filter((r) => r.serviceFee > 0).length,
         taxableBase: totals.serviceFeeBase,
         amount: totals.serviceFee,
-      },
-      {
+      });
+    }
+    if (totals.diamondFee > 0) {
+      taxTypeBreakdown.push({
+        type: 'diamondFee',
+        label: `Service Fee (Diamond) ${diamondFeeRate}%`,
+        rate: `${diamondFeeRate}%`,
+        count: rows.filter((r) => r.diamondFee > 0).length,
+        taxableBase: totals.diamondFeeBase,
+        amount: totals.diamondFee,
+      });
+    }
+    if (totals.diamondVat > 0) {
+      taxTypeBreakdown.push({
         type: 'diamondVat',
-        label: 'VAT (Diamond)',
-        rate: '13%',
+        label: `VAT (Diamond) ${diamondVatRate}%`,
+        rate: `${diamondVatRate}%`,
         count: rows.filter((r) => r.diamondVat > 0).length,
         taxableBase: totals.vatBase,
         amount: totals.diamondVat,
-      },
-    ];
+      });
+    }
 
     return successResponse(res, {
       summary: {
         ...totals,
+        diamondFeeRate,
+        diamondVatRate,
         avgTaxPerSale: totals.totalSales ? Number((totals.totalTax / totals.totalSales).toFixed(2)) : 0,
       },
       taxTypeBreakdown,
@@ -1054,7 +1188,7 @@ function drawTableRows(doc, headers, keys, widths, rows) {
 exports.exportReport = async (req, res) => {
   try {
     const { type } = req.params;
-    const { format = 'excel', startDate, endDate, customerId } = req.query;
+    const { format = 'excel', startDate, endDate, customerId, search, status } = req.query;
     let exportMeta = null;
     let data;
     switch (type) {
@@ -1065,10 +1199,15 @@ exports.exportReport = async (req, res) => {
         const latestSilver = await Rate.findOne({ metalType: 'silver' }).sort({ date: -1 });
         const goldRatePerGram = toPerGramRate(latestGold);
         const silverRatePerGram = toPerGramRate(latestSilver);
-        const items = await Item.find({ status: 'In Stock' }).lean();
+        const [items, lots] = await Promise.all([
+          Item.find({ status: 'In Stock', itemType: { $ne: 'loose' } }).lean(),
+          LooseLot.find({ status: 'active' }).lean(),
+        ]);
+        const liveRateFor = (metalType) =>
+          metalType === 'gold' ? goldRatePerGram : metalType === 'silver' ? silverRatePerGram : 0;
         const rows = items.map((i) => {
-          const rate = i.metalType === 'gold' ? goldRatePerGram : silverRatePerGram;
-          const estimatedValue = (i.netMetalWeight || 0) * rate * ((i.purity || 0) / 1000);
+          const rate = liveRateFor(i.metalType);
+          const estimatedValue = (i.netMetalWeight || 0) * rate * ((i.purity || 0) / 1000) * (i.quantity || 1);
           return {
             SKU: i.SKU,
             'Item Name': i.itemName,
@@ -1082,6 +1221,21 @@ exports.exportReport = async (req, res) => {
             'Estimated Value': estimatedValue,
           };
         });
+        lots.forEach((l) => {
+          const rate = l.ratePerGram || liveRateFor(l.metalType);
+          rows.push({
+            SKU: l.lotBarcode,
+            'Item Name': l.itemName || 'Loose Lot',
+            Category: l.category,
+            'Metal Type': l.metalType,
+            Purity: l.purity,
+            Karat: l.karat,
+            Qty: l.remainingPieces,
+            'Net Weight (g)': l.remainingWeight,
+            'Rate/g': rate,
+            'Estimated Value': (l.remainingWeight || 0) * rate * ((l.purity || 0) / 1000),
+          });
+        });
         const totalValue = rows.reduce((s, r) => s + r['Estimated Value'], 0);
         rows.forEach((r) => { r['Value %'] = totalValue > 0 ? Number(((r['Estimated Value'] / totalValue) * 100).toFixed(2)) : 0; });
         data = rows;
@@ -1094,16 +1248,19 @@ exports.exportReport = async (req, res) => {
           if (startDate) query.movementDate.$gte = new Date(startDate);
           if (endDate) query.movementDate.$lte = new Date(endDate);
         }
+        if (req.query.movementType) query.type = req.query.movementType;
         const movements = await StockMovement.find(query).populate('item', 'SKU itemName category metalType purity').populate('performedBy', 'name').lean();
-        data = movements.map((m) => ({
+        data = movements.map(decorateMovement).map((m) => ({
           Date: m.movementDate ? new Date(m.movementDate).toISOString().split('T')[0] : '-',
           Type: m.type,
           Category: m.category,
-          'Item SKU': m.item?.SKU || '-',
-          'Item Name': m.item?.itemName || '-',
-          'Metal Type': m.item?.metalType || '-',
+          'Item SKU': m.itemSKU,
+          'Item Name': m.itemName,
+          Loose: m.isLoose ? 'Yes' : 'No',
+          'Metal Type': m.metalType,
           Qty: m.quantity,
           'Weight (g)': m.weight,
+          'Weight (laal)': m.weightInLaal,
           Purity: m.purity,
           Reference: m.reference || '-',
           Notes: m.notes || '-',
@@ -1225,7 +1382,7 @@ exports.exportReport = async (req, res) => {
             subtitle: `Opening ${opening.toLocaleString()} | Closing ${closing.toLocaleString()}`,
           };
         } else {
-          const report = await buildCustomerLedgerReport({ startDate, endDate });
+          const report = await buildCustomerLedgerReport({ startDate, endDate, search, status });
           data = report.rows.map((r) => ({
             Customer: r.customerName,
             Phone: r.customerPhone,
@@ -1293,6 +1450,7 @@ exports.exportReport = async (req, res) => {
             'Revenue (pre-tax)': revenue,
             Discount: discount,
             'Service Fee': tax.serviceFee,
+            'Service Fee (Diamond)': tax.diamondFee,
             'VAT (Diamond)': tax.diamondVat,
             'Total Tax': tax.totalTax,
             'Grand Total': Number((revenue + tax.totalTax - discount).toFixed(2)),

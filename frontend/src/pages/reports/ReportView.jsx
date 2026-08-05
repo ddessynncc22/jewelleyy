@@ -36,6 +36,8 @@ import CurrentStockReport from './CurrentStockReport';
 
 import KarigarReport from './KarigarReport';
 
+import StockMovementReport from './StockMovementReport';
+
 const reportNames = {
   'current-stock': 'Current Stock Report',
   'stock-movement': 'Stock Movement Report',
@@ -155,6 +157,10 @@ export default function ReportView() {
 
   if (type === 'current-stock') {
     return <CurrentStockReport reportBody={reportBody} onExport={handleExport} />;
+  }
+
+  if (type === 'stock-movement') {
+    return <StockMovementReport reportBody={reportBody} onExport={handleExport} />;
   }
 
   if (type === 'karigar') {

@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 
-import { Gem, Wrench, Package, TrendingUp, Activity, Grid3X3, Layers, Plus, ArrowRightLeft, Banknote, ExternalLink, Clock, CheckCircle2 } from 'lucide-react'
+import { Gem, Wrench, Package, TrendingUp, Activity, Grid3X3, Layers, Plus, ArrowRightLeft, ExternalLink, Clock, CheckCircle2 } from 'lucide-react'
 
 import { getDashboardStats } from '../../services/dashboardService'
 
@@ -145,9 +145,6 @@ export default function Dashboard() {
           </Button>
           <Button size="sm" variant="outline" onClick={() => navigate('/stock')} icon={<ArrowRightLeft size={14} />}>
             Record Stock
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => navigate('/pawn/new')} icon={<Banknote size={14} />}>
-            New Pawn Loan
           </Button>
         </div>
       </PageHeader>

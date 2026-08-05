@@ -1,20 +1,22 @@
 import { useState, useEffect, useCallback, useContext } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { X, Plus, Minus, ShoppingCart, Package, TrendingUp, Printer } from 'lucide-react'
-import { getItems } from '../../services/itemService'
+import { X, Plus, Minus, ShoppingCart, Package, TrendingUp, Printer, Layers, AlertTriangle } from 'lucide-react'
+import { getItems, getItemByBarcode } from '../../services/itemService'
+import { getLooseLots, getLooseLotByBarcode } from '../../services/looseLotService'
 import { getCustomers, createCustomer } from '../../services/customerService'
 import { getLatestRates } from '../../services/rateService'
-import { createSale } from '../../services/posService'
-import { getCachedSettings } from '../../services/settingsService'
+import { checkoutSale, getDiamondVatStatus } from '../../services/posService'
+import { getSettings, getCachedSettings } from '../../services/settingsService'
 import { AuthContext } from '../../context/AuthContext'
 import Button from '../../components/ui/Button'
 import SearchInput from '../../components/ui/SearchInput'
 import ConfirmDialog from '../../components/ui/ConfirmDialog'
 import Modal from '../../components/ui/Modal'
 import InvoiceDocument from '../../components/invoice/InvoiceDocument'
-import { buildInvoiceItems, getBSDate } from '../../components/invoice/invoiceUtils'
+import { buildInvoiceItems, getBSDate, fmtMoney, fmtWt, GRAMS_PER_TOLA } from '../../components/invoice/invoiceUtils'
 import { formatCurrency, formatDate, formatWeight, formatWeightLaal, getImageSrc, numberToWords, applyTransportRate, getTransportCharges } from '../../utils/helpers'
+import useBarcodeScanner from '../../hooks/useBarcodeScanner'
 
 const PAYMENT_TYPES = [
   { value: 'cash', label: 'Cash' },
@@ -75,6 +77,17 @@ function calcItemTotal(item, makingCharge, wastagePercent, ratePerGram, stonePri
   return metalValue + makingCharge + wastageAmt + (stonePrice || 0)
 }
 
+function lotLineTotal(c) {
+  const metalValue = Number(c.actualWeight || 0) * Number(c.ratePerGram || 0) * ((c.lot.purity || 0) / 1000)
+  return Number((metalValue + Number(c.makingCharge || 0)).toFixed(2))
+}
+
+function deviationOf(c) {
+  const expected = Number(c.lot.avgWeightPerPiece || 0) * Number(c.pieces || 0)
+  if (!expected) return 0
+  return Number(((Math.abs(Number(c.actualWeight || 0) - expected) / expected) * 100).toFixed(2))
+}
+
 const POS = ({ mode = 'standard' }) => {
   const isDiamondMode = mode === 'diamond'
   const navigate = useNavigate()
@@ -85,6 +98,8 @@ const POS = ({ mode = 'standard' }) => {
   const [heldBills, setHeldBills] = useState([])
   const [diamondModalItem, setDiamondModalItem] = useState(null)
   const [diamondValue, setDiamondValue] = useState('')
+  const [activeTab, setActiveTab] = useState('items')
+  const [tolerance, setTolerance] = useState(15)
 
   useEffect(() => {
     try {
@@ -94,8 +109,15 @@ const POS = ({ mode = 'standard' }) => {
       setHeldBills([])
     }
   }, [])
+  useEffect(() => {
+    getSettings().then((s) => {
+      if (s?.looseWeightTolerancePercent) setTolerance(Number(s.looseWeightTolerancePercent))
+    }).catch(() => {})
+  }, [])
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
+  const [lots, setLots] = useState([])
+  const [lotsLoading, setLotsLoading] = useState(false)
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
   const [metalFilter, setMetalFilter] = useState('')
@@ -121,6 +143,13 @@ const POS = ({ mode = 'standard' }) => {
   const [showConfirm, setShowConfirm] = useState(false)
   const [showCustomerModal, setShowCustomerModal] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [diamondVatInfo, setDiamondVatInfo] = useState(null)
+
+  useEffect(() => {
+    getDiamondVatStatus()
+      .then((res) => setDiamondVatInfo(res.data?.data || res.data || null))
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     getLatestRates().then((res) => {
@@ -128,6 +157,7 @@ const POS = ({ mode = 'standard' }) => {
       if (d?.gold || d?.silver) setRates({ gold: d.gold || null, silver: d.silver || null })
     }).catch(() => {})
   }, [])
+  const DIAMOND_VAT_THRESHOLD = 4900000
 
   const fetchItems = useCallback(async () => {
     setLoading(true)
@@ -137,6 +167,8 @@ const POS = ({ mode = 'standard' }) => {
       if (search) params.search = search
       if (categoryFilter) params.category = categoryFilter
       if (metalFilter) params.metalType = metalFilter
+      params.itemType = 'tagged'
+      params.status = 'In Stock'
       params.limit = 500
       const res = await getItems(params)
       const data = res.data?.data || res.data?.items || res.data || []
@@ -158,6 +190,27 @@ const POS = ({ mode = 'standard' }) => {
     }
   }, [items])
 
+  const fetchLots = useCallback(async () => {
+    if (activeTab !== 'lots') return
+    setLotsLoading(true)
+    try {
+      const params = { status: 'active', limit: 500 }
+      if (search) params.search = search
+      const res = await getLooseLots(params)
+      const data = res.data?.data || res.data || []
+      setLots(Array.isArray(data) ? data : [])
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Failed to load loose lots')
+      setLots([])
+    } finally {
+      setLotsLoading(false)
+    }
+  }, [activeTab, search])
+  useEffect(() => {
+    const t = setTimeout(fetchLots, 250)
+    return () => clearTimeout(t)
+  }, [fetchLots])
+
   const searchCustomers = useCallback(async (query) => {
     if (!query || query.length < 1) { setCustomerResults([]); return }
     try {
@@ -175,20 +228,22 @@ const POS = ({ mode = 'standard' }) => {
 
   const effectiveGoldRate = applyTransportRate(rates.gold, getTransportCharges().gold)
   const effectiveSilverRate = applyTransportRate(rates.silver, getTransportCharges().silver)
+  const goldPerGram = getRatePerGram(effectiveGoldRate)
+  const silverPerGram = getRatePerGram(effectiveSilverRate)
 
-  const getRateForItem = (item) => {
-    const metal = (item.metalType || '').toLowerCase()
-    if (metal === 'gold') return getRatePerGram(effectiveGoldRate)
-    if (metal === 'silver') return getRatePerGram(effectiveSilverRate)
+  const getRateForMetal = (metalType) => {
+    const metal = (metalType || '').toLowerCase()
+    if (metal === 'gold') return goldPerGram
+    if (metal === 'silver') return silverPerGram
     return 0
   }
 
   const addToCart = (item) => {
     setCart((prev) => {
-      const exists = prev.find((c) => c.item._id === item._id)
-      if (exists) return prev
-      const ratePerGram = getRateForItem(item)
+      if (prev.some((c) => c.source === 'item' && c.item._id === item._id)) return prev
+      const ratePerGram = getRateForMetal(item.metalType)
       return [...prev, {
+        source: 'item',
         item,
         qty: 1,
         makingCharge: Number(item.sellingMakingCharge || item.makingCharge) || 0,
@@ -200,7 +255,31 @@ const POS = ({ mode = 'standard' }) => {
     toast.success(`${item.itemName || item.name} added to cart`)
   }
 
+  const addLotToCart = (lot) => {
+    if (lot.status !== 'active' || lot.remainingPieces <= 0) {
+      toast.error(`Lot ${lot.lotBarcode} has no stock`)
+      return
+    }
+    setCart((prev) => {
+      if (prev.some((c) => c.source === 'lot' && c.lot._id === lot._id)) return prev
+      const ratePerGram = getRateForMetal(lot.metalType)
+      return [...prev, {
+        source: 'lot',
+        lot,
+        pieces: 1,
+        actualWeight: lot.avgWeightPerPiece || 0,
+        weightSource: 'average',
+        makingCharge: Number(lot.makingChargeValue) || 0,
+        ratePerGram,
+        overrideReason: '',
+        managerApproved: false,
+      }]
+    })
+  }
+
   const hasDiamond = (item) => (item?.metalType || '').toLowerCase() === 'diamond' || (item?.stoneType || '') === 'diamond'
+
+  const isDiamondLine = (c) => (c.source === 'lot' ? (c.lot.metalType || '').toLowerCase() === 'diamond' : hasDiamond(c.item))
 
   const handleAddItem = (item) => {
     if (isDiamondMode) {
@@ -220,14 +299,15 @@ const POS = ({ mode = 'standard' }) => {
     }
     const item = diamondModalItem
     setCart((prev) => {
-      if (prev.some((c) => c.item._id === item._id)) return prev
+      if (prev.some((c) => c.source === 'item' && c.item._id === item._id)) return prev
       return [...prev, {
+        source: 'item',
         item,
         qty: 1,
         makingCharge: Number(item.sellingMakingCharge || item.makingCharge) || 0,
         wastagePercent: Number(item.sellingWastagePercent || item.wastagePercent) || 0,
         stonePrice: value,
-        ratePerGram: getRateForItem(item),
+        ratePerGram: getRateForMetal(item.metalType),
       }]
     })
     setDiamondModalItem(null)
@@ -235,73 +315,109 @@ const POS = ({ mode = 'standard' }) => {
     toast.success(`${item.itemName || item.name} added to cart`)
   }
 
-  const updateCartField = (itemId, field, value) => {
-    setCart((prev) => prev.map((c) =>
-      c.item._id === itemId ? { ...c, [field]: value } : c
-    ))
+  const handleScan = useCallback(
+    async (barcode) => {
+      try {
+        const res = await getItemByBarcode(barcode)
+        const item = res.data?.data || res.data
+        if (item?._id) {
+          toast.success(`Scanned: ${item.itemName || item.name}`)
+          handleAddItem(item)
+          return
+        }
+      } catch { /* not a tagged item */ }
+      try {
+        const res = await getLooseLotByBarcode(barcode)
+        const lot = res.data?.data || res.data
+        if (lot?._id) {
+          toast.success(`Scanned lot: ${lot.lotBarcode}`)
+          addLotToCart(lot)
+          return
+        }
+      } catch { /* not a loose lot */ }
+      toast.error(`No item or loose lot found for barcode: ${barcode}`)
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [handleAddItem, addLotToCart],
+  )
+  useBarcodeScanner(handleScan)
+
+  const updateCartField = (id, field, value) => {
+    setCart((prev) => prev.map((c) => {
+      if (c.item?._id !== id && c.lot?._id !== id) return c
+      const next = { ...c, [field]: value }
+      if (field === 'pieces') {
+        const avg = c.lot.avgWeightPerPiece || 0
+        next.actualWeight = Number((avg * Number(value || 0)).toFixed(4))
+        next.weightSource = 'average'
+        next.overrideReason = ''
+        next.managerApproved = false
+      }
+      return next
+    }))
   }
 
-  const updateQty = (itemId, delta) => {
+  const updateQty = (id, delta) => {
     setCart((prev) => prev
-      .map((c) => c.item._id === itemId ? { ...c, qty: Math.max(1, c.qty + delta) } : c)
+      .map((c) => {
+        if (c.item?._id !== id && c.lot?._id !== id) return c
+        if (c.source === 'lot') {
+          const pieces = Math.min(c.lot.remainingPieces, Math.max(1, c.pieces + delta))
+          return { ...c, pieces, actualWeight: Number(((c.lot.avgWeightPerPiece || 0) * pieces).toFixed(4)), weightSource: 'average', overrideReason: '', managerApproved: false }
+        }
+        return { ...c, qty: Math.max(1, c.qty + delta) }
+      })
       .filter((c) => c.qty > 0)
     )
   }
 
-  const removeFromCart = (itemId) => {
-    setCart((prev) => prev.filter((c) => c.item._id !== itemId))
+  const removeFromCart = (id) => {
+    setCart((prev) => prev.filter((c) => c.item?._id !== id && c.lot?._id !== id))
   }
 
-  const cartTotal = cart.reduce((sum, c) => {
-    const itemTotal = calcItemTotal(c.item, c.makingCharge, c.wastagePercent, c.ratePerGram, c.stonePrice)
-    return sum + itemTotal * c.qty
-  }, 0)
+  const lineSubtotal = (c) => (c.source === 'lot' ? lotLineTotal(c) : calcItemTotal(c.item, c.makingCharge, c.wastagePercent, c.ratePerGram, c.stonePrice) * c.qty)
+  const cartTotal = cart.reduce((sum, c) => sum + lineSubtotal(c), 0)
 
   const feeRate = 0.5
-  const diamondTaxRate = 13
 
-  const diamondSubtotal = cart.reduce((sum, c) => {
-    if (!hasDiamond(c.item)) return sum
-    const itemTotal = calcItemTotal(c.item, c.makingCharge, c.wastagePercent, c.ratePerGram, c.stonePrice)
-    return sum + itemTotal * c.qty
-  }, 0)
+  const diamondSubtotal = cart.reduce((sum, c) => (isDiamondLine(c) ? sum + lineSubtotal(c) : sum), 0)
   const nonDiamondSubtotal = cartTotal - diamondSubtotal
+
+  // Diamonds below the annual threshold carry the 0.5% service fee; once the
+  // tenant's cumulative yearly diamond sales cross Rs. 49,00,000, 13% VAT kicks
+  // in. Best-effort on the frontend using the last fetched status + this cart.
+  const annualDiamondSales = Number(diamondVatInfo?.annualDiamondSales) || 0
+  const diamondTaxRate = annualDiamondSales + diamondSubtotal > DIAMOND_VAT_THRESHOLD ? 13 : feeRate
 
   // Old gold brought in for exchange is NON-taxable — the fee (0.5%) is only
   // charged on the net amount the customer actually pays for the new item.
-  const goldPerGram = getRatePerGram(effectiveGoldRate)
   const oldGoldWeightNum = Number(oldGoldWeight) || 0
   const oldGoldDeductionPercentNum = Number(oldGoldDeductionPercent) || 0
   const oldGoldNetWeight = oldGoldWeightNum > 0 ? oldGoldWeightNum * (1 - oldGoldDeductionPercentNum / 100) : 0
   const oldGoldKaratNum = Number(oldGoldKarat) || 24
   const oldGoldValue = oldGoldNetWeight * (oldGoldKaratNum / 24) * goldPerGram
-  const oldGoldValueForTax =
-    paymentType === 'oldGoldExchange' ? Math.min(oldGoldValue, cartTotal) : 0
 
-  // Taxes: diamond items carry 13% VAT (the 0.5% service fee does not apply to
-  // them); gold carries the 0.5% service fee. A discount is split
+  // Taxes: the 0.5% service fee is charged on the FULL gold value sold (old
+  // gold traded in does NOT reduce the taxable base), and diamonds carry 13%
+  // VAT (the service fee does not apply to them). A discount is split
   // proportionally across diamond / non-diamond before either tax is applied.
   const computeTax = (discount) => {
     const d = Math.max(0, Number(discount) || 0)
     const diamondShare = cartTotal > 0 ? d * (diamondSubtotal / cartTotal) : 0
     const nonDiamondShare = d - diamondShare
-    const taxableAmount = Math.max(0, nonDiamondSubtotal - nonDiamondShare - oldGoldValueForTax)
+    const taxableAmount = Math.max(0, nonDiamondSubtotal - nonDiamondShare)
     const feeAmount = Number((taxableAmount * feeRate / 100).toFixed(2))
     const diamondTaxable = Math.max(0, diamondSubtotal - diamondShare)
     const diamondTaxAmount = Number((diamondTaxable * diamondTaxRate / 100).toFixed(2))
     const totalTaxAmount = Number((feeAmount + diamondTaxAmount).toFixed(2))
     const totalTaxable = Number((taxableAmount + diamondTaxable).toFixed(2))
-    const rawTotal = Number((taxableAmount + feeAmount + oldGoldValueForTax + diamondTaxable + diamondTaxAmount).toFixed(2))
+    const rawTotal = Number((taxableAmount + feeAmount + diamondTaxable + diamondTaxAmount).toFixed(2))
     return { taxableAmount, diamondTaxable, diamondTaxAmount, feeAmount, totalTaxAmount, totalTaxable, rawTotal }
   }
 
-  // Full (undiscounted) bill
   const full = computeTax(0)
   const fullBill = Number((cartTotal + full.totalTaxAmount).toFixed(2))
 
-  // The bill is always computed from the cart. Round off is only the normal
-  // whole-rupee rounding of the raw total — it is never used to absorb a
-  // shortfall or reconcile against what the cashier collected.
   let { taxableAmount, feeAmount, diamondTaxAmount, totalTaxAmount, totalTaxable, rawTotal } = computeTax(0)
   let billTotal = Math.round(rawTotal)
   let roundOff = Number((billTotal - rawTotal).toFixed(2))
@@ -314,8 +430,6 @@ const POS = ({ mode = 'standard' }) => {
   let oldGoldCashPaid = 0
 
   if (paymentType === 'oldGoldExchange') {
-    // Old gold brought in for exchange is credited against the bill. The credit
-    // is rounded to whole rupees; the balance is what the customer pays in cash.
     oldGoldCredit = Math.round(Math.min(oldGoldValue, billTotal))
     oldGoldAmountToPay = Math.max(0, billTotal - oldGoldCredit)
     oldGoldChange = Math.max(0, Math.round(oldGoldValue) - billTotal)
@@ -346,9 +460,6 @@ const POS = ({ mode = 'standard' }) => {
       receivedAmount = oldGoldCredit + oldGoldCashPaid
     }
   } else {
-    // The cashier's entered amount decides the bill: if less than the bill,
-    // the shortfall is a discount applied to the subtotal BEFORE tax, so the
-    // taxes are charged on the discounted amount and the customer pays less.
     receivedAmount = Number(actualAmountReceived) || 0
     if (receivedAmount > 0 && receivedAmount < fullBill) {
       computedDiscount = Number((fullBill - receivedAmount).toFixed(2))
@@ -391,153 +502,7 @@ const POS = ({ mode = 'standard' }) => {
     }
   }
 
-  const handleCompleteSale = async () => {
-    if (cart.length === 0) { toast.error('Cart is empty'); return }
-    if (!customerName.trim() || !customerPhone.trim()) {
-      toast.error('Customer name and phone number are required'); return
-    }
-    if (paymentType === 'partial' && !Number(cashAmount) && !Number(khaataAmount)) {
-      toast.error('Enter cash or khaata amount for partial payment'); return
-    }
-    if (paymentType === 'oldGoldExchange' && !Number(oldGoldWeight)) {
-      toast.error('Enter old gold weight'); return
-    }
-    if (paymentType === 'oldGoldExchange' && oldGoldDeductionPercentNum >= 100) {
-      toast.error('Deduction percent must be less than 100'); return
-    }
-    let customerId = selectedCustomer?._id || null
-    if (!customerId && (customerName.trim() || customerPhone.trim())) {
-      customerId = await ensureCustomer()
-      if (!customerId) return
-    }
-    const breakdown = getPaymentBreakdown()
-    const payload = {
-      items: cart.map((c) => {
-        const itemTotal = calcItemTotal(c.item, c.makingCharge, c.wastagePercent, c.ratePerGram, c.stonePrice)
-         return {
-          item: c.item._id,
-          quantity: c.qty,
-          price: itemTotal,
-          makingCharge: c.makingCharge,
-          wastagePercent: c.wastagePercent,
-          sellingMakingCharge: c.makingCharge,
-          sellingWastagePercent: c.wastagePercent,
-          ratePerGram: c.ratePerGram,
-          stonePrice: c.stonePrice,
-          metalValue: (c.item.netMetalWeight || c.item.grossWeight || 0) * c.ratePerGram * ((c.item.purity || 0) / 1000),
-        }
-      }),
-      paymentType,
-      totalAmount: cartTotal,
-      taxAmount: feeAmount,
-      diamondTaxAmount,
-      actualAmountReceived: receivedAmount || null,
-      discountAmount: computedDiscount,
-      paidAmount: paymentType === 'cash' ? billTotal : (breakdown.oldGold ? (breakdown.oldGold.deduction || 0) + (breakdown.cash || 0) : (breakdown.cash || 0)),
-      customerId,
-      cashAmount: breakdown.cash || 0,
-      khaataAmount: breakdown.khaata || 0,
-      oldGoldDetails: breakdown.oldGold ? {
-        weight: breakdown.oldGold.weight,
-        purity: breakdown.oldGold.purity,
-        deductionPercent: breakdown.oldGold.deductionPercent,
-        netWeight: breakdown.oldGold.netWeight,
-        deductibleAmount: breakdown.oldGold.deduction,
-      } : null,
-    }
-    setSubmitting(true)
-    try {
-      const res = await createSale(payload)
-      toast.success('Sale completed successfully!')
-      setCart([])
-      setPaymentType('cash')
-      setCashAmount('')
-      setKhaataAmount('')
-      setActualAmountReceived('')
-      setSelectedCustomer(null)
-      setCustomerSearch('')
-      setCustomerName('')
-      setCustomerPhone('')
-      setCustomerAddress('')
-      setOldGoldWeight('')
-      setOldGoldKarat('24')
-      setOldGoldPurity('999')
-      setOldGoldDeductionPercent('')
-      setOldGoldCash('')
-      setShowConfirm(false)
-      const saleId = res.data?.data?._id || res.data?._id
-      if (saleId) {
-        setCompletedSaleId(saleId)
-        setShowPrintDialog(true)
-      }
-    } catch (err) {
-      toast.error(err?.response?.data?.message || 'Failed to complete sale')
-    } finally {
-      setSubmitting(false)
-    }
-   }
-
-   const handlePreviewBill = () => {
-     if (cart.length === 0) { toast.error('Cart is empty'); return }
-     setShowPreviewDialog(true)
-   }
-
-   const handleHoldBill = () => {
-     if (cart.length === 0) { toast.error('Cart is empty'); return }
-     const heldBill = {
-       id: Date.now(),
-       cart: [...cart],
-       paymentType,
-       cashAmount,
-       khaataAmount,
-       actualAmountReceived,
-       customerName,
-       customerPhone,
-       customerAddress,
-        oldGoldWeight,
-        oldGoldKarat,
-        oldGoldPurity,
-        oldGoldDeductionPercent,
-        oldGoldCash,
-        customerId: selectedCustomer?._id || null,
-       heldAt: new Date().toISOString(),
-     }
-     const existing = JSON.parse(localStorage.getItem('heldBills') || '[]')
-     existing.push(heldBill)
-     localStorage.setItem('heldBills', JSON.stringify(existing))
-     setHeldBills(existing)
-     toast.success('Bill held successfully! You can resume it later.')
-   }
-
-   const handleLoadHeldBill = (heldBill) => {
-     setCart(heldBill.cart || [])
-     setPaymentType(heldBill.paymentType || 'cash')
-     setCashAmount(heldBill.cashAmount || '')
-     setKhaataAmount(heldBill.khaataAmount || '')
-     setActualAmountReceived(heldBill.actualAmountReceived || '')
-     setCustomerName(heldBill.customerName || '')
-     setCustomerPhone(heldBill.customerPhone || '')
-     setCustomerAddress(heldBill.customerAddress || '')
-      setOldGoldWeight(heldBill.oldGoldWeight || '')
-      setOldGoldKarat(heldBill.oldGoldKarat || '24')
-      setOldGoldPurity(heldBill.oldGoldPurity || '999')
-      setOldGoldDeductionPercent(heldBill.oldGoldDeductionPercent || '')
-      setOldGoldCash(heldBill.oldGoldCash || '')
-     if (heldBill.customerId) {
-       setSelectedCustomer({ _id: heldBill.customerId })
-     }
-     setShowHoldDialog(false)
-     toast.success('Held bill loaded!')
-   }
-
-   const handleDeleteHeldBill = (id) => {
-     const updated = heldBills.filter((b) => b.id !== id)
-     localStorage.setItem('heldBills', JSON.stringify(updated))
-     setHeldBills(updated)
-     toast.success('Held bill deleted')
-   }
-
-   const getPaymentBreakdown = () => {
+  const getPaymentBreakdown = () => {
     switch (paymentType) {
       case 'cash': return { cash: Number(cashAmount) || billTotal, khaata: 0 }
       case 'khaata': return { cash: 0, khaata: Number(khaataAmount) || cartTotal }
@@ -559,9 +524,172 @@ const POS = ({ mode = 'standard' }) => {
     }
   }
 
-  const goldRate = effectiveGoldRate
-  const silverRate = effectiveSilverRate
-  const silverPerGram = getRatePerGram(effectiveSilverRate)
+  const handleCompleteSale = async () => {
+    if (cart.length === 0) { toast.error('Cart is empty'); return }
+    const customerRequired = paymentType === 'khaata' || paymentType === 'partial'
+    if (customerRequired && !selectedCustomer && (!customerName.trim() || !customerPhone.trim())) {
+      toast.error('Customer name and phone are required for khaata/partial payment'); return
+    }
+    if (paymentType === 'partial' && !Number(cashAmount) && !Number(khaataAmount)) {
+      toast.error('Enter cash or khaata amount for partial payment'); return
+    }
+    if (paymentType === 'oldGoldExchange' && !Number(oldGoldWeight)) {
+      toast.error('Enter old gold weight'); return
+    }
+    if (paymentType === 'oldGoldExchange' && oldGoldDeductionPercentNum >= 100) {
+      toast.error('Deduction percent must be less than 100'); return
+    }
+    const lotLines = cart.filter((c) => c.source === 'lot')
+    const deviating = lotLines.filter((c) => deviationOf(c) > tolerance)
+    if (deviating.some((c) => !c.overrideReason.trim() || !c.managerApproved)) {
+      toast.error('Lots deviating beyond tolerance need a reason and manager approval')
+      return
+    }
+    for (const c of lotLines) {
+      if (c.pieces > c.lot.remainingPieces) { toast.error(`Only ${c.lot.remainingPieces} pcs left in ${c.lot.lotBarcode}`); return }
+      if (Number(c.actualWeight) > c.lot.remainingWeight) { toast.error(`Only ${c.lot.remainingWeight.toFixed(3)} g left in ${c.lot.lotBarcode}`); return }
+    }
+    let customerId = selectedCustomer?._id || null
+    if (customerId || customerName.trim() || customerPhone.trim()) {
+      customerId = await ensureCustomer()
+      if (customerRequired && !customerId) return
+    }
+    const breakdown = getPaymentBreakdown()
+    const payload = {
+      items: cart.filter((c) => c.source === 'item').map((c) => {
+        const itemTotal = calcItemTotal(c.item, c.makingCharge, c.wastagePercent, c.ratePerGram, c.stonePrice)
+        return {
+          item: c.item._id,
+          quantity: c.qty,
+          price: itemTotal,
+          makingCharge: c.makingCharge,
+          wastagePercent: c.wastagePercent,
+          sellingMakingCharge: c.makingCharge,
+          sellingWastagePercent: c.wastagePercent,
+          ratePerGram: c.ratePerGram,
+          stonePrice: c.stonePrice,
+          metalValue: (c.item.netMetalWeight || c.item.grossWeight || 0) * c.ratePerGram * ((c.item.purity || 0) / 1000),
+        }
+      }),
+      lotLines: lotLines.map((c) => ({
+        lotId: c.lot._id,
+        piecesSold: c.pieces,
+        actualWeightSold: Number(c.actualWeight),
+        weightSource: c.weightSource,
+        makingCharge: Number(c.makingCharge) || 0,
+        ratePerGram: Number(c.ratePerGram) || 0,
+        overrideReason: c.overrideReason,
+        managerApproved: c.managerApproved,
+      })),
+      paymentType,
+      totalAmount: cartTotal,
+      taxAmount: feeAmount,
+      diamondTaxAmount,
+      actualAmountReceived: receivedAmount || null,
+      discountAmount: computedDiscount,
+      paidAmount: paymentType === 'cash' ? billTotal : (breakdown.oldGold ? (breakdown.oldGold.deduction || 0) + (breakdown.cash || 0) : (breakdown.cash || 0)),
+      cashAmount: breakdown.cash || 0,
+      khaataAmount: breakdown.khaata || 0,
+      customerId,
+      oldGoldDetails: breakdown.oldGold ? {
+        weight: breakdown.oldGold.weight,
+        purity: breakdown.oldGold.purity,
+        deductionPercent: breakdown.oldGold.deductionPercent,
+        netWeight: breakdown.oldGold.netWeight,
+        deductibleAmount: breakdown.oldGold.deduction,
+      } : null,
+    }
+    setSubmitting(true)
+    try {
+      const res = await checkoutSale(payload)
+      toast.success('Sale completed successfully!')
+      setCart([])
+      setPaymentType('cash')
+      setCashAmount('')
+      setKhaataAmount('')
+      setActualAmountReceived('')
+      setSelectedCustomer(null)
+      setCustomerSearch('')
+      setCustomerName('')
+      setCustomerPhone('')
+      setCustomerAddress('')
+      setOldGoldWeight('')
+      setOldGoldKarat('24')
+      setOldGoldPurity('999')
+      setOldGoldDeductionPercent('')
+      setOldGoldCash('')
+      setShowConfirm(false)
+      const saleId = res.data?.data?.sale?._id || res.data?.data?._id || res.data?._id
+      if (saleId) {
+        setCompletedSaleId(saleId)
+        setShowPrintDialog(true)
+      }
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Failed to complete sale')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handlePreviewBill = () => {
+    if (cart.length === 0) { toast.error('Cart is empty'); return }
+    setShowPreviewDialog(true)
+  }
+
+  const handleHoldBill = () => {
+    if (cart.length === 0) { toast.error('Cart is empty'); return }
+    const heldBill = {
+      id: Date.now(),
+      cart: [...cart],
+      paymentType,
+      cashAmount,
+      khaataAmount,
+      actualAmountReceived,
+      customerName,
+      customerPhone,
+      customerAddress,
+      oldGoldWeight,
+      oldGoldKarat,
+      oldGoldPurity,
+      oldGoldDeductionPercent,
+      oldGoldCash,
+      customerId: selectedCustomer?._id || null,
+      heldAt: new Date().toISOString(),
+    }
+    const existing = JSON.parse(localStorage.getItem('heldBills') || '[]')
+    existing.push(heldBill)
+    localStorage.setItem('heldBills', JSON.stringify(existing))
+    setHeldBills(existing)
+    toast.success('Bill held successfully! You can resume it later.')
+  }
+
+  const handleLoadHeldBill = (heldBill) => {
+    setCart(heldBill.cart || [])
+    setPaymentType(heldBill.paymentType || 'cash')
+    setCashAmount(heldBill.cashAmount || '')
+    setKhaataAmount(heldBill.khaataAmount || '')
+    setActualAmountReceived(heldBill.actualAmountReceived || '')
+    setCustomerName(heldBill.customerName || '')
+    setCustomerPhone(heldBill.customerPhone || '')
+    setCustomerAddress(heldBill.customerAddress || '')
+    setOldGoldWeight(heldBill.oldGoldWeight || '')
+    setOldGoldKarat(heldBill.oldGoldKarat || '24')
+    setOldGoldPurity(heldBill.oldGoldPurity || '999')
+    setOldGoldDeductionPercent(heldBill.oldGoldDeductionPercent || '')
+    setOldGoldCash(heldBill.oldGoldCash || '')
+    if (heldBill.customerId) {
+      setSelectedCustomer({ _id: heldBill.customerId })
+    }
+    setShowHoldDialog(false)
+    toast.success('Held bill loaded!')
+  }
+
+  const handleDeleteHeldBill = (id) => {
+    const updated = heldBills.filter((b) => b.id !== id)
+    localStorage.setItem('heldBills', JSON.stringify(updated))
+    setHeldBills(updated)
+    toast.success('Held bill deleted')
+  }
 
   const handleOldGoldKaratChange = (value) => {
     setOldGoldKarat(value)
@@ -576,14 +704,52 @@ const POS = ({ mode = 'standard' }) => {
   }
 
   const { user } = useContext(AuthContext)
-  const previewItems = buildInvoiceItems(cart.map((c) => ({
-    item: c.item,
-    qty: c.qty,
-    ratePerGram: c.ratePerGram,
-    makingCharge: c.makingCharge,
-    wastagePercent: c.wastagePercent,
-    stonePrice: c.stonePrice,
-  })))
+  const buildPreviewItems = () => {
+    const itemRows = buildInvoiceItems(cart.filter((c) => c.source === 'item').map((c) => ({
+      item: c.item,
+      qty: c.qty,
+      ratePerGram: c.ratePerGram,
+      makingCharge: c.makingCharge,
+      wastagePercent: c.wastagePercent,
+      stonePrice: c.stonePrice,
+    })))
+    const lotRows = cart.filter((c) => c.source === 'lot').map((c) => {
+      const lot = c.lot
+      const metal = lot.metalType ? lot.metalType.charAt(0).toUpperCase() + lot.metalType.slice(1) : ''
+      const karat = lot.karat ? `${lot.karat}K` : ''
+      const type = [metal, karat].filter(Boolean).join(' ') || '-'
+      const purity = Number(lot.purity || 0)
+      const purityPercent = purity > 0 ? Number(((purity / 1000) * 100).toFixed(2)) : '-'
+      const weight = Number(c.actualWeight || 0)
+      const ratePerGram = Number(c.ratePerGram || 0)
+      const tolaRate = Math.round(ratePerGram * GRAMS_PER_TOLA)
+      const makingCharge = Number(c.makingCharge || 0)
+      const totalAmount = lotLineTotal(c)
+      return {
+        sn: 0,
+        hsCode: lot.hsCode || '',
+        itemName: lot.itemName || lot.designCode || '-',
+        type,
+        purity: purityPercent,
+        grossWeight: fmtWt(weight),
+        lessWeight: fmtWt(0),
+        netWeight: fmtWt(weight),
+        wastage: '',
+        totalWeight: fmtWt(weight),
+        rate: ratePerGram > 0 ? `${ratePerGram.toFixed(3)} (${tolaRate})` : '',
+        makingCharge: fmtMoney(makingCharge),
+        other: fmtMoney(0),
+        diamondWt: '',
+        diamondAmount: '',
+        stoneWt: '',
+        stoneAmount: '',
+        totalAmount: fmtMoney(totalAmount),
+        _total: totalAmount,
+      }
+    })
+    return [...itemRows, ...lotRows].map((row, i) => ({ ...row, sn: i + 1 }))
+  }
+  const previewItems = buildPreviewItems()
   const previewSubtotal = previewItems.reduce((sum, it) => sum + it._total, 0)
   const previewBreakdown = getPaymentBreakdown()
   const previewPaidAmount =
@@ -601,6 +767,16 @@ const POS = ({ mode = 'standard' }) => {
   const previewWords = `${numberToWords(billTotal)} only`
   const previewOldGold = previewBreakdown.oldGold || {}
   const previewPaymentLabel = PAYMENT_TYPES.find((p) => p.value === paymentType)?.label || paymentType
+
+  const goldRate = effectiveGoldRate
+  const silverRate = effectiveSilverRate
+
+  const tabClass = (active) =>
+    `px-4 py-2 text-sm font-medium rounded-xl border transition-colors ${
+      active
+        ? 'bg-amber-600 text-white border-amber-600'
+        : 'bg-white text-gray-700 border-gray-200 hover:border-amber-300'
+    }`
 
   return (
     <div className="flex flex-col lg:flex-row gap-4">
@@ -631,91 +807,158 @@ const POS = ({ mode = 'standard' }) => {
             </div>
           )}
         </div>
+        {!isDiamondMode && (
+          <div className="mb-3 flex gap-2">
+            <button type="button" onClick={() => setActiveTab('items')} className={tabClass(activeTab === 'items')}>
+              Tagged Items
+            </button>
+            <button type="button" onClick={() => setActiveTab('lots')} className={tabClass(activeTab === 'lots')}>
+              Loose Lots
+            </button>
+          </div>
+        )}
         <div className="mb-3 space-y-2">
           <div className="flex items-center gap-3">
             <div className="flex-1">
-              <SearchInput value={search} onChange={setSearch} placeholder="Search by SKU, name, or barcode..." />
+              <SearchInput value={search} onChange={setSearch} placeholder={activeTab === 'lots' ? 'Search by design code, lot barcode, name...' : 'Search by SKU, name, or barcode...'} />
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm bg-white min-w-0 max-w-[160px]">
-              <option value="">All Categories</option>
-              {categories.map((c) => (<option key={c} value={c}>{c}</option>))}
-            </select>
-            <select value={metalFilter} onChange={(e) => setMetalFilter(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm bg-white min-w-0 max-w-[140px]">
-              <option value="">All Metals</option>
-              {metalTypes.map((m) => (<option key={m} value={m}>{m}</option>))}
-            </select>
-          </div>
+          {activeTab === 'items' && (
+            <div className="flex flex-wrap gap-2">
+              <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm bg-white min-w-0 max-w-[160px]">
+                <option value="">All Categories</option>
+                {categories.map((c) => (<option key={c} value={c}>{c}</option>))}
+              </select>
+              <select value={metalFilter} onChange={(e) => setMetalFilter(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm bg-white min-w-0 max-w-[140px]">
+                <option value="">All Metals</option>
+                {metalTypes.map((m) => (<option key={m} value={m}>{m}</option>))}
+              </select>
+            </div>
+          )}
         </div>
         <div className="flex-1 overflow-y-auto">
-          {loading ? (
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="rounded-xl border border-gray-200 p-4 animate-pulse">
-                  <div className="h-24 bg-gray-200 rounded-lg mb-3" />
-                  <div className="h-4 bg-gray-200 rounded w-3/4 mb-2" />
-                  <div className="h-3 bg-gray-200 rounded w-1/2" />
-                </div>
-              ))}
-            </div>
-          ) : items.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <Package className="h-12 w-12 text-gray-300 mb-3" />
-              <p className="text-sm text-gray-500">No items found</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-              {items.map((item) => {
-                const ratePerGram = getRateForItem(item)
-                const netWt = item.netMetalWeight || item.grossWeight || 0
-                const purity = item.purity || 0
-                const metalValue = netWt * ratePerGram * (purity / 1000)
-                const isSold = item.status && item.status !== 'In Stock'
-                const itemHasDiamond = hasDiamond(item)
-                const displayPrice = itemHasDiamond
-                  ? (item.sellingStonePrice || item.sellingPrice || item.price || 0)
-                  : (ratePerGram > 0 ? metalValue : (item.sellingPrice || item.price || 0))
-                return (
-                  <button key={item._id} onClick={() => !isSold && handleAddItem(item)} disabled={isSold} className={`rounded-xl border border-gray-200 bg-white p-4 text-left transition-all group ${isSold ? 'opacity-60 cursor-not-allowed' : 'hover:border-amber-300 hover:shadow-md'}`}>
-                    <div className="h-24 bg-gray-100 rounded-lg mb-3 flex items-center justify-center overflow-hidden relative">
-                      {item.images?.[0] || item.image ? (
-                        <img src={getImageSrc(item.images?.[0] || item.image)} alt={item.itemName} className="h-full w-full object-cover" />
-                      ) : (
-                        <Package className="h-8 w-8 text-gray-300" />
-                      )}
-                      {itemHasDiamond && (
-                        <span className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-semibold">
-                          Diamond
-                        </span>
-                      )}
-                      {isSold && (
-                        <span className="absolute top-1.5 right-1.5 px-2 py-0.5 rounded-full bg-gray-800/80 text-white text-[10px] font-semibold">
-                          {item.status}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm font-semibold text-gray-900 truncate group-hover:text-amber-600">{item.itemName || item.name}</p>
-                    <p className="text-xs text-gray-500">{item.SKU || ''}</p>
-                    <div className="mt-1 space-y-0.5">
-                      <p className="text-xs text-gray-400">{item.metalType} / {item.karat ? `${item.karat}K` : ''} / {item.purity || ''}</p>
-                      {netWt > 0 && <p className="text-xs text-gray-400">Net: {formatWeight(netWt)} ({formatWeightLaal(netWt)})</p>}
-                      {item.stoneType && item.stoneType !== 'none' && (
-                        <p className="text-xs text-gray-400">
-                          Stone: {item.stoneType.charAt(0).toUpperCase() + item.stoneType.slice(1)}
-                          {Number(item.stoneWeight) > 0 && ` · ${formatWeight(item.stoneWeight)}`}
-                          {Number(item.carat) > 0 && ` · ${item.carat}ct`}
+          {activeTab === 'items' && (
+            loading ? (
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="rounded-xl border border-gray-200 p-4 animate-pulse">
+                    <div className="h-24 bg-gray-200 rounded-lg mb-3" />
+                    <div className="h-4 bg-gray-200 rounded w-3/4 mb-2" />
+                    <div className="h-3 bg-gray-200 rounded w-1/2" />
+                  </div>
+                ))}
+              </div>
+            ) : items.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <Package className="h-12 w-12 text-gray-300 mb-3" />
+                <p className="text-sm text-gray-500">No items found</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                {items.map((item) => {
+                  const ratePerGram = getRateForMetal(item.metalType)
+                  const netWt = item.netMetalWeight || item.grossWeight || 0
+                  const purity = item.purity || 0
+                  const metalValue = netWt * ratePerGram * (purity / 1000)
+                  const isSold = item.status && item.status !== 'In Stock'
+                  const itemHasDiamond = hasDiamond(item)
+                  const displayPrice = itemHasDiamond
+                    ? (item.sellingStonePrice || item.sellingPrice || item.price || 0)
+                    : (ratePerGram > 0 ? metalValue : (item.sellingPrice || item.price || 0))
+                  return (
+                    <button key={item._id} onClick={() => !isSold && handleAddItem(item)} disabled={isSold} className={`rounded-xl border border-gray-200 bg-white p-4 text-left transition-all group ${isSold ? 'opacity-60 cursor-not-allowed' : 'hover:border-amber-300 hover:shadow-md'}`}>
+                      <div className="h-24 bg-gray-100 rounded-lg mb-3 flex items-center justify-center overflow-hidden relative">
+                        {item.images?.[0] || item.image ? (
+                          <img src={getImageSrc(item.images?.[0] || item.image)} alt={item.itemName} className="h-full w-full object-cover" />
+                        ) : (
+                          <Package className="h-8 w-8 text-gray-300" />
+                        )}
+                        {itemHasDiamond && (
+                          <span className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-semibold">
+                            Diamond
+                          </span>
+                        )}
+                        {isSold && (
+                          <span className="absolute top-1.5 right-1.5 px-2 py-0.5 rounded-full bg-gray-800/80 text-white text-[10px] font-semibold">
+                            {item.status}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm font-semibold text-gray-900 truncate group-hover:text-amber-600">{item.itemName || item.name}</p>
+                      <p className="text-xs text-gray-500">{item.SKU || ''}</p>
+                      <div className="mt-1 space-y-0.5">
+                        <p className="text-xs text-gray-400">{item.metalType} / {item.karat ? `${item.karat}K` : ''} / {item.purity || ''}</p>
+                        {netWt > 0 && <p className="text-xs text-gray-400">Net: {formatWeight(netWt)} ({formatWeightLaal(netWt)})</p>}
+                        {item.stoneType && item.stoneType !== 'none' && (
+                          <p className="text-xs text-gray-400">
+                            Stone: {item.stoneType.charAt(0).toUpperCase() + item.stoneType.slice(1)}
+                            {Number(item.stoneWeight) > 0 && ` · ${formatWeight(item.stoneWeight)}`}
+                            {Number(item.carat) > 0 && ` · ${item.carat}ct`}
+                          </p>
+                        )}
+                      </div>
+                      <p className="text-sm font-bold text-amber-700 mt-1">
+                        {formatCurrency(displayPrice)}
+                      </p>
+                      {isDiamondMode && <p className="text-[10px] text-gray-400">Tap to enter value at sale</p>}
+                    </button>
+                  )
+                })}
+              </div>
+            )
+          )}
+          {activeTab === 'lots' && (
+            lotsLoading ? (
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="rounded-xl border border-gray-200 p-4 animate-pulse">
+                    <div className="h-4 bg-gray-200 rounded w-3/4 mb-2" />
+                    <div className="h-3 bg-gray-200 rounded w-1/2" />
+                  </div>
+                ))}
+              </div>
+            ) : lots.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <Package className="h-12 w-12 text-gray-300 mb-3" />
+                <p className="text-sm text-gray-500">No loose lots found</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                {lots.map((lot) => {
+                  const low = lot.lowStockPiecesThreshold > 0 && lot.remainingPieces <= lot.lowStockPiecesThreshold
+                  return (
+                    <button
+                      key={lot._id}
+                      onClick={() => addLotToCart(lot)}
+                      className="rounded-xl border border-gray-200 bg-white p-4 text-left transition-all hover:border-amber-300 hover:shadow-md"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-gray-900">{lot.itemName || lot.designCode || 'Loose item'}</p>
+                          <p className="font-mono text-xs text-gray-500">{lot.lotBarcode}</p>
+                        </div>
+                        <Layers className="h-4 w-4 shrink-0 text-gray-300" />
+                      </div>
+                      <p className="mt-1 text-xs text-gray-400">
+                        {lot.designCode || '—'} · {lot.metalType} / {lot.purity}
+                      </p>
+                      <div className="mt-2 space-y-0.5">
+                        <p className={`text-sm font-bold ${low ? 'text-amber-600' : 'text-gray-900'}`}>
+                          {lot.remainingPieces} pcs left
                         </p>
-                      )}
-                    </div>
-                    <p className="text-sm font-bold text-amber-700 mt-1">
-                      {itemHasDiamond ? formatCurrency(displayPrice) : formatCurrency(displayPrice)}
-                    </p>
-                    {isDiamondMode && <p className="text-[10px] text-gray-400">Tap to enter value at sale</p>}
-                  </button>
-                )
-              })}
-            </div>
+                        <p className="text-xs text-gray-400">
+                          {formatWeight(lot.remainingWeight)} · avg {lot.avgWeightPerPiece} g/pc
+                        </p>
+                      </div>
+                      <p className="mt-1 text-sm font-semibold text-amber-700">
+                        {getRateForMetal(lot.metalType) ? `Rs. ${Math.round(getRateForMetal(lot.metalType))}/g` : 'No rate'}
+                      </p>
+                      {low && <p className="mt-1 text-[10px] font-medium text-amber-600">Low stock</p>}
+                    </button>
+                  )
+                })}
+              </div>
+            )
           )}
         </div>
       </div>
@@ -730,17 +973,107 @@ const POS = ({ mode = 'standard' }) => {
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <ShoppingCart className="h-12 w-12 text-gray-200 mb-3" />
               <p className="text-sm text-gray-400">Cart is empty</p>
-              <p className="text-xs text-gray-300 mt-1">Click items to add them</p>
+              <p className="text-xs text-gray-300 mt-1">Click items or scan a barcode to add them</p>
             </div>
           ) : (
             cart.map((c) => {
+              if (c.source === 'lot') {
+                const dev = deviationOf(c)
+                const expected = Number((c.lot.avgWeightPerPiece || 0) * c.pieces).toFixed(4)
+                const deviates = dev > tolerance
+                return (
+                  <div key={`lot-${c.lot._id}`} className="p-3 rounded-lg border border-gray-200 bg-white space-y-2">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{c.lot.itemName || c.lot.designCode || 'Loose item'}</p>
+                        <p className="text-xs text-gray-400">{c.lot.lotBarcode} · {formatWeight(c.lot.remainingWeight)} left · <span className="text-amber-600">Loose lot</span></p>
+                      </div>
+                      <button onClick={() => removeFromCart(c.lot._id)} className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500">
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <label className="text-gray-500">Pieces (max {c.lot.remainingPieces})</label>
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => updateQty(c.lot._id, -1)} className="p-1 rounded hover:bg-gray-100 text-gray-600"><Minus className="h-3 w-3" /></button>
+                          <input
+                            type="number"
+                            min="1"
+                            max={c.lot.remainingPieces}
+                            value={c.pieces}
+                            onChange={(e) => updateCartField(c.lot._id, 'pieces', Math.max(1, Math.min(c.lot.remainingPieces, Math.floor(Number(e.target.value) || 1))))}
+                            className="w-14 rounded border border-gray-200 px-2 py-1 text-center"
+                          />
+                          <button onClick={() => updateQty(c.lot._id, 1)} className="p-1 rounded hover:bg-gray-100 text-gray-600"><Plus className="h-3 w-3" /></button>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-gray-500">Rate / g</label>
+                        <input type="number" value={Math.round(c.ratePerGram)} onChange={(e) => updateCartField(c.lot._id, 'ratePerGram', Number(e.target.value))} className="w-full rounded border border-gray-200 px-2 py-1" />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="text-gray-500">Actual Weight (g) <span className="text-gray-400">— expected {expected} g</span></label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            step="0.001"
+                            min="0.001"
+                            value={c.actualWeight}
+                            onChange={(e) => updateCartField(c.lot._id, 'actualWeight', Number(e.target.value))}
+                            onFocus={() => updateCartField(c.lot._id, 'weightSource', 'manual_weighed')}
+                            className="w-full rounded border border-gray-200 px-2 py-1"
+                          />
+                          <select
+                            value={c.weightSource}
+                            onChange={(e) => updateCartField(c.lot._id, 'weightSource', e.target.value)}
+                            className="rounded border border-gray-200 px-1 py-1 bg-white"
+                          >
+                            <option value="average">Avg</option>
+                            <option value="manual_weighed">Weighed</option>
+                          </select>
+                        </div>
+                        {deviates && (
+                          <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-2 space-y-1.5">
+                            <p className="flex items-center gap-1 text-xs font-semibold text-amber-800">
+                              <AlertTriangle className="h-3.5 w-3.5" /> Deviates {dev}% from expected — exceeds {tolerance}% tolerance
+                            </p>
+                            <input
+                              value={c.overrideReason}
+                              onChange={(e) => updateCartField(c.lot._id, 'overrideReason', e.target.value)}
+                              placeholder="Reason for variance"
+                              className="w-full rounded border border-amber-300 px-2 py-1 text-xs"
+                            />
+                            <label className="flex items-center gap-1.5 text-xs text-amber-800">
+                              <input
+                                type="checkbox"
+                                checked={c.managerApproved}
+                                onChange={(e) => updateCartField(c.lot._id, 'managerApproved', e.target.checked)}
+                              />
+                              Manager approved
+                            </label>
+                          </div>
+                        )}
+                      </div>
+                      <div className="col-span-2">
+                        <label className="text-gray-500">Making Charge</label>
+                        <input type="number" value={c.makingCharge} onChange={(e) => updateCartField(c.lot._id, 'makingCharge', Number(e.target.value))} className="w-full rounded border border-gray-200 px-2 py-1" />
+                      </div>
+                    </div>
+                    <div className="flex justify-between text-sm font-bold text-gray-900 pt-1 border-t border-gray-100">
+                      <span>Line Total</span>
+                      <span>{formatCurrency(lineSubtotal(c))}</span>
+                    </div>
+                  </div>
+                )
+              }
               const itemTotal = calcItemTotal(c.item, c.makingCharge, c.wastagePercent, c.ratePerGram, c.stonePrice)
               const netWt = c.item.netMetalWeight || c.item.grossWeight || 0
               const metalVal = netWt * c.ratePerGram * ((c.item.purity || 0) / 1000)
               const wastageAmt = metalVal * (c.wastagePercent / 100)
               const itemHasDiamond = hasDiamond(c.item)
               return (
-                <div key={c.item._id} className="p-3 rounded-lg border border-gray-200 bg-white space-y-2">
+                <div key={`item-${c.item._id}`} className="p-3 rounded-lg border border-gray-200 bg-white space-y-2">
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-900 truncate">{c.item.itemName || c.item.name} {itemHasDiamond && <span className="ml-1 px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-semibold align-middle">Diamond</span>}</p>
@@ -802,7 +1135,7 @@ const POS = ({ mode = 'standard' }) => {
             </div>
             {diamondSubtotal > 0 && (
               <div className="flex justify-between items-center text-sm">
-                <span className="text-gray-600">Diamond VAT ({diamondTaxRate}%)</span>
+                <span className="text-gray-600">Diamond {diamondTaxRate >= 13 ? 'VAT' : `Service Fee`} ({diamondTaxRate}%)</span>
                 <span>{formatCurrency(diamondTaxAmount)}</span>
               </div>
             )}
@@ -995,7 +1328,7 @@ const POS = ({ mode = 'standard' }) => {
             <div className="mt-2 space-y-0.5 text-right">
               <div><span className="font-medium">Subtotal:</span> {formatCurrency(cartTotal)}</div>
               <div><span className="font-medium">Service Fee ({feeRate}%):</span> {formatCurrency(feeAmount)}</div>
-              {diamondSubtotal > 0 && <div><span className="font-medium">Diamond VAT ({diamondTaxRate}%):</span> {formatCurrency(diamondTaxAmount)}</div>}
+              {diamondSubtotal > 0 && <div><span className="font-medium">Diamond {diamondTaxRate >= 13 ? 'VAT' : 'Service Fee'} ({diamondTaxRate}%):</span> {formatCurrency(diamondTaxAmount)}</div>}
               {computedDiscount > 0 && <div className="text-green-600"><span className="font-medium">Discount:</span> -{formatCurrency(computedDiscount)}</div>}
               <div className="font-bold pt-1 border-t"><span className="font-medium">Bill Total:</span> {formatCurrency(billTotal)}</div>
               {paymentType === 'oldGoldExchange' && oldGoldValue > 0 && (
@@ -1027,7 +1360,6 @@ const POS = ({ mode = 'standard' }) => {
             </div>
           </div>
           <p className="text-gray-700 mb-6">Your sale has been completed successfully!</p>
-          <p className="text-sm text-gray-600 mb-6">Would you like to print an IRD-compliant jewellery invoice?</p>
           <div className="flex justify-center gap-3 mt-6">
             <Button
               variant="outline"
@@ -1082,7 +1414,7 @@ const POS = ({ mode = 'standard' }) => {
               totalTax={totalTaxAmount}
               taxLines={[
                 { name: 'Service Fee', rate: feeRate, amount: feeAmount },
-                { name: 'VAT (Diamond)', rate: diamondTaxRate, amount: diamondTaxAmount },
+                { name: diamondTaxRate >= 13 ? 'VAT (Diamond)' : 'Service Fee (Diamond)', rate: diamondTaxRate, amount: diamondTaxAmount },
               ].filter((t) => t.amount > 0)}
               roundOff={roundOff}
               grandTotal={billTotal}

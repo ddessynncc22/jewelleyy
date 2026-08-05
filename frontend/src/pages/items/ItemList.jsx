@@ -13,7 +13,6 @@ import {
   AlertTriangle,
   LayoutGrid,
   List,
-  Copy,
   Printer,
   Gem,
   Package,
@@ -28,7 +27,6 @@ import {
   getItems,
   deleteItem,
   getLowStockItems,
-  cloneItem,
   bulkUpdateItems,
   bulkDeleteItems,
   getItemByBarcode,
@@ -111,6 +109,12 @@ const metalChipColors = {
 const formatLabel = (value) =>
   value ? value.charAt(0).toUpperCase() + value.slice(1).replace(/_/g, ' ') : '-'
 
+const LooseBadge = () => (
+  <span className="inline-flex shrink-0 items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+    Loose
+  </span>
+)
+
 const IconButton = ({ children, title, onClick, className = '' }) => (
   <button
     type="button"
@@ -187,31 +191,49 @@ const ItemCard = ({ item, selected, onToggleSelect, onOpen, onEdit, onDelete }) 
 
       <div className="space-y-2.5 p-4">
         <div>
-          <h3
-            className="truncate text-sm font-semibold text-[var(--color-text)]"
-            title={item.itemName}
-          >
-            {item.itemName || 'Untitled item'}
-          </h3>
+          <div className="flex items-center gap-1.5">
+            <h3
+              className="truncate text-sm font-semibold text-[var(--color-text)]"
+              title={item.itemName}
+            >
+              {item.itemName || 'Untitled item'}
+            </h3>
+            {item.itemType === 'loose' && <LooseBadge />}
+          </div>
           <p className="mt-0.5 font-mono text-xs text-[var(--color-text-secondary)]">
             {item.SKU || '-'}
           </p>
         </div>
 
-        <div className="flex items-center justify-between border-t border-[var(--color-border)] pt-2.5">
-          <div>
+        {item.itemType === 'loose' ? (
+          <div className="border-t border-[var(--color-border)] pt-2.5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-[var(--color-text-secondary)]">Stock remaining</p>
+                <p className="text-sm font-semibold text-[var(--color-text)]">
+                  {item.looseRemainingPieces ?? 0} pcs · {formatWeight(item.looseRemainingWeight ?? 0)}
+                </p>
+                <p className="text-xs text-[var(--color-text-secondary)]">
+                  {item.looseLotCount ?? 0} lot{item.looseLotCount === 1 ? '' : 's'} ·{' '}
+                  {formatCurrency(item.loosePerGramRate)}/g
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-[var(--color-text-secondary)]">Loose stock value</p>
+                <p className="text-sm font-semibold text-[var(--color-primary)]">
+                  {formatCurrency(item.computedValue)}
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="border-t border-[var(--color-border)] pt-2.5">
             <p className="text-xs text-[var(--color-text-secondary)]">Gross weight</p>
             <p className="text-sm font-semibold text-[var(--color-text)]">
               {formatWeight(item.grossWeight)}
             </p>
           </div>
-          <div className="text-right">
-            <p className="text-xs text-[var(--color-text-secondary)]">Selling price</p>
-            <p className="text-sm font-semibold text-[var(--color-primary)]">
-              {formatCurrency(item.sellingPrice)}
-            </p>
-          </div>
-        </div>
+        )}
 
         <div className="flex items-center justify-between pt-1">
           <div className="flex min-w-0 items-center gap-1.5">
@@ -350,15 +372,6 @@ const ItemList = () => {
     onError: (err) => toast.error(err.response?.data?.message || 'Failed to delete item'),
   })
 
-  const cloneMutation = useMutation({
-    mutationFn: cloneItem,
-    onSuccess: () => {
-      toast.success('Item cloned successfully')
-      invalidate()
-    },
-    onError: (err) => toast.error(err.response?.data?.message || 'Failed to clone item'),
-  })
-
   const bulkUpdateMutation = useMutation({
     mutationFn: bulkUpdateItems,
     onSuccess: () => {
@@ -387,12 +400,19 @@ const ItemList = () => {
     deleteMutation.mutate(deleteId)
   }
 
+  const openItem = (item) =>
+    item.itemType === 'loose'
+      ? navigate(`/loose-lots?item=${item._id}&itemName=${encodeURIComponent(item.itemName || '')}`)
+      : navigate(`/items/${item._id}`)
+
   const handleEdit = (item) => {
+    if (item.itemType === 'loose') {
+      navigate(`/loose-lots?item=${item._id}&itemName=${encodeURIComponent(item.itemName || '')}`)
+      return
+    }
     setEditingItem(item)
     setShowForm(true)
   }
-
-  const handleClone = (id) => cloneMutation.mutate(id)
 
   const handleFormSuccess = () => {
     setShowForm(false)
@@ -575,9 +595,12 @@ const ItemList = () => {
               )}
             </div>
             <div className="min-w-0">
-              <p className="max-w-[220px] truncate text-sm font-medium text-[var(--color-text)]">
-                {name || '-'}
-              </p>
+              <div className="flex items-center gap-1.5">
+                <p className="max-w-[220px] truncate text-sm font-medium text-[var(--color-text)]">
+                  {name || '-'}
+                </p>
+                {row.itemType === 'loose' && <LooseBadge />}
+              </div>
               <p className="font-mono text-xs text-[var(--color-text-secondary)]">
                 {row.SKU || '-'}
               </p>
@@ -612,6 +635,18 @@ const ItemList = () => {
       key: 'quantity',
       label: 'Qty',
       render: (val, row) => {
+        if (row.itemType === 'loose') {
+          return (
+            <div>
+              <p className="text-sm font-medium text-[var(--color-text)]">
+                {row.looseRemainingPieces ?? val ?? '-'} pcs
+              </p>
+              <p className="text-xs text-[var(--color-text-secondary)]">
+                {row.looseLotCount ?? 0} lot{row.looseLotCount === 1 ? '' : 's'}
+              </p>
+            </div>
+          )
+        }
         const low = row.status === 'In Stock' && val <= LOW_STOCK_THRESHOLD
         return <span className={low ? 'font-semibold text-amber-600' : ''}>{val ?? '-'}</span>
       },
@@ -619,19 +654,41 @@ const ItemList = () => {
     {
       key: 'grossWeight',
       label: 'Gross Weight',
-      render: (val) => (
-        <div>
-          <p className="text-sm font-medium text-[var(--color-text)]">{formatWeight(val)}</p>
-          <p className="text-xs text-[var(--color-text-secondary)]">{formatWeightTolaLaal(val)}</p>
-        </div>
-      ),
+      render: (val, row) => {
+        if (row.itemType === 'loose') {
+          return (
+            <div>
+              <p className="text-sm font-medium text-[var(--color-text)]">
+                {formatWeight(row.looseRemainingWeight ?? val)} remaining
+              </p>
+              <p className="text-xs text-[var(--color-text-secondary)]">
+                {formatCurrency(row.loosePerGramRate)}/g
+              </p>
+            </div>
+          )
+        }
+        return (
+          <div>
+            <p className="text-sm font-medium text-[var(--color-text)]">{formatWeight(val)}</p>
+            <p className="text-xs text-[var(--color-text-secondary)]">{formatWeightTolaLaal(val)}</p>
+          </div>
+        )
+      },
     },
     {
-      key: 'sellingPrice',
-      label: 'Selling Price',
-      render: (val) => (
-        <span className="font-medium text-[var(--color-text)]">{formatCurrency(val)}</span>
-      ),
+      key: 'looseValue',
+      label: 'Loose Stock',
+      render: (val, row) =>
+        row.itemType === 'loose' ? (
+          <div>
+            <p className="font-medium text-[var(--color-primary)]">
+              {formatCurrency(row.computedValue)}
+            </p>
+            <p className="text-xs text-[var(--color-text-secondary)]">stock value</p>
+          </div>
+        ) : (
+          <span className="text-[var(--color-text-secondary)]">—</span>
+        ),
     },
     {
       key: 'status',
@@ -647,7 +704,7 @@ const ItemList = () => {
         <div className="flex items-center justify-end gap-1">
           <IconButton
             title="View details"
-            onClick={() => navigate(`/items/${row._id}`)}
+            onClick={() => openItem(row)}
             className="hover:bg-blue-50 hover:text-blue-600"
           >
             <Eye className="h-4 w-4" />
@@ -658,13 +715,6 @@ const ItemList = () => {
             className="hover:bg-[var(--color-primary-light)] hover:text-[var(--color-primary)]"
           >
             <Edit className="h-4 w-4" />
-          </IconButton>
-          <IconButton
-            title="Clone"
-            onClick={() => handleClone(row._id)}
-            className="hover:bg-emerald-50 hover:text-emerald-600"
-          >
-            <Copy className="h-4 w-4" />
           </IconButton>
           <IconButton
             title="Delete"
@@ -883,6 +933,16 @@ const ItemList = () => {
             options={KARAT_OPTIONS}
             placeholder="All Karat"
           />
+          <FilterSelect
+            label="Item Type"
+            value={filters.itemType || ''}
+            onChange={(v) => handleFilterChange('itemType', v)}
+            options={[
+              { value: 'tagged', label: 'Tagged' },
+              { value: 'loose', label: 'Loose' },
+            ]}
+            placeholder="All Types"
+          />
         </div>
       </FilterPanel>
 
@@ -923,7 +983,7 @@ const ItemList = () => {
                   item={item}
                   selected={selectedIds.includes(item._id)}
                   onToggleSelect={() => toggleSelect(item._id)}
-                  onOpen={() => navigate(`/items/${item._id}`)}
+                  onOpen={() => openItem(item)}
                   onEdit={() => handleEdit(item)}
                   onDelete={() => setDeleteId(item._id)}
                 />
@@ -939,7 +999,7 @@ const ItemList = () => {
           loading={itemsQuery.isLoading}
           pagination={itemsPagination}
           onSort={handleSort}
-          onRowClick={(row) => navigate(`/items/${row._id}`)}
+          onRowClick={(row) => openItem(row)}
         />
       )}
 

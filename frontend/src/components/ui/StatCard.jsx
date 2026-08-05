@@ -53,7 +53,7 @@ const StatCard = ({
             }
           : undefined
       }
-      className={`group rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-6 shadow-sm transition-all duration-200 ${
+      className={`group rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-5 shadow-sm transition-all duration-200 ${
         onClick
           ? "cursor-pointer hover:shadow-lg hover:-translate-y-0.5"
           : ""

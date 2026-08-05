@@ -1,4 +1,5 @@
 const Item = require('../models/Item');
+const LooseLot = require('../models/LooseLot');
 const { scopeAggregate } = require('../utils/tenant');
 const StockMovement = require('../models/StockMovement');
 const ActivityLog = require('../models/ActivityLog');
@@ -6,12 +7,20 @@ const Rate = require('../models/Rate');
 const Settings = require('../models/Settings');
 const { successResponse, errorResponse, paginatedResponse } = require('../utils/response');
 const { generateBarcode, generateSKU } = require('../services/barcode');
+const { toPerGramRate } = require('../utils/rates');
 const { escapeRegex } = require('../utils/helpers');
 
 exports.getItems = async (req, res) => {
   try {
     const { page = 1, limit = 20, status, category, metalType, purity, karat, karigarId, sort, search } = req.query;
     const query = {};
+    if (req.query.itemType) {
+      // Legacy tagged items may predate the itemType field and have it missing;
+      // the schema default is 'tagged', so missing/null counts as tagged.
+      query.itemType = req.query.itemType === 'tagged'
+        ? { $in: ['tagged', null] }
+        : req.query.itemType;
+    }
     if (status) query.status = status;
     if (category) query.category = { $regex: category, $options: 'i' };
     if (metalType) query.metalType = metalType;
@@ -38,9 +47,54 @@ exports.getItems = async (req, res) => {
     const sortOption = sort ? sort.split(',').join(' ') : '-createdAt';
     const skip = (Number(page) - 1) * Number(limit);
     const [items, total] = await Promise.all([
-      Item.find(query).sort(sortOption).skip(skip).limit(Number(limit)),
+      sort
+        ? Item.find(query).sort(sortOption).skip(skip).limit(Number(limit)).lean()
+        : Item.aggregate(scopeAggregate([
+            { $match: { isDeleted: false, ...query } },
+            { $addFields: { _stockRank: { $cond: [{ $eq: ['$status', 'In Stock'] }, 0, 1] } } },
+            { $sort: { _stockRank: 1, createdAt: -1 } },
+            { $skip: skip },
+            { $limit: Number(limit) },
+          ])),
       Item.countDocuments({ ...query, isDeleted: false }),
     ]);
+    // Loose aggregate items (parents of loose lots) carry no sellingPrice or
+    // netMetalWeight, so give them a real display value derived from today's
+    // rate x remaining weight so they are not shown as NPR 0.00, plus the
+    // aggregated lot/stock info (lots count, remaining pieces/weight).
+    if (items.some((it) => it.itemType === 'loose')) {
+      const looseIds = items.filter((it) => it.itemType === 'loose').map((it) => it._id);
+      const [goldLatest, silverLatest, lotAgg] = await Promise.all([
+        Rate.findOne({ metalType: 'gold' }).sort({ date: -1 }),
+        Rate.findOne({ metalType: 'silver' }).sort({ date: -1 }),
+        LooseLot.aggregate(scopeAggregate([
+          { $match: { item: { $in: looseIds }, isDeleted: false } },
+          {
+            $group: {
+              _id: '$item',
+              lotCount: { $sum: 1 },
+              remainingPieces: { $sum: '$remainingPieces' },
+              remainingWeight: { $sum: '$remainingWeight' },
+            },
+          },
+        ])),
+      ]);
+      const goldRate = toPerGramRate(goldLatest);
+      const silverRate = toPerGramRate(silverLatest);
+      const lotMap = new Map(lotAgg.map((r) => [String(r._id), r]));
+      items.forEach((it) => {
+        if (it.itemType === 'loose') {
+          const agg = lotMap.get(String(it._id));
+          it.looseLotCount = agg?.lotCount || 0;
+          it.looseRemainingPieces = agg?.remainingPieces || 0;
+          it.looseRemainingWeight = agg?.remainingWeight || 0;
+          const ratePerGram = it.metalType === 'gold' ? goldRate : silverRate;
+          const weight = agg ? it.looseRemainingWeight : it.grossWeight || it.netMetalWeight || 0;
+          it.loosePerGramRate = Math.round(ratePerGram);
+          it.computedValue = Number((weight * ratePerGram * ((it.purity || 0) / 1000)).toFixed(2));
+        }
+      });
+    }
     return paginatedResponse(res, items, total, Number(page), Number(limit));
   } catch (error) {
     return errorResponse(res, error.message, 500);
@@ -74,7 +128,7 @@ const createItemWithRetry = async (data, retries = 3) => {
 
 exports.createItem = async (req, res) => {
   try {
-    const { category, metalType, purity, karat, itemName, grossWeight, stoneWeight, netMetalWeight, designCode, description, stoneType, carat, cut, clarity, certificationNumber, costPrice, costMakingCharge, costWastagePercent, costStonePrice, sellingPrice, sellingMakingCharge, sellingWastagePercent, sellingStonePrice, makingCharge, wastagePercent, tags, status, currentLocation, quantity, karigarId } = req.body;
+    const { category, metalType, purity, karat, itemName, grossWeight, stoneWeight, netMetalWeight, designCode, description, stoneType, carat, stoneCarat, stoneWeightGram, stoneQuantity, stoneRate, stoneAmount, cut, clarity, certificationNumber, costPrice, costMakingCharge, costWastagePercent, costStonePrice, sellingPrice, sellingMakingCharge, sellingWastagePercent, sellingStonePrice, makingCharge, wastagePercent, tags, status, currentLocation, quantity, karigarId } = req.body;
     if (!category || !metalType || !purity || !itemName || !grossWeight) {
       return errorResponse(res, 'Category, metalType, purity, itemName, and grossWeight are required', 400);
     }
@@ -84,7 +138,7 @@ exports.createItem = async (req, res) => {
     }
     if (!req.tenantId) return errorResponse(res, 'Tenant context required to create item', 400);
     const item = await createItemWithRetry({
-      tenantId: req.tenantId, category, metalType, purity, karat, itemName, grossWeight, stoneWeight, netMetalWeight, designCode, description, stoneType, carat, cut, clarity, certificationNumber, costPrice, costMakingCharge: costMakingCharge || 0, costWastagePercent: costWastagePercent || 0, costStonePrice: costStonePrice || 0, sellingPrice, sellingMakingCharge: sellingMakingCharge || 0, sellingWastagePercent: sellingWastagePercent || 0, sellingStonePrice: sellingStonePrice || 0, makingCharge: makingCharge || 0, wastagePercent: wastagePercent || 0, tags: tags || [], images, status: status || 'In Stock', currentLocation, quantity: quantity || 1, karigarId: karigarId || null,
+      tenantId: req.tenantId, category, metalType, purity, karat, itemName, grossWeight, stoneWeight, netMetalWeight, designCode, description, stoneType, carat, stoneCarat, stoneWeightGram, stoneQuantity, stoneRate, stoneAmount, cut, clarity, certificationNumber, costPrice, costMakingCharge: costMakingCharge || 0, costWastagePercent: costWastagePercent || 0, costStonePrice: costStonePrice || 0, sellingPrice, sellingMakingCharge: sellingMakingCharge || 0, sellingWastagePercent: sellingWastagePercent || 0, sellingStonePrice: sellingStonePrice || 0, makingCharge: makingCharge || 0, wastagePercent: wastagePercent || 0, tags: tags || [], images, status: status || 'In Stock', currentLocation, quantity: quantity || 1, karigarId: karigarId || null,
     });
     await StockMovement.create({
       item: item._id,
@@ -117,7 +171,7 @@ exports.updateItem = async (req, res) => {
     if (!item) {
       return errorResponse(res, 'Item not found', 404);
     }
-    const allowedFields = ['category', 'metalType', 'purity', 'karat', 'itemName', 'grossWeight', 'stoneWeight', 'netMetalWeight', 'designCode', 'description', 'stoneType', 'carat', 'cut', 'clarity', 'certificationNumber', 'costPrice', 'costMakingCharge', 'costWastagePercent', 'costStonePrice', 'sellingPrice', 'sellingMakingCharge', 'sellingWastagePercent', 'sellingStonePrice', 'makingCharge', 'wastagePercent', 'tags', 'status', 'currentLocation', 'quantity', 'karigarId'];
+    const allowedFields = ['itemType', 'category', 'metalType', 'purity', 'karat', 'itemName', 'grossWeight', 'stoneWeight', 'netMetalWeight', 'designCode', 'description', 'stoneType', 'carat', 'stoneCarat', 'stoneWeightGram', 'stoneQuantity', 'stoneRate', 'stoneAmount', 'cut', 'clarity', 'certificationNumber', 'costPrice', 'costMakingCharge', 'costWastagePercent', 'costStonePrice', 'sellingPrice', 'sellingMakingCharge', 'sellingWastagePercent', 'sellingStonePrice', 'makingCharge', 'wastagePercent', 'tags', 'status', 'currentLocation', 'quantity', 'karigarId'];
     const previousStatus = item.status;
     const previousQuantity = item.quantity || 0;
     allowedFields.forEach((field) => {
@@ -191,6 +245,14 @@ exports.deleteItem = async (req, res) => {
       return errorResponse(res, 'Item not found', 404);
     }
     await item.softDelete();
+
+    // A loose parent retires all of its lots too, so they don't linger as
+    // sellable in Loose POS with an orphaned parent item.
+    if (item.itemType === 'loose') {
+      const lots = await LooseLot.find({ item: item._id });
+      await Promise.all(lots.map((lot) => lot.softDelete()));
+    }
+
     await ActivityLog.create({
       action: 'delete',
       module: 'item',
@@ -305,20 +367,47 @@ exports.getDashboardItemStats = async (req, res) => {
   try {
     const settings = await Settings.getSettings();
     const lowThreshold = settings?.lowStockThreshold || 5;
-    const [totalItems, inStock, soldCount, withKarigar, pawnCollateral, damaged, melted, totalValue, lowStockCount] = await Promise.all([
-      Item.countDocuments({ isDeleted: false }),
-      Item.countDocuments({ status: 'In Stock', isDeleted: false }),
+    const [latestGold, latestSilver, totalItems, totalQuantity, inStock, soldCount, withKarigar, pawnCollateral, damaged, melted, lowStockCount] = await Promise.all([
+      Rate.findOne({ metalType: 'gold' }).sort({ date: -1 }),
+      Rate.findOne({ metalType: 'silver' }).sort({ date: -1 }),
+      Item.aggregate(scopeAggregate([{ $match: { isDeleted: false } }, { $group: { _id: null, total: { $sum: '$quantity' } } }])),
+      Item.aggregate(scopeAggregate([{ $match: { isDeleted: false } }, { $group: { _id: null, total: { $sum: '$quantity' } } }])),
+      Item.aggregate(scopeAggregate([{ $match: { status: 'In Stock', isDeleted: false } }, { $group: { _id: null, total: { $sum: '$quantity' } } }])),
       Item.countDocuments({ status: 'Sold', isDeleted: false }),
       Item.countDocuments({ status: 'With Karigar', isDeleted: false }),
       Item.countDocuments({ status: 'Pawn Collateral', isDeleted: false }),
       Item.countDocuments({ status: 'Damaged', isDeleted: false }),
       Item.countDocuments({ status: 'Melted', isDeleted: false }),
-      Item.aggregate(scopeAggregate([{ $match: { status: 'In Stock', isDeleted: false } }, { $group: { _id: null, total: { $sum: { $multiply: ['$sellingPrice', '$quantity'] } } } }])),
       Item.countDocuments({ status: 'In Stock', isDeleted: false, quantity: { $lte: lowThreshold } }),
     ]);
+    const goldRate = toPerGramRate(latestGold);
+    const silverRate = toPerGramRate(latestSilver);
+    const inStockItems = await Item.find({ status: 'In Stock', isDeleted: false }).lean();
+    const looseIds = inStockItems.filter((it) => it.itemType === 'loose').map((it) => it._id);
+    const lotAgg = looseIds.length
+      ? await LooseLot.aggregate(scopeAggregate([
+          { $match: { item: { $in: looseIds }, isDeleted: false } },
+          { $group: { _id: '$item', remainingWeight: { $sum: '$remainingWeight' } } },
+        ]))
+      : [];
+    const remainingWeightByItem = new Map(lotAgg.map((r) => [String(r._id), r.remainingWeight]));
+    const inventoryValue = inStockItems.reduce((sum, item) => {
+      const rate = item.metalType === 'gold' ? goldRate : silverRate;
+      if (item.itemType === 'loose') {
+        // Loose items are tracked by lot; grossWeight is the whole-lot total,
+        // so value = remaining lot weight x rate x purity (no quantity factor).
+        const weight = (remainingWeightByItem.get(String(item._id)) ?? item.grossWeight) || 0;
+        return sum + weight * rate * ((item.purity || 0) / 1000);
+      }
+      const weight = item.netMetalWeight || 0;
+      return sum + weight * rate * ((item.purity || 0) / 1000) * (item.quantity || 1);
+    }, 0);
     return successResponse(res, {
-      totalItems, inStock, soldCount, withKarigar, pawnCollateral, damaged, melted,
-      inventoryValue: totalValue[0]?.total || 0,
+      totalItems: totalItems[0]?.total || 0,
+      totalQuantity: totalQuantity[0]?.total || 0,
+      inStock: inStock[0]?.total || 0,
+      soldCount, withKarigar, pawnCollateral, damaged, melted,
+      inventoryValue,
       lowStockCount,
     });
   } catch (error) {

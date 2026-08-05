@@ -4,6 +4,7 @@ const router = express.Router();
 router.use('/public', require('./publicRoutes'));
 router.use('/auth', require('./authRoutes'));
 router.use('/items', require('./itemRoutes'));
+router.use('/loose-lots', require('./looseLotRoutes'));
 router.use('/stock', require('./stockRoutes'));
 router.use('/karigars', require('./karigarRoutes'));
 router.use('/custom-orders', require('./customOrderRoutes'));

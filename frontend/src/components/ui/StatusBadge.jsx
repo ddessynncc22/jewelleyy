@@ -12,6 +12,8 @@ const statusColorMap = {
   Forfeited: "bg-red-50 text-red-700 border-red-200",
   Renewed: "bg-teal-50 text-teal-700 border-teal-200",
   Overdue: "bg-red-50 text-red-700 border-red-200",
+  "Stock In": "bg-emerald-50 text-emerald-700 border-emerald-200",
+  "Stock Out": "bg-red-50 text-red-700 border-red-200",
 };
 
 const defaultStyle = "bg-gray-100 text-gray-700 border-gray-200";

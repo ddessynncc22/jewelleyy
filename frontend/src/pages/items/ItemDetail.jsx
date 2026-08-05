@@ -184,7 +184,7 @@ const ItemDetail = () => {
             <div class="sku">${item.SKU}</div>
             <div class="info">${item.metalType} / ${item.karat ? `${item.karat}K` : ''} / ${item.purity || ''}</div>
             <div class="info">Gross: ${item.grossWeight}g | Stone: ${item.stoneWeight || 0}g | Net: ${item.netMetalWeight || 0}g</div>
-            <div class="price">$${Number(item.sellingPrice || 0).toLocaleString()}</div>
+            <div class="price">Rs. ${Number(item.sellingPrice || 0).toLocaleString()}</div>
             <div class="info">${item.barcode || item.SKU}</div>
           </div>
           `}

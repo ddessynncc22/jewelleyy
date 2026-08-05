@@ -2,11 +2,15 @@ import { useState, useEffect, useCallback } from 'react'
 
 import toast from 'react-hot-toast'
 
+import { Plus, Trash2 } from 'lucide-react'
+
 import { createItem, updateItem } from '../../services/itemService'
 import { getKarigars } from '../../services/karigarService'
-import { getCategories, createCategory } from '../../services/categoryService'
+import { getCategories, createCategory, deleteCategory } from '../../services/categoryService'
 
 import Modal from '../../components/ui/Modal'
+
+import ConfirmDialog from '../../components/ui/ConfirmDialog'
 
 import FormInput from '../../components/ui/FormInput'
 
@@ -125,6 +129,11 @@ const initialState = {
   karigarId: '',
   stoneType: '',
   carat: '',
+  stoneCarat: '',
+  stoneWeightGram: '',
+  stoneQuantity: '1',
+  stoneRate: '',
+  stoneAmount: '',
   cut: '',
   clarity: '',
   certificationNumber: '',
@@ -154,6 +163,14 @@ const validate = (values) => {
   if (Number(values.stoneWeight) < 0) {
     errors.stoneWeight = 'Stone weight cannot be negative'
   }
+  if (values.stoneType && values.stoneType !== 'none') {
+    if (values.stoneCarat !== '' && Number(values.stoneCarat) < 0) {
+      errors.stoneCarat = 'Carat cannot be negative'
+    }
+    if (Number(values.stoneQuantity) < 1) {
+      errors.stoneQuantity = 'Quantity must be at least 1'
+    }
+  }
   return errors
 }
 
@@ -165,6 +182,8 @@ const ItemForm = ({ item, onClose, onSuccess }) => {
   const [categories, setCategories] = useState([])
   const [karigars, setKarigars] = useState([])
   const [newCategoryName, setNewCategoryName] = useState('')
+  const [showCategoryInput, setShowCategoryInput] = useState(false)
+  const [categoryToDelete, setCategoryToDelete] = useState(null)
   const [images, setImages] = useState([])
   const [newFiles, setNewFiles] = useState([])
 
@@ -200,6 +219,11 @@ const ItemForm = ({ item, onClose, onSuccess }) => {
         karigarId: item.karigarId || '',
         stoneType: item.stoneType || '',
         carat: item.carat ?? '',
+        stoneCarat: item.stoneCarat ?? item.carat ?? '',
+        stoneWeightGram: item.stoneWeightGram ?? item.stoneWeight ?? '0',
+        stoneQuantity: String(item.stoneQuantity ?? item.quantity ?? 1),
+        stoneRate: item.stoneRate ?? '',
+        stoneAmount: item.stoneAmount ?? '',
         cut: item.cut || '',
         clarity: item.clarity || '',
         certificationNumber: item.certificationNumber || '',
@@ -313,6 +337,62 @@ const ItemForm = ({ item, onClose, onSuccess }) => {
     [handleChange],
   )
 
+  const round3 = (n) => Math.round(n * 1000) / 1000
+
+  const stoneCaratNum = Number(form.stoneCarat) || 0
+  const stoneQtyNum = Math.max(1, Number(form.stoneQuantity) || 1)
+  const stoneWeightGram = round3(stoneCaratNum * 0.2 * stoneQtyNum)
+  const totalStoneCarat = round3(stoneCaratNum * stoneQtyNum)
+  const stoneAmount = round3(totalStoneCarat * (Number(form.stoneRate) || 0))
+
+  const handleStoneCaratChange = useCallback(
+    (e) => {
+      const { value } = e.target
+      const v = Number(value)
+      setForm((prev) => {
+        const qty = Math.max(1, Number(prev.stoneQuantity) || 1)
+        const gram = round3((Number(value) || 0) * 0.2 * qty)
+        return { ...prev, stoneCarat: value, carat: value, stoneWeightGram: String(gram), stoneWeight: String(gram) }
+      })
+      setErrors((prev) => {
+        const next = { ...prev }
+        if (v < 0) next.stoneCarat = 'Carat cannot be negative'
+        else delete next.stoneCarat
+        return next
+      })
+    },
+    [],
+  )
+
+  const handleStoneQuantityChange = useCallback(
+    (e) => {
+      const { value } = e.target
+      const v = Number(value)
+      setForm((prev) => {
+        const gram = round3((Number(prev.stoneCarat) || 0) * 0.2 * (Math.max(1, v) || 1))
+        return { ...prev, stoneQuantity: value, stoneWeightGram: String(gram), stoneWeight: String(gram) }
+      })
+      setErrors((prev) => {
+        const next = { ...prev }
+        if (v < 1) next.stoneQuantity = 'Quantity must be at least 1'
+        else delete next.stoneQuantity
+        return next
+      })
+    },
+    [],
+  )
+
+  const handleStoneRateChange = useCallback(
+    (e) => {
+      const { value } = e.target
+      setForm((prev) => {
+        const totalCarat = round3((Number(prev.stoneCarat) || 0) * (Math.max(1, Number(prev.stoneQuantity) || 1)))
+        return { ...prev, stoneRate: value, stoneAmount: String(round3(totalCarat * (Number(value) || 0))) }
+      })
+    },
+    [],
+  )
+
   const removeExistingImage = useCallback((index) => {
     setImages((prev) => prev.filter((_, i) => i !== index))
   }, [])
@@ -346,6 +426,11 @@ const ItemForm = ({ item, onClose, onSuccess }) => {
       formData.append('karigarId', form.karigarId)
       formData.append('stoneType', form.stoneType)
       formData.append('carat', form.carat)
+      formData.append('stoneCarat', form.stoneCarat || '0')
+      formData.append('stoneWeightGram', form.stoneWeightGram || stoneWeightGram || '0')
+      formData.append('stoneQuantity', form.stoneQuantity || '1')
+      formData.append('stoneRate', form.stoneRate || '0')
+      formData.append('stoneAmount', form.stoneAmount || stoneAmount || '0')
       formData.append('cut', form.cut)
       formData.append('clarity', form.clarity)
       formData.append('certificationNumber', form.certificationNumber)
@@ -395,9 +480,35 @@ const ItemForm = ({ item, onClose, onSuccess }) => {
       setCategories((prev) => [...prev, cat].sort((a, b) => a.name.localeCompare(b.name)))
       setForm((prev) => ({ ...prev, category: cat.name }))
       setNewCategoryName('')
+      setShowCategoryInput(false)
       toast.success('Category created')
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to create category')
+    }
+  }
+
+  const confirmRemoveCategory = () => {
+    const cat = categories.find((c) => c.name === form.category)
+    if (!cat) {
+      toast.error('Select a category to remove')
+      return
+    }
+    setCategoryToDelete(cat)
+  }
+
+  const handleRemoveCategory = async () => {
+    if (!categoryToDelete) return
+    try {
+      await deleteCategory(categoryToDelete._id)
+      setCategories((prev) => prev.filter((c) => c._id !== categoryToDelete._id))
+      if (form.category === categoryToDelete.name) {
+        setForm((prev) => ({ ...prev, category: '' }))
+      }
+      toast.success('Category removed')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to remove category')
+    } finally {
+      setCategoryToDelete(null)
     }
   }
 
@@ -406,7 +517,7 @@ const ItemForm = ({ item, onClose, onSuccess }) => {
       isOpen={true}
       onClose={onClose}
       title={isEditing ? 'Edit Item' : 'Add New Item'}
-      size="xl"
+      size="5xl"
     >
       <form onSubmit={handleSubmit} className="space-y-8">
         <div>
@@ -424,33 +535,67 @@ const ItemForm = ({ item, onClose, onSuccess }) => {
               placeholder="Enter item name"
             />
             <div>
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <span className="text-sm font-medium text-[var(--color-text)]">
+                  Category
+                  <span className="text-red-500 ml-0.5">*</span>
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewCategoryName('')
+                      setShowCategoryInput((v) => !v)
+                    }}
+                    title={showCategoryInput ? 'Close' : 'Add new category'}
+                    className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-border)] px-2 py-1 text-xs font-medium text-[var(--color-primary)] transition-colors hover:bg-[var(--color-elevated)]"
+                  >
+                    <Plus size={14} /> {showCategoryInput ? 'Close' : 'Add'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmRemoveCategory}
+                    disabled={!form.category}
+                    title="Remove selected category"
+                    className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-border)] px-2 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <Trash2 size={14} /> Remove
+                  </button>
+                </div>
+              </div>
               <FormSelect
-                label="Category"
                 name="category"
                 value={form.category}
                 onChange={handleChange}
                 options={categories.map((c) => ({ value: c.name, label: c.name }))}
                 placeholder="Select category"
-                required
                 error={errors.category}
               />
-              <div className="flex gap-2 mt-2">
-                <input
-                  type="text"
-                  value={newCategoryName}
-                  onChange={(e) => setNewCategoryName(e.target.value)}
-                  placeholder="New category name..."
-                  className="flex-1 rounded-xl border border-[var(--color-border)] px-3 py-1.5 text-xs bg-[var(--color-card)] text-[var(--color-text)] placeholder-[var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:border-[var(--color-primary)] focus:ring-[var(--color-primary)]/20"
-                />
-                <button
-                  type="button"
-                  onClick={handleAddCategory}
-                  disabled={!newCategoryName.trim()}
-                  className="px-3 py-1.5 rounded-xl text-xs font-medium bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-dark)] disabled:opacity-40 transition-colors"
-                >
-                  + Add
-                </button>
-              </div>
+              {showCategoryInput && (
+                <div className="mt-2 flex items-center gap-2">
+                  <input
+                    autoFocus
+                    type="text"
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        handleAddCategory()
+                      }
+                      if (e.key === 'Escape') setShowCategoryInput(false)
+                    }}
+                    placeholder="New category name"
+                    className="flex-1 rounded-xl border border-[var(--color-border)] px-3 py-1.5 text-xs bg-[var(--color-card)] text-[var(--color-text)] placeholder-[var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:border-[var(--color-primary)] focus:ring-[var(--color-primary)]/20"
+                  />
+                  <Button type="button" size="sm" onClick={handleAddCategory} disabled={!newCategoryName.trim()}>
+                    Save
+                  </Button>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setShowCategoryInput(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              )}
             </div>
             <FormInput
               label="Design Code"
@@ -589,15 +734,37 @@ const ItemForm = ({ item, onClose, onSuccess }) => {
               placeholder="Select stone type"
             />
             {form.stoneType && form.stoneType !== 'none' && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <FormInput
-                  label="Carat"
-                  name="carat"
+                  label="Carat (per stone)"
+                  name="stoneCarat"
                   type="number"
                   step="0.01"
-                  value={form.carat}
-                  onChange={handleChange}
+                  min="0"
+                  value={form.stoneCarat}
+                  onChange={handleStoneCaratChange}
+                  error={errors.stoneCarat}
                   placeholder="0.00"
+                />
+                <FormInput
+                  label="Stone Quantity"
+                  name="stoneQuantity"
+                  type="number"
+                  step="1"
+                  min="1"
+                  value={form.stoneQuantity}
+                  onChange={handleStoneQuantityChange}
+                  error={errors.stoneQuantity}
+                  placeholder="1"
+                />
+                <FormInput
+                  label="Stone Weight (g)"
+                  name="stoneWeightGram"
+                  type="number"
+                  step="0.001"
+                  value={stoneWeightGram}
+                  disabled
+                  placeholder="0.000"
                 />
                 <FormSelect
                   label="Cut"
@@ -614,6 +781,25 @@ const ItemForm = ({ item, onClose, onSuccess }) => {
                   onChange={handleChange}
                   options={CLARITY_OPTIONS}
                   placeholder="Select clarity"
+                />
+                <FormInput
+                  label="Stone Rate (per carat)"
+                  name="stoneRate"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={form.stoneRate}
+                  onChange={handleStoneRateChange}
+                  placeholder="0.00"
+                />
+                <FormInput
+                  label="Stone Amount"
+                  name="stoneAmount"
+                  type="number"
+                  step="0.01"
+                  value={form.stoneAmount}
+                  disabled
+                  placeholder="0.00"
                 />
                 <FormInput
                   label="Certification Number"
@@ -722,7 +908,7 @@ const ItemForm = ({ item, onClose, onSuccess }) => {
               <h4 className="text-sm font-medium text-gray-700 mb-2">Cost</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormInput
-                  label="Making Charge ($)"
+                  label="Making Charge (Rs.)"
                   name="costMakingCharge"
                   type="number"
                   step="0.01"
@@ -742,7 +928,7 @@ const ItemForm = ({ item, onClose, onSuccess }) => {
                   placeholder="0"
                 />
                 <FormInput
-                  label="Stone/Mala Price ($)"
+                  label="Stone/Mala Price (Rs.)"
                   name="costStonePrice"
                   type="number"
                   step="0.01"
@@ -762,7 +948,7 @@ const ItemForm = ({ item, onClose, onSuccess }) => {
               <h4 className="text-sm font-medium text-gray-700 mb-2">Selling</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormInput
-                  label="Making Charge ($)"
+                  label="Making Charge (Rs.)"
                   name="sellingMakingCharge"
                   type="number"
                   step="0.01"
@@ -782,7 +968,7 @@ const ItemForm = ({ item, onClose, onSuccess }) => {
                   placeholder="0"
                 />
                 <FormInput
-                  label="Stone/Mala Price ($)"
+                  label="Stone/Mala Price (Rs.)"
                   name="sellingStonePrice"
                   type="number"
                   step="0.01"
@@ -808,6 +994,15 @@ const ItemForm = ({ item, onClose, onSuccess }) => {
           </Button>
         </div>
       </form>
+
+      <ConfirmDialog
+        isOpen={!!categoryToDelete}
+        onClose={() => setCategoryToDelete(null)}
+        onConfirm={handleRemoveCategory}
+        title="Remove category"
+        message={`Delete category "${categoryToDelete?.name}"? Items already using it keep their category name.`}
+        confirmText="Remove"
+      />
     </Modal>
   )
 }

@@ -30,6 +30,7 @@ export default function InventoryValue() {
   const stats = data?.data || {};
   const groups = stats.groups || [];
   const totalValue = stats.totalValue || 0;
+  const totalQuantity = groups.reduce((s, g) => s + (g.totalQuantity || 0), 0);
   const goldRate = stats.goldRate?.rate || 0;
   const silverRate = stats.silverRate?.rate || 0;
 
@@ -55,21 +56,21 @@ export default function InventoryValue() {
           value={`Rs ${totalValue.toLocaleString()}`}
           icon={Package}
           color="green"
-          subtitle={`${groups.reduce((s, g) => s + g.count, 0)} items in stock`}
+          subtitle={`${totalQuantity} items in stock`}
         />
         <StatCard
           title="Gold"
           value={`Rs ${(gold?.totalValue || 0).toLocaleString()}`}
           icon={Gem}
           color="yellow"
-          subtitle={`${gold?.count || 0} items · ${(gold?.totalWeight || 0).toLocaleString()} g`}
+          subtitle={`${gold?.totalQuantity || 0} items · ${(gold?.totalWeight || 0).toLocaleString()} g`}
         />
         <StatCard
           title="Silver"
           value={`Rs ${(silver?.totalValue || 0).toLocaleString()}`}
           icon={Coins}
           color="gray"
-          subtitle={`${silver?.count || 0} items · ${(silver?.totalWeight || 0).toLocaleString()} g`}
+          subtitle={`${silver?.totalQuantity || 0} items · ${(silver?.totalWeight || 0).toLocaleString()} g`}
         />
       </div>
     </div>

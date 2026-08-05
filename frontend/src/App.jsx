@@ -26,8 +26,6 @@ import ItemDetail from "./pages/items/ItemDetail";
 
 import StockList from "./pages/stock/StockList";
 
-import StockForm from "./pages/stock/StockForm";
-
 import KarigarList from "./pages/karigar/KarigarList";
 
 import KarigarForm from "./pages/karigar/KarigarForm";
@@ -51,6 +49,16 @@ import PawnForm from "./pages/pawn/PawnForm";
 import PawnDetail from "./pages/pawn/PawnDetail";
 
 import POS from "./pages/pos/POS";
+
+import LoosePrintInvoice from "./pages/pos/LoosePrintInvoice";
+
+import LooseLotList from "./pages/loose/LooseLotList";
+
+import LooseLotDetail from "./pages/loose/LooseLotDetail";
+
+import LooseStockReport from "./pages/loose/LooseStockReport";
+
+import LooseDayEndReport from "./pages/loose/LooseDayEndReport";
 
 import SaleList from "./pages/pos/SaleList";
 
@@ -195,6 +203,10 @@ export default function App() {
         <Route path="/items/new" element={<ItemForm />} />
         <Route path="/items/:id" element={<ItemDetail />} />
         <Route path="/items/:id/edit" element={<ItemForm />} />
+        <Route path="/loose-lots" element={<LooseLotList />} />
+        <Route path="/loose-lots/:id" element={<LooseLotDetail />} />
+        <Route path="/loose-lots/reports/stock" element={<LooseStockReport />} />
+        <Route path="/loose-lots/reports/day-end" element={<LooseDayEndReport />} />
         <Route path="/stock" element={<StockList />} />
         <Route path="/karigar" element={<KarigarList />} />
         <Route path="/karigar/pending-jobs" element={<KarigarPendingJobs />} />
@@ -237,6 +249,7 @@ export default function App() {
         <Route path="/admin/rates" element={<SuperadminRoute><RateHistory /></SuperadminRoute>} />
       </Route>
       <Route path="/pos/print-invoice/:id" element={<ProtectedRoute><PrintInvoice /></ProtectedRoute>} />
+      <Route path="/pos/loose-bill/:id" element={<ProtectedRoute><LoosePrintInvoice /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

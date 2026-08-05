@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { getSale } from '../../services/posService';
 import InvoiceDocument from '../../components/invoice/InvoiceDocument';
@@ -8,6 +8,7 @@ import { formatDate, numberToWords } from '../../utils/helpers';
 import { getSettings } from '../../services/settingsService';
 
 export default function PrintInvoice() {
+  const navigate = useNavigate();
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const autoPrint = searchParams.get('print') === '1';
@@ -79,11 +80,11 @@ export default function PrintInvoice() {
   const taxLines = Array.isArray(taxDetails.taxes) ? taxDetails.taxes.filter((t) => Number(t.amount) > 0) : [];
   const totalTax = Number(taxDetails.totalTax) || taxLines.reduce((sum, t) => sum + Number(t.amount || 0), 0);
   const discount = sale.discountAmount || taxDetails.discountAmount || 0;
-  const oldGoldAmount = Number(sale.oldGoldDetails?.deductibleAmount || 0);
   // Taxes (0.5% service fee on gold + 13% VAT on diamonds) are read from the
   // stored taxDetails rather than recomputed, so the printed bill always matches
-  // what was actually charged at the till.
-  const taxableAmount = Number((subtotal - discount - oldGoldAmount).toFixed(2));
+  // what was actually charged at the till. The taxable base is the full goods
+  // value — old gold traded in is a payment, it does not reduce it.
+  const taxableAmount = Number((subtotal - discount).toFixed(2));
   const rawTotal = Number((subtotal - discount + totalTax).toFixed(2));
   const received = Number(sale.actualAmountReceived) || 0;
   let grandTotal = Math.round(rawTotal);
@@ -171,12 +172,20 @@ export default function PrintInvoice() {
       <div className="p-6 max-w-[1050px] mx-auto print:p-0">
         <div className="no-print flex justify-between items-center mb-4">
           <h1 className="text-lg font-bold">Invoice Preview</h1>
-          <button
-            onClick={() => window.print()}
-            className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700"
-          >
-            Print Invoice
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate(-1)}
+              className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100"
+            >
+              Back
+            </button>
+            <button
+              onClick={() => window.print()}
+              className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700"
+            >
+              Print Invoice
+            </button>
+          </div>
         </div>
 
         <InvoiceDocument
