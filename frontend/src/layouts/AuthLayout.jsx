@@ -9,7 +9,7 @@ export default function AuthLayout() {
 
   // On a shop subdomain the sign-in page identifies the shop, so staff can tell
   // at a glance they are at the right address.
-  const title = isShopHost && shop ? shop.storeName || shop.name : "Core";
+  const title = isShopHost && shop ? shop.storeName || shop.name : "Jewelcore";
   const subtitle = isShopHost && shop ? "Shop Sign In" : "Inventory Management System";
 
   return (
@@ -35,7 +35,7 @@ export default function AuthLayout() {
           <Outlet />
         </div>
         <p className="text-center text-xs text-gray-400 mt-6">
-          &copy; {new Date().getFullYear()} Core
+          &copy; {new Date().getFullYear()} Jewelcore
         </p>
       </div>
     </div>
