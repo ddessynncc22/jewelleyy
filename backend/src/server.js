@@ -13,13 +13,15 @@ connectDB();
 // rate the moment the page refreshes. The 11:30 NPT window is when hamropatro
 // usually publishes; the later runs are safety nets that make a restart
 // unnecessary when the first attempt fails.
-const SCRAPE_CRON_TIMES = ['30 11 * * *', '0 13 * * *', '0 15 * * *', '0 17 * * *'];
+const SCRAPE_CRON_TIMES = ['31 11 * * *', '0 13 * * *', '0 15 * * *', '0 17 * * *'];
 for (const expr of SCRAPE_CRON_TIMES) {
   cron.schedule(
     expr,
     () => {
       console.log(`[Cron] Running rate scraper (${expr} NPT)...`);
-      runScraper();
+      // force: a visitor opening the site shortly beforehand starts an on-demand
+      // scrape, and its cooldown would otherwise swallow this scheduled run.
+      runScraper({ force: true });
     },
     { timezone: 'Asia/Kathmandu' }
   );
@@ -30,7 +32,7 @@ for (const expr of SCRAPE_CRON_TIMES) {
 async function runScraperIfMissing() {
   try {
     console.log('[RateScraper] Running catch-up scrape at boot');
-    await runScraper();
+    await runScraper({ force: true });
   } catch (err) {
     console.error('[RateScraper] Catch-up scrape failed:', err.message);
   }

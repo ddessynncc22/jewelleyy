@@ -1,6 +1,7 @@
 const Rate = require('../models/Rate');
 const ActivityLog = require('../models/ActivityLog');
 const { successResponse, errorResponse, paginatedResponse } = require('../utils/response');
+const { ensureFreshRates } = require('../services/rateScraper');
 
 exports.getRates = async (req, res) => {
   try {
@@ -23,12 +24,23 @@ exports.getRates = async (req, res) => {
   }
 };
 
+// Each metal stores a tola row and a gram row under the same date, so sorting by
+// date alone left the winner to storage order — callers label this value
+// "Per Tola", so ask for tola explicitly and fall back to whatever exists.
+const latestFor = async (metalType) => {
+  const tola = await Rate.findOne({ metalType, unit: 'tola' }).sort({ date: -1 });
+  if (tola) return tola;
+  return Rate.findOne({ metalType }).sort({ date: -1 });
+};
+
 exports.getLatestRates = async (req, res) => {
   try {
-    const [goldRate, silverRate] = await Promise.all([
-      Rate.findOne({ metalType: 'gold' }).sort({ date: -1 }),
-      Rate.findOne({ metalType: 'silver' }).sort({ date: -1 }),
-    ]);
+    // Opening the site pulls a fresh rate when today's is missing or predates the
+    // 11:31 NPT cutoff. A no-op otherwise, and internally throttled, so this stays
+    // a plain database read on every load except the first one after 11:31.
+    await ensureFreshRates();
+
+    const [goldRate, silverRate] = await Promise.all([latestFor('gold'), latestFor('silver')]);
     return successResponse(res, { gold: goldRate || null, silver: silverRate || null });
   } catch (error) {
     return errorResponse(res, error.message, 500);
