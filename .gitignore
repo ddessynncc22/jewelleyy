@@ -10,5 +10,5 @@ dist/
 backend/uploads/
 *.tmp.js
 *.log
-
+.\CLAUDE.md
 CLAUDE.md
