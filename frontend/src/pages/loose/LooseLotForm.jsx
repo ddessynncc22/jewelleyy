@@ -76,6 +76,7 @@ const LooseLotForm = ({ lot, onClose, onSuccess }) => {
   const [itemResults, setItemResults] = useState([])
   const [linkedItem, setLinkedItem] = useState(null)
   const [itemPickerOpen, setItemPickerOpen] = useState(false)
+  const [showDimensions, setShowDimensions] = useState(false)
 
   const loadCategories = () =>
     getCategories()

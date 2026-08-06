@@ -81,8 +81,7 @@ body {
 .gold-text { color: var(--color-primary) !important; }
 
 .card-value {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow: visible;
+  white-space: normal;
   max-width: 100%;
 }

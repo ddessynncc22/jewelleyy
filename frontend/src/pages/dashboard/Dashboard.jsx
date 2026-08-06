@@ -74,17 +74,17 @@ const metalColors = {
 function DistributionRow({ label, count, total, pct, barColor, badgeClass }) {
   const share = total ? Math.round((count / total) * 100) : 0
   return (
-    <div>
+    <div className="py-2">
       <div className="flex items-center justify-between gap-2 mb-1.5">
-        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${badgeClass}`}>
+        <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${badgeClass} flex-shrink-0`}>
           {label}
         </span>
-        <span className="text-sm font-semibold text-[var(--color-text)]">
+        <span className="text-sm font-semibold text-[var(--color-text)] text-right flex-shrink-0">
           {count}
           <span className="text-xs font-normal text-[var(--color-text-secondary)]"> · {share}%</span>
         </span>
       </div>
-      <div className="h-2 rounded-full bg-[var(--color-elevated)] overflow-hidden">
+      <div className="h-1.5 rounded-full bg-[var(--color-elevated)] overflow-hidden">
         <div
           className={`h-full rounded-full transition-all duration-500 ${barColor}`}
           style={{ width: `${pct}%` }}
@@ -205,11 +205,11 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <Card title="Items by Status" icon={Grid3X3}>
+        <Card title="Items by Status" icon={Grid3X3} className="min-h-[200px]">
           {byStatus.length === 0 ? (
             <div className="text-center py-8 text-sm text-gray-500">No data</div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {byStatus.map((s) => (
                 <DistributionRow
                   key={s._id}
@@ -225,11 +225,11 @@ export default function Dashboard() {
           )}
         </Card>
 
-        <Card title="Items by Metal Type" icon={Layers}>
+        <Card title="Items by Metal Type" icon={Layers} className="min-h-[200px]">
           {byMetal.length === 0 ? (
             <div className="text-center py-8 text-sm text-gray-500">No data</div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {byMetal.map((m) => (
                 <DistributionRow
                   key={m._id}
@@ -245,7 +245,7 @@ export default function Dashboard() {
           )}
         </Card>
 
-        <Card title={`Low Stock (${stats.lowStockItems || 0})`} icon={Package}>
+        <Card title={`Low Stock (${stats.lowStockItems || 0})`} icon={Package} className="min-h-[200px]">
           {stats.lowStockItemList?.length > 0 ? (
             <div className="space-y-2">
               {stats.lowStockItemList.map((item) => (

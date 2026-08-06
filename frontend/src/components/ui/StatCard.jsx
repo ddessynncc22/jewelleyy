@@ -38,7 +38,7 @@ const StatCard = ({
   const TrendIcon = trend ? trendIcons[trend] : null;
   const accent = accentColors[color] || accentColors.blue;
 
-  return (
+return (
     <div
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}
@@ -50,12 +50,17 @@ const StatCard = ({
                 e.preventDefault();
                 onClick(e);
               }
-        }
+            }
           : undefined
       }
+      className={`group rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-5 shadow-sm transition-all duration-200 ${
+        onClick
+          ? "cursor-pointer hover:shadow-lg hover:-translate-y-0.5"
+          : ""
+      }`}
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
+        <div className="min-w-0 flex-auto">
           <p className="text-sm font-medium text-[var(--color-text-secondary)] truncate" title={title}>
             {title}
           </p>
@@ -63,7 +68,7 @@ const StatCard = ({
             {value}
           </p>
           {subtitle && (
-           <p className="mt-1 text-xs text-[var(--color-text-secondary)] truncate">
+           <p className="mt-1 text-xs text-[var(--color-text-secondary)] break-words">
                {subtitle}
              </p>
           )}
@@ -79,6 +84,7 @@ const StatCard = ({
         {icon && (
           <div
             className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${accent} transition-transform duration-200 group-hover:scale-110`}
+            style={{ flexShrink: 0 }}
           >
             {isComp(icon) ? createElement(icon, { size: 22 }) : icon}
           </div>
