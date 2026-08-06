@@ -33,6 +33,16 @@ async function hasRatesForToday() {
   return Rate.exists({ date: { $gte: today, $lt: end } });
 }
 
+// When hamropatro's number for the day is treated as final. Anything stored
+// before this is presumed to be yesterday's carried-over value. Keep in sync
+// with the first entry of SCRAPE_CRON_TIMES in server.js.
+const PUBLISH_OFFSET_MS = (11 * 60 + 31) * 60 * 1000;
+
+// The instant 11:31 NPT falls on for the current Nepal day.
+function publishInstant() {
+  return new Date(getNepalToday().getTime() + PUBLISH_OFFSET_MS);
+}
+
 function parseNpr(text) {
   const cleaned = (text || '').replace(/[^0-9,.]/g, '').replace(/,/g, '');
   const num = parseFloat(cleaned);
@@ -177,6 +187,10 @@ async function saveRates(rates) {
         await existing.save();
         console.log(`[RateScraper] Updated ${entry.metalType}/${entry.unit}: ${oldRate} → ${entry.rate}`);
       } else {
+        // Touch the row even though the value is identical. updateOne bumps
+        // updatedAt where an unmodified save() would be a no-op, and isStale()
+        // reads updatedAt to tell "checked after 11:31" from "never rechecked".
+        await Rate.updateOne({ _id: existing._id }, { $set: { rate: entry.rate } });
         console.log(`[RateScraper] Unchanged ${entry.metalType}/${entry.unit} — already up to date`);
       }
     } else {
@@ -186,7 +200,7 @@ async function saveRates(rates) {
   }
 }
 
-async function runScraper() {
+async function runScraperOnce() {
   const maxAttempts = 3;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
@@ -217,4 +231,86 @@ async function runScraper() {
   }
 }
 
-module.exports = { runScraper, scrapeRates, saveRates, getNepalToday, hasRatesForToday };
+// Only one scrape may be in flight, and unforced callers may not start one more
+// often than this. Both guards exist because GET /rates/latest is public and
+// unauthenticated — without them, page loads would hammer hamropatro.
+const MIN_INTERVAL_MS = 10 * 60 * 1000;
+
+let inFlight = null;
+let lastAttemptAt = 0;
+
+/**
+ * Runs the scraper, collapsing concurrent callers onto one run. `force` bypasses
+ * the cooldown and is what the cron uses, so a page load shortly beforehand can
+ * never turn a scheduled run into a no-op. Never throws.
+ */
+function runScraper({ force = false } = {}) {
+  if (inFlight) return inFlight;
+
+  if (!force && Date.now() - lastAttemptAt < MIN_INTERVAL_MS) {
+    return Promise.resolve(undefined);
+  }
+  lastAttemptAt = Date.now();
+
+  const pending = runScraperOnce().finally(() => {
+    inFlight = null;
+  });
+
+  inFlight = pending;
+  return pending;
+}
+
+/**
+ * True when today's rate is missing, or when it was last refreshed before
+ * today's 11:31 NPT cutoff and that time has passed — i.e. what we are holding
+ * is yesterday's number.
+ */
+async function isStale(now = new Date()) {
+  const today = getNepalToday();
+  const end = new Date(today.getTime() + 86400000);
+
+  const row = await Rate.findOne({
+    metalType: 'gold',
+    unit: 'tola',
+    date: { $gte: today, $lt: end },
+  })
+    .select('updatedAt')
+    .lean();
+
+  if (!row) return true;
+
+  const publishAt = publishInstant();
+  if (now < publishAt) return false;
+  return new Date(row.updatedAt) < publishAt;
+}
+
+/**
+ * Called from GET /rates/latest so opening the site pulls a fresh rate. Scrapes
+ * only when the data is actually stale and waits at most `waitMs` — if
+ * hamropatro is slow the visitor still gets what is already stored, and the
+ * scrape finishes in the background for whoever loads next.
+ */
+async function ensureFreshRates({ waitMs = 4000 } = {}) {
+  try {
+    if (!(await isStale())) return false;
+    const pending = runScraper();
+    if (waitMs > 0) {
+      await Promise.race([pending, new Promise((r) => setTimeout(r, waitMs))]);
+    }
+    return true;
+  } catch (err) {
+    console.error('[RateScraper] Freshness check failed:', err.message);
+    return false;
+  }
+}
+
+module.exports = {
+  runScraper,
+  scrapeRates,
+  saveRates,
+  getNepalToday,
+  hasRatesForToday,
+  publishInstant,
+  isStale,
+  ensureFreshRates,
+};
