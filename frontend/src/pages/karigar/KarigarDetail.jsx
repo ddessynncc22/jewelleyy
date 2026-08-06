@@ -86,6 +86,7 @@ const KarigarDetail = () => {
     goldPurity: '999',
     ratePerGram: '',
     note: '',
+    payFull: false,
   })
   const [goldForm, setGoldForm] = useState({
     materialIndex: '',
@@ -199,9 +200,13 @@ const KarigarDetail = () => {
     e.preventDefault()
     setSubmitting(true)
     try {
+      const m = (karigar.materials || [])[Number(paymentForm.materialIndex)]
+      const pending = paymentForm.payFull && m
+        ? Math.max(0, (Number(m.paymentDue) || Number(m.payment) || 0) - (Number(m.paymentReceived) || 0))
+        : Number(paymentForm.amount)
       const payload = {
         materialIndex: Number(paymentForm.materialIndex),
-        amount: paymentForm.type === 'cash' ? Number(paymentForm.amount) : 0,
+        amount: paymentForm.type === 'cash' ? pending : 0,
         type: paymentForm.type,
         goldWeight: paymentForm.type === 'gold' ? Number(paymentForm.goldWeight) : undefined,
         goldKarat: Number(paymentForm.goldKarat),
@@ -212,7 +217,7 @@ const KarigarDetail = () => {
       await recordKarigarPayment(id, Number(paymentForm.materialIndex), payload)
       toast.success('Payment recorded successfully')
       setPaymentModalOpen(false)
-      setPaymentForm({ materialIndex: '', amount: '', type: 'cash', goldWeight: '', goldKarat: '24', goldPurity: '999', ratePerGram: '', note: '' })
+      setPaymentForm({ materialIndex: '', amount: '', type: 'cash', goldWeight: '', goldKarat: '24', goldPurity: '999', ratePerGram: '', note: '', payFull: false })
       fetchKarigar()
       fetchPaymentHistory()
     } catch (err) {
@@ -753,7 +758,7 @@ const totalGoldTaken = (karigar.materials || []).reduce((s, m) => s + (m.goldRec
               {reportCards.map((c) => (
                 <Card key={c.label}>
                   <p className="text-sm text-gray-500">{c.label}</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{c.value}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1 card-value">{c.value}</p>
                 </Card>
               ))}
             </div>
@@ -1100,6 +1105,23 @@ const totalGoldTaken = (karigar.materials || []).reduce((s, m) => s + (m.goldRec
                 </div>
               );
             })() : null}
+            <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-700">
+              <input
+                type="checkbox"
+                checked={paymentForm.payFull}
+                onChange={(e) => {
+                  const m = (karigar.materials || [])[Number(paymentForm.materialIndex)]
+                  const pending = m ? Math.max(0, (Number(m.paymentDue) || Number(m.payment) || 0) - (Number(m.paymentReceived) || 0)) : 0
+                  setPaymentForm((p) => ({
+                    ...p,
+                    payFull: e.target.checked,
+                    amount: e.target.checked ? String(pending) : p.amount,
+                  }))
+                }}
+                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              Pay Full Amount
+            </label>
            <FormSelect
              label="Payment Type"
              name="type"

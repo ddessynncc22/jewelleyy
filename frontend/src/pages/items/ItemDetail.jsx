@@ -2,11 +2,13 @@ import { useState, useEffect, useCallback } from 'react'
 
 import { useParams, useNavigate } from 'react-router-dom'
 
-import { ArrowLeft, Edit, Trash2, Package, History, Copy, Printer, Link, FileText, DollarSign, MessageSquare } from 'lucide-react'
+import { ArrowLeft, Edit, Trash2, Package, History, Copy, Printer, Link, FileText, DollarSign, MessageSquare, QrCode } from 'lucide-react'
 
 import toast from 'react-hot-toast'
 
-import { getItem, deleteItem, cloneItem } from '../../services/itemService'
+import { useAuth } from '../../hooks/useAuth'
+
+import { getItem, deleteItem, cloneItem, regenerateItemQrToken } from '../../services/itemService'
 
 import { getStockHistory } from '../../services/stockService'
 
@@ -24,7 +26,7 @@ import ErrorState from '../../components/ui/ErrorState'
 
 import DataTable from '../../components/ui/DataTable'
 
-import { formatWeight, formatCurrency, formatDate, formatDateTime, getImageSrc } from '../../utils/helpers'
+import { formatWeight, formatCurrency, formatDate, formatDateTime, getImageSrc, getDiamondPerStoneCarat } from '../../utils/helpers'
 import { printBarcodeLabels } from '../../utils/barcodeLabels'
 
 import { getActivityLogs } from '../../services/auditService'
@@ -51,6 +53,9 @@ const Section = ({ title, icon: Icon, children }) => (
 const ItemDetail = () => {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { user } = useAuth()
+
+  const canRegenerateQr = user?.role === 'admin' || user?.role === 'manager'
 
   const [item, setItem] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -138,61 +143,18 @@ const ItemDetail = () => {
   }
 
   const handlePrintBarcode = (size) => {
-    const isLoop = size === 'loop'
-    const printWindow = window.open('', '_blank')
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Barcode - ${item.SKU}</title>
-          <style>
-            ${isLoop ? `@page { size: 90mm 15mm; margin: 0; }
-            * { box-sizing: border-box; margin: 0; padding: 0; }
-            body { font-family: Arial; width: 90mm; height: 15mm; display: flex; align-items: center; }
-            .label { width: 90mm; height: 15mm; display: flex; flex-direction: row; align-items: center; justify-content: space-between; padding: 1mm 3mm; overflow: hidden; }
-            .left { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; flex: 1; min-width: 0; }
-            .right { display: flex; flex-direction: column; align-items: flex-end; justify-content: center; text-align: right; flex-shrink: 0; }
-            .item-name { font-size: 8px; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-            .sku { font-weight: bold; letter-spacing: 0.5px; font-size: 11px; line-height: 1.2; }
-            .info { color: #444; font-size: 6px; line-height: 1.1; }
-            .price { font-weight: bold; font-size: 8px; line-height: 1.2; }
-            .barcode { color: #888; letter-spacing: 0.5px; font-size: 7px; line-height: 1; }`
-            : `
-            body { font-family: Arial; text-align: center; padding: 40px; }
-            .label { border: 2px dashed #ccc; display: inline-block; padding: 20px 40px; border-radius: 8px; }
-            h2 { margin: 0 0 4px; font-size: 18px; }
-            .sku { font-size: 24px; font-weight: bold; letter-spacing: 2px; margin: 8px 0; }
-            .info { font-size: 12px; color: #666; margin: 2px 0; }
-            .price { font-size: 16px; font-weight: bold; margin: 8px 0; }`}
-          </style>
-        </head>
-        <body>
-          ${isLoop ? `
-          <div class="label">
-            <div class="left">
-              <div class="item-name">${item.itemName}</div>
-              <div class="sku">${item.SKU}</div>
-            </div>
-            <div class="right">
-              <div class="info">${item.metalType}${item.karat ? ` ${item.karat}K` : ''}${item.purity ? ` ${item.purity}` : ''}</div>
-              <div class="info">W: ${item.grossWeight}g</div>
-              <div class="barcode">${item.barcode || item.SKU}</div>
-            </div>
-          </div>
-          ` : `
-          <div class="label">
-            <h2>${item.itemName}</h2>
-            <div class="sku">${item.SKU}</div>
-            <div class="info">${item.metalType} / ${item.karat ? `${item.karat}K` : ''} / ${item.purity || ''}</div>
-            <div class="info">Gross: ${item.grossWeight}g | Stone: ${item.stoneWeight || 0}g | Net: ${item.netMetalWeight || 0}g</div>
-            <div class="price">Rs. ${Number(item.sellingPrice || 0).toLocaleString()}</div>
-            <div class="info">${item.barcode || item.SKU}</div>
-          </div>
-          `}
-          <script>window.print()</script>
-        </body>
-      </html>
-    `)
-    printWindow.document.close()
+    printBarcodeLabels({ items: [item], size, title: `Tag - ${item.SKU}` })
+  }
+
+  const handleRegenerateQr = async () => {
+    try {
+      const res = await regenerateItemQrToken(id)
+      const updated = res.data.data || res.data
+      setItem(updated)
+      toast.success('QR token regenerated — reprint the tag to update the QR')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to regenerate QR')
+    }
   }
 
   const handleFormSuccess = () => {
@@ -277,6 +239,11 @@ const ItemDetail = () => {
           <Button variant="outline" icon={Copy} onClick={handleClone} loading={cloning} size="sm">
             Clone
           </Button>
+          {canRegenerateQr && (
+            <Button variant="outline" icon={QrCode} onClick={handleRegenerateQr} size="sm">
+              Regenerate QR
+            </Button>
+          )}
           <Button variant="outline" icon={Edit} onClick={() => setShowForm(true)} size="sm">
             Edit
           </Button>
@@ -310,17 +277,26 @@ const ItemDetail = () => {
           <Section title="General" icon={Package}>
             <DetailRow label="Item Name" value={item.itemName} />
             <DetailRow label="SKU" value={item.SKU} />
-            <DetailRow
-              label="Category"
-              value={
-                item.category
-                  ? item.category.charAt(0).toUpperCase() +
-                    item.category.slice(1).replace(/_/g, ' ')
-                  : '-'
-              }
-            />
+             <DetailRow
+               label="Category"
+               value={
+                 item.category
+                   ? item.category.charAt(0).toUpperCase() +
+                     item.category.slice(1).replace(/_/g, ' ')
+                   : '-'
+               }
+             />
+             <DetailRow label="Subcategory" value={item.subcategory || '-'} />
             <DetailRow label="Design Code" value={item.designCode} />
             <DetailRow label="Barcode" value={item.barcode} />
+            <DetailRow
+              label="QR Lookup"
+              value={item.qrToken ? (
+                <a href={`/lookup/${item.qrToken}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                  /lookup/{item.qrToken.slice(0, 8)}...
+                </a>
+              ) : '-'}
+            />
             <DetailRow label="Quantity" value={item.quantity ?? '-'} />
             <DetailRow label="Description" value={item.description} />
           </Section>
@@ -386,7 +362,7 @@ const ItemDetail = () => {
                   : '-'
               }
             />
-            <DetailRow label="Carat" value={item.carat ? `${item.carat} ct` : '-'} />
+            <DetailRow label="Carat" value={getDiamondPerStoneCarat(item) > 0 ? `${getDiamondPerStoneCarat(item)} ct` : '-'} />
             <DetailRow
               label="Cut"
               value={

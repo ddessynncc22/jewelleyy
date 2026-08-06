@@ -5,6 +5,7 @@ import { X, Plus, Minus, ShoppingCart, Package, TrendingUp, Printer, Layers, Ale
 import { getItems, getItemByBarcode } from '../../services/itemService'
 import { getLooseLots, getLooseLotByBarcode } from '../../services/looseLotService'
 import { getCustomers, createCustomer } from '../../services/customerService'
+import { getUsers } from '../../services/userService'
 import { getLatestRates } from '../../services/rateService'
 import { checkoutSale, getDiamondVatStatus } from '../../services/posService'
 import { getSettings, getCachedSettings } from '../../services/settingsService'
@@ -118,9 +119,10 @@ const POS = ({ mode = 'standard' }) => {
   const [loading, setLoading] = useState(false)
   const [lots, setLots] = useState([])
   const [lotsLoading, setLotsLoading] = useState(false)
-  const [search, setSearch] = useState('')
-  const [categoryFilter, setCategoryFilter] = useState('')
-  const [metalFilter, setMetalFilter] = useState('')
+   const [search, setSearch] = useState('')
+   const [categoryFilter, setCategoryFilter] = useState('')
+   const [subcategoryFilter, setSubcategoryFilter] = useState('')
+   const [metalFilter, setMetalFilter] = useState('')
   const [categories, setCategories] = useState([])
   const [metalTypes, setMetalTypes] = useState([])
   const [rates, setRates] = useState({ gold: null, silver: null })
@@ -135,10 +137,13 @@ const POS = ({ mode = 'standard' }) => {
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
   const [customerAddress, setCustomerAddress] = useState('')
+  const [cashierName, setCashierName] = useState('')
+  const [cashierOptions, setCashierOptions] = useState([])
   const [oldGoldWeight, setOldGoldWeight] = useState('')
   const [oldGoldKarat, setOldGoldKarat] = useState('24')
   const [oldGoldPurity, setOldGoldPurity] = useState('999')
   const [oldGoldDeductionPercent, setOldGoldDeductionPercent] = useState('')
+  const [oldGoldActualValue, setOldGoldActualValue] = useState('')
   const [oldGoldCash, setOldGoldCash] = useState('')
   const [showConfirm, setShowConfirm] = useState(false)
   const [showCustomerModal, setShowCustomerModal] = useState(false)
@@ -148,6 +153,18 @@ const POS = ({ mode = 'standard' }) => {
   useEffect(() => {
     getDiamondVatStatus()
       .then((res) => setDiamondVatInfo(res.data?.data || res.data || null))
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    getUsers({ limit: 500 })
+      .then((res) => {
+        const data = res.data?.data || res.data
+        const list = data?.users || data || []
+        if (Array.isArray(list)) {
+          setCashierOptions(list.map((u) => u.name).filter(Boolean))
+        }
+      })
       .catch(() => {})
   }, [])
 
@@ -165,8 +182,9 @@ const POS = ({ mode = 'standard' }) => {
       const params = {}
       if (isDiamondMode) params.diamond = true
       if (search) params.search = search
-      if (categoryFilter) params.category = categoryFilter
-      if (metalFilter) params.metalType = metalFilter
+       if (categoryFilter) params.category = categoryFilter
+       if (subcategoryFilter) params.subcategory = subcategoryFilter
+       if (metalFilter) params.metalType = metalFilter
       params.itemType = 'tagged'
       params.status = 'In Stock'
       params.limit = 500
@@ -179,16 +197,20 @@ const POS = ({ mode = 'standard' }) => {
     } finally {
       setLoading(false)
     }
-  }, [search, categoryFilter, metalFilter, isDiamondMode])
+   }, [search, categoryFilter, subcategoryFilter, metalFilter, isDiamondMode])
   useEffect(() => { fetchItems() }, [fetchItems])
-  useEffect(() => {
-    if (items.length > 0) {
-      const cats = [...new Set(items.map((i) => i.category).filter(Boolean))]
-      const metals = [...new Set(items.map((i) => i.metalType).filter(Boolean))]
-      if (cats.length) setCategories(cats)
-      if (metals.length) setMetalTypes(metals)
-    }
-  }, [items])
+   useEffect(() => {
+     if (items.length > 0) {
+       const cats = [...new Set(items.map((i) => i.category).filter(Boolean))]
+       const metals = [...new Set(items.map((i) => i.metalType).filter(Boolean))]
+       if (cats.length) setCategories(cats)
+       if (metals.length) setMetalTypes(metals)
+     }
+     setSubcategoryFilter('')
+   }, [items])
+   const subcategoryOptions = categoryFilter
+     ? [...new Set(items.filter((i) => i.category === categoryFilter && i.subcategory).map((i) => i.subcategory))]
+     : []
 
   const fetchLots = useCallback(async () => {
     if (activeTab !== 'lots') return
@@ -395,7 +417,9 @@ const POS = ({ mode = 'standard' }) => {
   const oldGoldDeductionPercentNum = Number(oldGoldDeductionPercent) || 0
   const oldGoldNetWeight = oldGoldWeightNum > 0 ? oldGoldWeightNum * (1 - oldGoldDeductionPercentNum / 100) : 0
   const oldGoldKaratNum = Number(oldGoldKarat) || 24
-  const oldGoldValue = oldGoldNetWeight * (oldGoldKaratNum / 24) * goldPerGram
+  const oldGoldComputedValue = oldGoldNetWeight * (oldGoldKaratNum / 24) * goldPerGram
+  const oldGoldActualValueNum = Number(oldGoldActualValue) || 0
+  const oldGoldValue = oldGoldActualValueNum > 0 ? oldGoldActualValueNum : oldGoldComputedValue
 
   // Taxes: the 0.5% service fee is charged on the FULL gold value sold (old
   // gold traded in does NOT reduce the taxable base), and diamonds carry 13%
@@ -516,6 +540,7 @@ const POS = ({ mode = 'standard' }) => {
           netWeight: oldGoldNetWeight,
           deduction: oldGoldCredit,
           value: oldGoldValue,
+          valuedAmount: oldGoldActualValueNum,
           amountToPay: oldGoldAmountToPay,
           change: oldGoldChange,
         },
@@ -591,12 +616,15 @@ const POS = ({ mode = 'standard' }) => {
       cashAmount: breakdown.cash || 0,
       khaataAmount: breakdown.khaata || 0,
       customerId,
+      cashierName: cashierName.trim(),
       oldGoldDetails: breakdown.oldGold ? {
         weight: breakdown.oldGold.weight,
         purity: breakdown.oldGold.purity,
         deductionPercent: breakdown.oldGold.deductionPercent,
         netWeight: breakdown.oldGold.netWeight,
         deductibleAmount: breakdown.oldGold.deduction,
+        value: breakdown.oldGold.value,
+        valuedAmount: breakdown.oldGold.valuedAmount,
       } : null,
     }
     setSubmitting(true)
@@ -617,6 +645,7 @@ const POS = ({ mode = 'standard' }) => {
       setOldGoldKarat('24')
       setOldGoldPurity('999')
       setOldGoldDeductionPercent('')
+      setOldGoldActualValue('')
       setOldGoldCash('')
       setShowConfirm(false)
       const saleId = res.data?.data?.sale?._id || res.data?.data?._id || res.data?._id
@@ -648,10 +677,12 @@ const POS = ({ mode = 'standard' }) => {
       customerName,
       customerPhone,
       customerAddress,
+      cashierName,
       oldGoldWeight,
       oldGoldKarat,
       oldGoldPurity,
       oldGoldDeductionPercent,
+      oldGoldActualValue,
       oldGoldCash,
       customerId: selectedCustomer?._id || null,
       heldAt: new Date().toISOString(),
@@ -672,10 +703,12 @@ const POS = ({ mode = 'standard' }) => {
     setCustomerName(heldBill.customerName || '')
     setCustomerPhone(heldBill.customerPhone || '')
     setCustomerAddress(heldBill.customerAddress || '')
+    setCashierName(heldBill.cashierName || user?.name || '')
     setOldGoldWeight(heldBill.oldGoldWeight || '')
     setOldGoldKarat(heldBill.oldGoldKarat || '24')
     setOldGoldPurity(heldBill.oldGoldPurity || '999')
     setOldGoldDeductionPercent(heldBill.oldGoldDeductionPercent || '')
+    setOldGoldActualValue(heldBill.oldGoldActualValue || '')
     setOldGoldCash(heldBill.oldGoldCash || '')
     if (heldBill.customerId) {
       setSelectedCustomer({ _id: heldBill.customerId })
@@ -704,6 +737,10 @@ const POS = ({ mode = 'standard' }) => {
   }
 
   const { user } = useContext(AuthContext)
+  useEffect(() => {
+    if (user?.name && !cashierName) setCashierName(user.name)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user])
   const buildPreviewItems = () => {
     const itemRows = buildInvoiceItems(cart.filter((c) => c.source === 'item').map((c) => ({
       item: c.item,
@@ -825,10 +862,16 @@ const POS = ({ mode = 'standard' }) => {
           </div>
           {activeTab === 'items' && (
             <div className="flex flex-wrap gap-2">
-              <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm bg-white min-w-0 max-w-[160px]">
-                <option value="">All Categories</option>
-                {categories.map((c) => (<option key={c} value={c}>{c}</option>))}
-              </select>
+               <select value={categoryFilter} onChange={(e) => { setCategoryFilter(e.target.value); setSubcategoryFilter('') }} className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm bg-white min-w-0 max-w-[160px]">
+                 <option value="">All Categories</option>
+                 {categories.map((c) => (<option key={c} value={c}>{c}</option>))}
+               </select>
+               {subcategoryOptions.length > 0 && (
+                 <select value={subcategoryFilter} onChange={(e) => setSubcategoryFilter(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm bg-white min-w-0 max-w-[140px]">
+                   <option value="">All Subcategories</option>
+                   {subcategoryOptions.map((s) => (<option key={s} value={s}>{s}</option>))}
+                 </select>
+               )}
               <select value={metalFilter} onChange={(e) => setMetalFilter(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm bg-white min-w-0 max-w-[140px]">
                 <option value="">All Metals</option>
                 {metalTypes.map((m) => (<option key={m} value={m}>{m}</option>))}
@@ -1223,6 +1266,10 @@ const POS = ({ mode = 'standard' }) => {
                 </div>
               </div>
               <input type="number" value={oldGoldDeductionPercent} onChange={(e) => setOldGoldDeductionPercent(e.target.value)} placeholder="Deduction (%)" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Actual Valued Price (Rs)</label>
+                <input type="number" value={oldGoldActualValue} onChange={(e) => setOldGoldActualValue(e.target.value)} placeholder="Leave blank to auto-calculate from rate" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              </div>
               {oldGoldNetWeight > 0 && (
                 <p className="text-xs text-gray-600">
                   Gold weight after {oldGoldDeductionPercentNum}% deduction: <b>{formatWeight(oldGoldNetWeight)}</b> ({oldGoldKaratNum}K pure equivalent: {formatWeight(oldGoldNetWeight * (oldGoldKaratNum / 24))}g)
@@ -1231,6 +1278,11 @@ const POS = ({ mode = 'standard' }) => {
               {oldGoldValue > 0 && (
                 <p className="text-xs text-green-600 font-medium">
                   Old gold value: {formatCurrency(Math.round(oldGoldValue))}
+                </p>
+              )}
+              {oldGoldActualValueNum > 0 && oldGoldComputedValue > 0 && Math.abs(oldGoldActualValueNum - oldGoldComputedValue) > 0.01 && (
+                <p className="text-xs text-amber-600">
+                  Auto-calculated value was {formatCurrency(Math.round(oldGoldComputedValue))} — using actual valued price instead.
                 </p>
               )}
               {oldGoldAmountToPay < billTotal && oldGoldValue > 0 && (
@@ -1259,6 +1311,21 @@ const POS = ({ mode = 'standard' }) => {
               </div>
             </div>
           )}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Cashier</label>
+            <div className="relative">
+              <input
+                list="cashier-options"
+                value={cashierName}
+                onChange={(e) => setCashierName(e.target.value)}
+                placeholder="Enter or select cashier name"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+              <datalist id="cashier-options">
+                {cashierOptions.map((name) => <option key={name} value={name} />)}
+              </datalist>
+            </div>
+          </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Customer Details</label>
             <div className="space-y-2">
@@ -1405,7 +1472,7 @@ const POS = ({ mode = 'standard' }) => {
               customerPhone={customerPhone}
               customerAddress={customerAddress}
               customerCode={selectedCustomer?.customerCode || ''}
-              salesPerson={user?.name || ''}
+              salesPerson={cashierName || user?.name || ''}
               items={previewItems}
               words={previewWords}
               subtotal={previewSubtotal}
@@ -1426,7 +1493,7 @@ const POS = ({ mode = 'standard' }) => {
               oldGoldDeductionPercent={previewOldGold.deductionPercent}
               oldGoldGrossWeight={previewOldGold.weight}
               oldGoldNetWeight={previewOldGold.netWeight || previewOldGold.weight}
-              cashier={user?.name || ''}
+              cashier={cashierName || user?.name || ''}
             />
           </div>
          <div className="flex justify-end gap-2 mt-4">

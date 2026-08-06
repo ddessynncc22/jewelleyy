@@ -631,7 +631,7 @@ const CustomerDetail = () => {
           <Card title="Khaata Balance" icon={Wallet}>
             <div className="flex flex-col items-center justify-center py-4 text-center">
               <p className="text-xs font-medium uppercase tracking-wider text-[var(--color-text-secondary)]">Current Balance</p>
-              <p className={`mt-2 text-3xl font-bold tracking-tight ${ledgerSummary.totalBalance > 0 ? 'text-red-600' : ledgerSummary.totalBalance < 0 ? 'text-emerald-600' : 'text-[var(--color-text)]'}`}>
+              <p className={`mt-2 text-3xl font-bold tracking-tight card-value ${ledgerSummary.totalBalance > 0 ? 'text-red-600' : ledgerSummary.totalBalance < 0 ? 'text-emerald-600' : 'text-[var(--color-text)]'}`}>
                 {formatCurrency(ledgerSummary.totalBalance || 0)}
               </p>
               <span className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${ledgerSummary.totalBalance > 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>

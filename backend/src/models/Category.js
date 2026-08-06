@@ -8,6 +8,13 @@ const categorySchema = new mongoose.Schema(
       required: [true, 'Category name is required'],
       trim: true,
     },
+    parent: {
+      // Points to the top-level category this subcategory belongs to.
+      // null/undefined means this IS a top-level category.
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Category',
+      default: null,
+    },
     isActive: {
       type: Boolean,
       default: true,
@@ -37,7 +44,9 @@ categorySchema.pre(/^find/, function (next) {
   next();
 });
 
-categorySchema.index({ tenantId: 1, name: 1 }, { unique: true });
+// Name is unique per (tenant, parent), so two different top-level categories
+// can each have their own "Rings" subcategory.
+categorySchema.index({ tenantId: 1, parent: 1, name: 1 }, { unique: true });
 
 categorySchema.plugin(tenantPlugin);
 

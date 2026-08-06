@@ -24,6 +24,7 @@ import {
   History,
   ClipboardList,
   Layers,
+  QrCode,
 } from 'lucide-react'
 import { getCachedSettings } from '../services/settingsService'
 import { useAuth } from '../hooks/useAuth'
@@ -98,6 +99,13 @@ const tenantSections = [
       { to: '/settings', label: 'Settings', icon: Settings },
     ],
   },
+  {
+    label: 'QR Lookup',
+    items: [
+      { to: '/lookup', label: 'QR Scanner', icon: QrCode },
+      { to: '/qr-accounts', label: 'QR Accounts', icon: Users, roles: ['admin'] },
+    ],
+  },
 ]
 
 const adminSections = [
@@ -122,13 +130,21 @@ const adminSections = [
   },
 ]
 
+const qrLookupSections = [
+  {
+    label: 'QR Lookup',
+    items: [{ to: '/lookup', label: 'QR Lookup', icon: QrCode, end: true }],
+  },
+]
+
 export default function Sidebar({ collapsed, storeName, onToggle, mobileOpen, onMobileClose }) {
   const location = useLocation()
   const { user } = useAuth()
   const [expandedMenus, setExpandedMenus] = useState({})
 
   const isSuperAdmin = user?.role === 'superadmin'
-  const sections = isSuperAdmin ? adminSections : tenantSections
+  const isQrLookup = user?.role === 'qr_lookup'
+  const sections = isSuperAdmin ? adminSections : isQrLookup ? qrLookupSections : tenantSections
   const appName = isSuperAdmin ? 'Admin Panel' : storeName || getCachedSettings()?.storeName || 'Jewellery MS'
 
   const toggleMenu = (label) => setExpandedMenus((prev) => ({ ...prev, [label]: !prev[label] }))
@@ -254,7 +270,11 @@ export default function Sidebar({ collapsed, storeName, onToggle, mobileOpen, on
                   {section.label}
                 </p>
               )}
-              <div className="space-y-0.5">{section.items.map(renderNavItem)}</div>
+              <div className="space-y-0.5">
+                {section.items
+                  .filter((item) => !item.roles || item.roles.includes(user?.role))
+                  .map(renderNavItem)}
+              </div>
             </div>
           ))}
         </nav>

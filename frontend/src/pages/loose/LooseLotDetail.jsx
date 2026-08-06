@@ -110,7 +110,8 @@ const LooseLotDetail = () => {
         </div>
         <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
           <InfoTile label="Design Code" value={lot.designCode || '—'} />
-          <InfoTile label="Category" value={lot.category || '—'} />
+           <InfoTile label="Category" value={lot.category || '—'} />
+           <InfoTile label="Subcategory" value={lot.subcategory || '—'} />
           <InfoTile label="Total Weight" value={`${formatWeight(lot.totalGrossWeight)} (${formatWeightTolaLaal(lot.totalGrossWeight)})`} />
           <InfoTile label="Total Pieces" value={lot.totalPieces} />
           <InfoTile label="Avg Weight / piece" value={lot.avgWeightPerPiece != null ? `${lot.avgWeightPerPiece} g` : '—'} />

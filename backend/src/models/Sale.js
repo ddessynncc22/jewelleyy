@@ -82,6 +82,8 @@ const saleSchema = new mongoose.Schema(
       purity: { type: Number, default: 0 },
       deductionPercent: { type: Number, default: 0 },
       netWeight: { type: Number, default: 0 },
+      value: { type: Number, default: 0 },
+      valuedAmount: { type: Number, default: 0 },
       deductibleAmount: { type: Number, default: 0 },
     },
     taxDetails: {
@@ -133,6 +135,11 @@ const saleSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: [true, 'Sold by is required'],
+    },
+    cashierName: {
+      type: String,
+      trim: true,
+      default: '',
     },
     saleDate: {
       type: Date,

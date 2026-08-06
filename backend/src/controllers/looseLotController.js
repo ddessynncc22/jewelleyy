@@ -212,13 +212,14 @@ async function processLotLine(line, { sale = null, saleNumber = '', performedBy,
 
 exports.listLots = async (req, res) => {
   try {
-    const { page = 1, limit = 20, status, search, metalType, purity, category, lowStock } = req.query;
+    const { page = 1, limit = 20, status, search, metalType, purity, category, subcategory, lowStock } = req.query;
     const query = {};
     if (req.query.item) query.item = req.query.item;
     if (status) query.status = status;
     if (metalType) query.metalType = metalType;
     if (purity) query.purity = Number(purity);
     if (category) query.category = { $regex: escapeRegex(category), $options: 'i' };
+    if (subcategory) query.subcategory = { $regex: escapeRegex(subcategory), $options: 'i' };
     if (search) {
       const searchRegex = { $regex: escapeRegex(search), $options: 'i' };
       query.$or = [
@@ -280,11 +281,14 @@ async function createLooseItem(data, totalGrossWeight, totalPieces) {
     SKU: generateSKU(data.category, data.metalType, data.purity),
     barcode: '',
     category: data.category,
+    subcategory: data.subcategory || '',
     designCode: data.designCode || '',
     itemName: data.itemName || data.designCode || 'Loose Lot',
     metalType: data.metalType,
     purity: Number(data.purity),
     karat: Number(data.karat) || 0,
+    length: Number(data.length) || 0,
+    diameter: Number(data.diameter) || 0,
     grossWeight: Number(totalGrossWeight),
     quantity: Number(totalPieces),
     status: 'In Stock',
@@ -305,10 +309,11 @@ async function createLooseItem(data, totalGrossWeight, totalPieces) {
 exports.createLot = async (req, res) => {
   try {
     const {
-      itemId, designCode, itemName, category, metalType, purity, karat,
+      itemId, designCode, itemName, category, subcategory, metalType, purity, karat,
       karigarId, totalGrossWeight, totalPieces, lotBarcode, lotNumber,
       makingChargeType, makingChargeValue, ratePerGram,
       lowStockPiecesThreshold, lowStockWeightThreshold, notes,
+      length, lengthUnit, diameter,
     } = req.body;
 
     if (!Number(totalGrossWeight) || Number(totalGrossWeight) <= 0) {
@@ -330,8 +335,8 @@ exports.createLot = async (req, res) => {
       if (!category || !metalType || !purity) {
         return errorResponse(res, 'category, metalType, and purity are required when not linking an existing item', 400);
       }
-      item = await createLooseItem(
-        { tenantId: req.tenantId, category, metalType, purity, karat, designCode, itemName },
+        item = await createLooseItem(
+        { tenantId: req.tenantId, category, subcategory, metalType, purity, karat, designCode, itemName, length, lengthUnit, diameter },
         totalGrossWeight,
         totalPieces
       );
@@ -351,10 +356,14 @@ exports.createLot = async (req, res) => {
           itemName: item.itemName || '',
           designCode: item.designCode || '',
           category: item.category || '',
+          subcategory: item.subcategory || '',
           metalType: item.metalType,
           purity: item.purity,
-          karat: item.karat || 0,
-          karigarId: karigarId || null,
+           karat: item.karat || 0,
+           karigarId: karigarId || null,
+           length: Number(length) || 0,
+           lengthUnit: lengthUnit || 'mm',
+           diameter: Number(diameter) || 0,
           totalGrossWeight: Number(totalGrossWeight),
           totalPieces: Number(totalPieces),
           remainingPieces: Number(totalPieces),
@@ -413,9 +422,10 @@ exports.updateLot = async (req, res) => {
     if (!lot) return errorResponse(res, 'Loose lot not found', 404);
 
     const allowed = [
-      'designCode', 'itemName', 'category', 'metalType', 'purity', 'karat', 'karigarId',
+      'designCode', 'itemName', 'category', 'subcategory', 'metalType', 'purity', 'karat', 'karigarId',
       'makingChargeType', 'makingChargeValue',
       'lowStockPiecesThreshold', 'lowStockWeightThreshold', 'notes', 'status',
+      'length', 'lengthUnit', 'diameter',
     ];
     if (req.body.status === 'active' && lot.remainingPieces <= 0) {
       return errorResponse(res, 'Cannot reopen an empty lot', 400);
@@ -428,7 +438,7 @@ exports.updateLot = async (req, res) => {
     // Keep the parent loose Item's design fields in sync when they change here.
     const item = await Item.findById(lot.item);
     if (item) {
-      const sync = ['designCode', 'itemName', 'category', 'metalType', 'purity', 'karat', 'karigarId'];
+      const sync = ['designCode', 'itemName', 'category', 'subcategory', 'metalType', 'purity', 'karat', 'karigarId'];
       let changed = false;
       sync.forEach((field) => {
         if (req.body[field] !== undefined && String(item[field] || '') !== String(lot[field] || '')) {

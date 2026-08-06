@@ -50,6 +50,26 @@ export function laalToGrams(laal) {
   return Number((laal * (11.664 / 100)).toFixed(4));
 }
 
+// Total diamond carat. 1 carat is defined as 0.2g, so when the per-stone carat
+// was never recorded (older items, bulk import), the total carat can be
+// recovered from the stored stone weight: totalCarat = stoneWeight / 0.2.
+export function getDiamondTotalCarat(item) {
+  if (!item) return 0;
+  const qty = Math.max(1, Number(item.stoneQuantity) || 1);
+  let total = (Number(item.stoneCarat) || Number(item.carat) || 0) * qty;
+  if (total <= 0) {
+    const grams = Number(item.stoneWeight) || 0;
+    if (grams > 0) total = grams / 0.2;
+  }
+  return total;
+}
+
+export function getDiamondPerStoneCarat(item) {
+  const qty = Math.max(1, Number(item?.stoneQuantity) || 1);
+  const total = getDiamondTotalCarat(item);
+  return total > 0 ? total / qty : 0;
+}
+
 export function formatWeightTolaLaal(grams) {
   if (grams == null) return "-";
   const totalLaal = Math.round(Number(grams) * (100 / 11.664) * 1000) / 1000;

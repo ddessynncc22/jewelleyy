@@ -20,7 +20,7 @@ exports.getDiamondVatStatus = getDiamondVatStatus;
 
 exports.createSale = async (req, res) => {
   try {
-    const { items, paymentType, cashAmount, khaataAmount, oldGoldDetails, paymentBreakdown, totalAmount, taxAmount, diamondTaxAmount, paidAmount, actualAmountReceived, discountAmount, customerId, customer: customerField, saleDate } = req.body;
+    const { items, paymentType, cashAmount, khaataAmount, oldGoldDetails, paymentBreakdown, totalAmount, taxAmount, diamondTaxAmount, paidAmount, actualAmountReceived, discountAmount, customerId, customer: customerField, saleDate, cashierName } = req.body;
     if (!items || !Array.isArray(items) || items.length === 0 || !paymentType || !totalAmount) {
       return errorResponse(res, 'Items, payment type, and total amount are required', 400);
     }
@@ -88,7 +88,7 @@ exports.createSale = async (req, res) => {
       paymentType,
       cashAmount: cash,
       khaataAmount: khaata,
-      oldGoldDetails: ogd ? { description: '', weight: ogd.weight || 0, purity: ogd.purity || 0, deductionPercent: ogd.deductionPercent || 0, netWeight: ogd.netWeight || 0, deductibleAmount: ogd.deduction || ogd.deductibleAmount || 0 } : { description: '', weight: 0, purity: 0, deductionPercent: 0, netWeight: 0, deductibleAmount: 0 },
+      oldGoldDetails: ogd ? { description: '', weight: ogd.weight || 0, purity: ogd.purity || 0, deductionPercent: ogd.deductionPercent || 0, netWeight: ogd.netWeight || 0, value: ogd.value || 0, valuedAmount: ogd.valuedAmount || 0, deductibleAmount: ogd.deduction || ogd.deductibleAmount || 0 } : { description: '', weight: 0, purity: 0, deductionPercent: 0, netWeight: 0, value: 0, valuedAmount: 0, deductibleAmount: 0 },
       taxDetails: {
         totalTax: totalTaxAmount,
         discountAmount: discount,
@@ -101,6 +101,7 @@ exports.createSale = async (req, res) => {
       discountAmount: discount,
       customer: customerId || customerField || null,
       soldBy: req.user._id,
+      cashierName: cashierName ? String(cashierName).trim() : '',
       saleDate: saleDate || new Date(),
     };
     const sale = await Sale.create(saleData);
@@ -263,7 +264,7 @@ exports.createCombinedSale = async (req, res) => {
       items, lotLines, paymentType, cashAmount, khaataAmount, oldGoldDetails,
       paymentBreakdown, taxAmount, diamondTaxAmount, paidAmount,
       actualAmountReceived, discountAmount, customerId, customer: customerField,
-      saleDate,
+      saleDate, cashierName,
     } = req.body;
 
     if (!paymentType) return errorResponse(res, 'Payment type is required', 400);
@@ -397,8 +398,8 @@ exports.createCombinedSale = async (req, res) => {
       cashAmount: cash,
       khaataAmount: khaata,
       oldGoldDetails: ogd
-        ? { description: '', weight: ogd.weight || 0, purity: ogd.purity || 0, deductionPercent: ogd.deductionPercent || 0, netWeight: ogd.netWeight || 0, deductibleAmount: ogd.deduction || ogd.deductibleAmount || 0 }
-        : { description: '', weight: 0, purity: 0, deductionPercent: 0, netWeight: 0, deductibleAmount: 0 },
+        ? { description: '', weight: ogd.weight || 0, purity: ogd.purity || 0, deductionPercent: ogd.deductionPercent || 0, netWeight: ogd.netWeight || 0, value: ogd.value || 0, valuedAmount: ogd.valuedAmount || 0, deductibleAmount: ogd.deduction || ogd.deductibleAmount || 0 }
+        : { description: '', weight: 0, purity: 0, deductionPercent: 0, netWeight: 0, value: 0, valuedAmount: 0, deductibleAmount: 0 },
       taxDetails: { totalTax: totalTaxAmount, discountAmount: discount, taxes },
       totalAmount: subtotal,
       diamondAmount: Number(diamondAmount.toFixed(2)),
@@ -407,6 +408,7 @@ exports.createCombinedSale = async (req, res) => {
       discountAmount: discount,
       customer: resolvedCustomer,
       soldBy: req.user._id,
+      cashierName: cashierName ? String(cashierName).trim() : '',
       saleDate: saleDate ? new Date(saleDate) : new Date(),
     });
 

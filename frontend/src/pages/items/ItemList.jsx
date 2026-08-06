@@ -318,6 +318,8 @@ const ItemList = () => {
   const invalidate = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['items'] })
     queryClient.invalidateQueries({ queryKey: ['item-stats'] })
+    queryClient.invalidateQueries({ queryKey: ['loose-lots'] })
+    queryClient.invalidateQueries({ queryKey: ['loose-stock-report'] })
   }, [queryClient])
 
   const itemsQuery = useQuery({
@@ -358,9 +360,16 @@ const ItemList = () => {
     queryKey: ['categories'],
     queryFn: getCategories,
   })
-  const categoryOptions = Array.isArray(catRes?.data?.data)
-    ? catRes.data.data.map((c) => ({ value: c.name, label: c.name }))
-    : []
+   const categoryOptions = Array.isArray(catRes?.data?.data)
+     ? catRes.data.data.filter((c) => !c.parent).map((c) => ({ value: c.name, label: c.name, id: c._id, parent: c.parent?._id || c.parent || null }))
+     : []
+   const selectedCategoryFilter = categoryOptions.find((c) => c.value === filters.category)
+   const subcategoryOptions =
+     selectedCategoryFilter && !selectedCategoryFilter.parent
+       ? catRes.data.data
+           .filter((c) => c.parent && String(c.parent._id || c.parent) === String(selectedCategoryFilter.id))
+           .map((c) => ({ value: c.name, label: c.name }))
+       : []
 
   const deleteMutation = useMutation({
     mutationFn: deleteItem,
@@ -463,17 +472,18 @@ const ItemList = () => {
   const handleSort = ({ column, direction }) => setSort({ column, direction })
 
   const handleExport = useCallback(() => {
-    const headers = [
-      'SKU', 'Item Name', 'Category', 'Metal Type', 'Karat', 'Purity',
-      'Quantity', 'Gross Weight (g)', 'Stone Weight (g)', 'Net Metal Weight (g)',
-      'Status', 'Cost Price', 'Selling Price', 'Barcode', 'Design Code',
-      'Stone Type', 'Carat', 'Cut', 'Clarity', 'Certification Number',
-    ]
+     const headers = [
+       'SKU', 'Item Name', 'Category', 'Subcategory', 'Metal Type', 'Karat', 'Purity',
+       'Quantity', 'Gross Weight (g)', 'Stone Weight (g)', 'Net Metal Weight (g)',
+       'Status', 'Cost Price', 'Selling Price', 'Barcode', 'Design Code',
+       'Stone Type', 'Carat', 'Cut', 'Clarity', 'Certification Number',
+     ]
 
-    const rows = items.map((item) => [
-      item.SKU || '',
-      item.itemName || '',
-      item.category || '',
+     const rows = items.map((item) => [
+       item.SKU || '',
+       item.itemName || '',
+       item.category || '',
+       item.subcategory || '',
       item.metalType || '',
       item.karat ?? '',
       item.purity ?? '',
@@ -615,6 +625,11 @@ const ItemList = () => {
       render: (val) => <span className="text-sm text-[var(--color-text-secondary)]">{formatLabel(val)}</span>,
     },
     {
+      key: 'subcategory',
+      label: 'Subcategory',
+      render: (val) => val ? <span className="text-sm text-[var(--color-text-secondary)]">{formatLabel(val)}</span> : '-',
+    },
+    {
       key: 'metalType',
       label: 'Metal',
       sortable: false,
@@ -632,63 +647,35 @@ const ItemList = () => {
       ),
     },
     {
-      key: 'quantity',
-      label: 'Qty',
-      render: (val, row) => {
+      key: 'stock',
+      label: 'Stock',
+      sortable: false,
+      render: (_, row) => {
         if (row.itemType === 'loose') {
           return (
             <div>
               <p className="text-sm font-medium text-[var(--color-text)]">
-                {row.looseRemainingPieces ?? val ?? '-'} pcs
+                {row.looseRemainingPieces ?? 0} pcs
               </p>
               <p className="text-xs text-[var(--color-text-secondary)]">
-                {row.looseLotCount ?? 0} lot{row.looseLotCount === 1 ? '' : 's'}
+                {formatWeight(row.looseRemainingWeight ?? 0)} · {formatCurrency(row.loosePerGramRate)}/g
               </p>
             </div>
           )
         }
-        const low = row.status === 'In Stock' && val <= LOW_STOCK_THRESHOLD
-        return <span className={low ? 'font-semibold text-amber-600' : ''}>{val ?? '-'}</span>
-      },
-    },
-    {
-      key: 'grossWeight',
-      label: 'Gross Weight',
-      render: (val, row) => {
-        if (row.itemType === 'loose') {
-          return (
-            <div>
-              <p className="text-sm font-medium text-[var(--color-text)]">
-                {formatWeight(row.looseRemainingWeight ?? val)} remaining
-              </p>
-              <p className="text-xs text-[var(--color-text-secondary)]">
-                {formatCurrency(row.loosePerGramRate)}/g
-              </p>
-            </div>
-          )
-        }
+        const qty = row.quantity ?? 0
+        const low = row.status === 'In Stock' && qty <= LOW_STOCK_THRESHOLD
         return (
           <div>
-            <p className="text-sm font-medium text-[var(--color-text)]">{formatWeight(val)}</p>
-            <p className="text-xs text-[var(--color-text-secondary)]">{formatWeightTolaLaal(val)}</p>
+            <p className={`text-sm font-medium text-[var(--color-text)] ${low ? 'text-amber-600' : ''}`}>
+              {qty} pcs
+            </p>
+            <p className="text-xs text-[var(--color-text-secondary)]">
+              {formatWeight(row.grossWeight)} · {formatWeightTolaLaal(row.grossWeight)}
+            </p>
           </div>
         )
       },
-    },
-    {
-      key: 'looseValue',
-      label: 'Loose Stock',
-      render: (val, row) =>
-        row.itemType === 'loose' ? (
-          <div>
-            <p className="font-medium text-[var(--color-primary)]">
-              {formatCurrency(row.computedValue)}
-            </p>
-            <p className="text-xs text-[var(--color-text-secondary)]">stock value</p>
-          </div>
-        ) : (
-          <span className="text-[var(--color-text-secondary)]">—</span>
-        ),
     },
     {
       key: 'status',
@@ -919,13 +906,20 @@ const ItemList = () => {
             options={METAL_TYPE_OPTIONS}
             placeholder="All Metal Types"
           />
-          <FilterSelect
-            label="Category"
-            value={filters.category || ''}
-            onChange={(v) => handleFilterChange('category', v)}
-            options={categoryOptions}
-            placeholder="All Categories"
-          />
+           <FilterSelect
+             label="Category"
+             value={filters.category || ''}
+             onChange={(v) => handleFilterChange('category', v)}
+             options={categoryOptions}
+             placeholder="All Categories"
+           />
+           <FilterSelect
+             label="Subcategory"
+             value={filters.subcategory || ''}
+             onChange={(v) => handleFilterChange('subcategory', v)}
+             options={subcategoryOptions}
+             placeholder="All Subcategories"
+           />
           <FilterSelect
             label="Karat"
             value={filters.karat || ''}

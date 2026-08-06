@@ -66,7 +66,7 @@ export default function AdminDashboard() {
               <p className="text-xs font-semibold uppercase tracking-wider text-amber-600">Gold Rate</p>
             </div>
           </div>
-          <p className="text-2xl font-bold text-amber-900">
+          <p className="text-2xl font-bold text-amber-900 card-value">
             {gold ? `Rs. ${gold.rate.toLocaleString()}` : '—'}
             {gold && <span className="text-sm font-normal text-amber-500 ml-1">/{gold.unit}</span>}
           </p>
@@ -83,7 +83,7 @@ export default function AdminDashboard() {
               <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Silver Rate</p>
             </div>
           </div>
-          <p className="text-2xl font-bold text-gray-800">
+          <p className="text-2xl font-bold text-gray-800 card-value">
             {silver ? `Rs. ${silver.rate.toLocaleString()}` : '—'}
             {silver && <span className="text-sm font-normal text-gray-400 ml-1">/{silver.unit}</span>}
           </p>

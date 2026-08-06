@@ -79,3 +79,10 @@ body {
 .gold-border { border-color: var(--color-primary) !important; }
 .gold-bg { background-color: var(--color-primary-bg) !important; }
 .gold-text { color: var(--color-primary) !important; }
+
+.card-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}

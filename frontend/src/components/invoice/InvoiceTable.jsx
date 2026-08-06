@@ -1,4 +1,8 @@
 export default function InvoiceTable({ items }) {
+  const hasDiamond = (items || []).some((item) => item.diamondWt || item.diamondAmount);
+  const hasStone = (items || []).some((item) => item.stoneWt || item.stoneAmount);
+  const colCount = 14 + (hasDiamond ? 2 : 0) + (hasStone ? 2 : 0);
+
   return (
     <div className="mb-1">
       <table className="w-full border-collapse text-[9.5px]">
@@ -10,8 +14,12 @@ export default function InvoiceTable({ items }) {
             <th colSpan="8" className="border border-black px-1 py-0.5 font-bold bg-white">Gold/Silver</th>
             <th rowSpan="2" className="border border-black px-1 py-0.5 font-bold bg-white">Making</th>
             <th rowSpan="2" className="border border-black px-1 py-0.5 font-bold bg-white">Other</th>
-            <th colSpan="2" className="border border-black px-1 py-0.5 font-bold bg-white">Diamond</th>
-            <th colSpan="2" className="border border-black px-1 py-0.5 font-bold bg-white">Stone/<br />Mala</th>
+            {hasDiamond && (
+              <th colSpan="2" className="border border-black px-1 py-0.5 font-bold bg-white">Diamond</th>
+            )}
+            {hasStone && (
+              <th colSpan="2" className="border border-black px-1 py-0.5 font-bold bg-white">Stone/<br />Mala</th>
+            )}
             <th rowSpan="2" className="border border-black px-1 py-0.5 font-bold bg-white">Total<br />Amount</th>
           </tr>
           <tr>
@@ -23,10 +31,18 @@ export default function InvoiceTable({ items }) {
             <th className="border border-black px-1 py-0.5 font-bold bg-white">Waste</th>
             <th className="border border-black px-1 py-0.5 font-bold bg-white">Total Wt.</th>
             <th className="border border-black px-1 py-0.5 font-bold bg-white">Rate<br />(Grm/Tola)</th>
-            <th className="border border-black px-1 py-0.5 font-bold bg-white">Wt. (Crt)</th>
-            <th className="border border-black px-1 py-0.5 font-bold bg-white">Amount</th>
-            <th className="border border-black px-1 py-0.5 font-bold bg-white">Wt. (Crt)</th>
-            <th className="border border-black px-1 py-0.5 font-bold bg-white">Stone/Mala Amt</th>
+            {hasDiamond && (
+              <>
+                <th className="border border-black px-1 py-0.5 font-bold bg-white">Wt. (Crt)</th>
+                <th className="border border-black px-1 py-0.5 font-bold bg-white">Amount</th>
+              </>
+            )}
+            {hasStone && (
+              <>
+                <th className="border border-black px-1 py-0.5 font-bold bg-white">Wt. (Crt)</th>
+                <th className="border border-black px-1 py-0.5 font-bold bg-white">Stone/Mala Amt</th>
+              </>
+            )}
           </tr>
         </thead>
         <tbody>
@@ -45,15 +61,23 @@ export default function InvoiceTable({ items }) {
               <td className="border border-black px-1 py-0.5 text-center">{item.rate}</td>
               <td className="border border-black px-1 py-0.5 text-center">{item.makingCharge}</td>
               <td className="border border-black px-1 py-0.5 text-center">{item.other}</td>
-              <td className="border border-black px-1 py-0.5 text-center">{item.diamondWt}</td>
-              <td className="border border-black px-1 py-0.5 text-center">{item.diamondAmount}</td>
-              <td className="border border-black px-1 py-0.5 text-center">{item.stoneWt}</td>
-              <td className="border border-black px-1 py-0.5 text-center">{item.stoneAmount}</td>
+              {hasDiamond && (
+                <>
+                  <td className="border border-black px-1 py-0.5 text-center">{item.diamondWt}</td>
+                  <td className="border border-black px-1 py-0.5 text-center">{item.diamondAmount}</td>
+                </>
+              )}
+              {hasStone && (
+                <>
+                  <td className="border border-black px-1 py-0.5 text-center">{item.stoneWt}</td>
+                  <td className="border border-black px-1 py-0.5 text-center">{item.stoneAmount}</td>
+                </>
+              )}
               <td className="border border-black px-1 py-0.5 text-center font-bold">{item.totalAmount}</td>
             </tr>
           ))}
           <tr>
-            <td colSpan="18" className="border border-black">&nbsp;</td>
+            <td colSpan={colCount} className="border border-black">&nbsp;</td>
           </tr>
         </tbody>
       </table>

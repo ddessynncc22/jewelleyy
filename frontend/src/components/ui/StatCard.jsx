@@ -50,27 +50,22 @@ const StatCard = ({
                 e.preventDefault();
                 onClick(e);
               }
-            }
+        }
           : undefined
       }
-      className={`group rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-5 shadow-sm transition-all duration-200 ${
-        onClick
-          ? "cursor-pointer hover:shadow-lg hover:-translate-y-0.5"
-          : ""
-      }`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-[var(--color-text-secondary)] truncate" title={title}>
             {title}
           </p>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-[var(--color-text)] break-words leading-snug">
+          <p className="mt-2 text-2xl font-bold tracking-tight text-[var(--color-text)] break-words leading-snug card-value">
             {value}
           </p>
           {subtitle && (
-            <p className="mt-1 text-xs text-[var(--color-text-secondary)] break-words">
-              {subtitle}
-            </p>
+           <p className="mt-1 text-xs text-[var(--color-text-secondary)] truncate">
+               {subtitle}
+             </p>
           )}
           {trend && TrendIcon && (
             <div

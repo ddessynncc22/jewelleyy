@@ -29,6 +29,7 @@ const looseLotSchema = new mongoose.Schema(
     itemName: { type: String, default: '' },
     designCode: { type: String, trim: true, default: '' },
     category: { type: String, trim: true, default: '' },
+    subcategory: { type: String, trim: true, default: '' },
     metalType: {
       type: String,
       enum: ['gold', 'silver', 'diamond', 'gemstone'],
@@ -41,6 +42,10 @@ const looseLotSchema = new mongoose.Schema(
       max: 1000,
     },
     karat: { type: Number, default: 0 },
+
+    length: { type: Number, default: 0, min: 0 },
+    lengthUnit: { type: String, enum: ['inch', 'cm', 'mm'], default: 'mm' },
+    diameter: { type: Number, default: 0, min: 0 },
 
     karigarId: {
       type: mongoose.Schema.Types.ObjectId,

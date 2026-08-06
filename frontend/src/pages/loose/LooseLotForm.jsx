@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2, X } from 'lucide-react'
 import Modal from '../../components/ui/Modal'
 import Button from '../../components/ui/Button'
 import ConfirmDialog from '../../components/ui/ConfirmDialog'
@@ -10,6 +10,7 @@ import { createLooseLot, updateLooseLot } from '../../services/looseLotService'
 import { getItems } from '../../services/itemService'
 import { getKarigars } from '../../services/karigarService'
 import { getCategories, createCategory, deleteCategory } from '../../services/categoryService'
+import { gramsToLaal } from '../../utils/helpers'
 
 const METAL_OPTIONS = [
   { value: 'gold', label: 'Gold' },
@@ -38,9 +39,14 @@ const PURITY_OPTIONS = [
 const emptyForm = {
   itemId: '',
   category: '',
+  subcategory: '',
   metalType: 'gold',
   purity: '916',
   karat: '22',
+  length: '',
+  lengthUnit: 'mm',
+  diameter: '',
+  diameterUnit: 'mm',
   karigarId: '',
   itemName: '',
   designCode: '',
@@ -63,6 +69,9 @@ const LooseLotForm = ({ lot, onClose, onSuccess }) => {
   const [showCategoryInput, setShowCategoryInput] = useState(false)
   const [newCategory, setNewCategory] = useState('')
   const [categoryToDelete, setCategoryToDelete] = useState(null)
+  const [newSubcategory, setNewSubcategory] = useState('')
+  const [showSubcategoryInput, setShowSubcategoryInput] = useState(false)
+  const [subcategoryToDelete, setSubcategoryToDelete] = useState(null)
   const [itemSearch, setItemSearch] = useState('')
   const [itemResults, setItemResults] = useState([])
   const [linkedItem, setLinkedItem] = useState(null)
@@ -72,7 +81,12 @@ const LooseLotForm = ({ lot, onClose, onSuccess }) => {
     getCategories()
       .then((res) => {
         const d = res.data?.data || []
-        setCategories(Array.isArray(d) ? d.map((c) => ({ value: c.name, label: c.name, id: c._id })) : [])
+        setCategories(Array.isArray(d) ? d.map((c) => ({
+          value: c.name,
+          label: c.name,
+          id: c._id,
+          parent: c.parent?._id || c.parent || null,
+        })) : [])
       })
       .catch(() => {})
 
@@ -91,12 +105,18 @@ const LooseLotForm = ({ lot, onClose, onSuccess }) => {
 
   useEffect(() => {
     if (!lot) return
-    setForm({
+    if (lot.length || lot.diameter) setShowDimensions(true)
+      setForm({
       itemId: lot.item?._id || lot.item || '',
       category: lot.category || '',
+      subcategory: lot.subcategory || '',
       metalType: lot.metalType || 'gold',
       purity: String(lot.purity ?? ''),
       karat: String(lot.karat ?? ''),
+      length: String(lot.length ?? ''),
+      lengthUnit: lot.lengthUnit || 'mm',
+      diameter: String(lot.diameter ?? ''),
+      diameterUnit: lot.diameterUnit || 'mm',
       karigarId: lot.karigarId?._id || lot.karigarId || '',
       itemName: lot.itemName || '',
       designCode: lot.designCode || '',
@@ -203,6 +223,45 @@ const LooseLotForm = ({ lot, onClose, onSuccess }) => {
     }
   }
 
+   const subcategoryOptions = categories.filter((c) => c.parent === selectedCategoryId)
+
+  const addSubcategory = async () => {
+    const name = newSubcategory.trim()
+    if (!name) return toast.error('Enter a subcategory name')
+    if (!selectedCategoryId) return toast.error('Select a category first')
+    try {
+      const res = await createCategory({ name, parent: selectedCategoryId })
+      const created = res.data?.data
+      await loadCategories()
+      if (created?.name) set('subcategory', created.name)
+      setNewSubcategory('')
+      setShowSubcategoryInput(false)
+      toast.success('Subcategory added')
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Failed to add subcategory')
+    }
+  }
+
+  const confirmRemoveSubcategory = () => {
+    const sub = subcategoryOptions.find((c) => c.value === form.subcategory)
+    if (!sub) return toast.error('Select a subcategory to remove')
+    setSubcategoryToDelete(sub)
+  }
+
+  const handleRemoveSubcategory = async () => {
+    if (!subcategoryToDelete) return
+    try {
+      await deleteCategory(subcategoryToDelete.id)
+      setCategories((prev) => prev.filter((c) => c.id !== subcategoryToDelete.id))
+      if (form.subcategory === subcategoryToDelete.value) set('subcategory', '')
+      toast.success('Subcategory removed')
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Failed to remove subcategory')
+    } finally {
+      setSubcategoryToDelete(null)
+    }
+  }
+
   const avgWeight =
     Number(form.totalGrossWeight) > 0 && Number(form.totalPieces) > 0
       ? (Number(form.totalGrossWeight) / Number(form.totalPieces)).toFixed(4)
@@ -218,12 +277,17 @@ const LooseLotForm = ({ lot, onClose, onSuccess }) => {
       return toast.error('Category, metal type and purity are required (or link an existing item)')
     }
 
-    const payload = {
-      itemId: form.itemId || undefined,
-      category: form.category,
-      metalType: form.metalType,
+     const payload = {
+       itemId: form.itemId || undefined,
+       category: form.category,
+       subcategory: form.subcategory || '',
+       metalType: form.metalType,
       purity: form.purity ? Number(form.purity) : undefined,
       karat: form.karat ? Number(form.karat) : 0,
+      length: Number(form.length) || 0,
+      lengthUnit: form.lengthUnit || 'mm',
+      diameter: Number(form.diameter) || 0,
+      diameterUnit: form.diameterUnit || 'mm',
       karigarId: form.karigarId || undefined,
       itemName: form.itemName,
       designCode: form.designCode,
@@ -331,42 +395,103 @@ const LooseLotForm = ({ lot, onClose, onSuccess }) => {
                   </button>
                 </div>
               </div>
-              {showCategoryInput ? (
-                <div className="flex items-center gap-2">
-                  <input
-                    autoFocus
-                    value={newCategory}
-                    onChange={(e) => setNewCategory(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        addCategory()
-                      }
-                      if (e.key === 'Escape') setShowCategoryInput(false)
-                    }}
-                    placeholder="New category name"
-                    className="w-full rounded-xl border border-[var(--color-border)] px-3.5 py-2.5 text-sm bg-[var(--color-card)] text-[var(--color-text)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20"
+               {showCategoryInput ? (
+                 <div className="flex items-center gap-2">
+                   <input
+                     autoFocus
+                     value={newCategory}
+                     onChange={(e) => setNewCategory(e.target.value)}
+                     onKeyDown={(e) => {
+                       if (e.key === 'Enter') {
+                         e.preventDefault()
+                         addCategory()
+                       }
+                       if (e.key === 'Escape') setShowCategoryInput(false)
+                     }}
+                     placeholder="New category name"
+                     className="w-full rounded-xl border border-[var(--color-border)] px-3.5 py-2.5 text-sm bg-[var(--color-card)] text-[var(--color-text)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20"
+                   />
+                   <Button type="button" size="sm" onClick={addCategory} disabled={!newCategory.trim()}>
+                     Save
+                   </Button>
+                   <Button type="button" variant="ghost" size="sm" onClick={() => setShowCategoryInput(false)}>
+                     Cancel
+                   </Button>
+                 </div>
+                ) : (
+                  <FormSelect
+                    name="category"
+                    options={categories.filter((c) => !c.parent)}
+                    value={form.category}
+                    onChange={(e) => { set('category', e.target.value); set('subcategory', '') }}
+                    placeholder="Select category"
+                    required
                   />
-                  <Button type="button" size="sm" onClick={addCategory} disabled={!newCategory.trim()}>
-                    Save
-                  </Button>
-                  <Button type="button" variant="ghost" size="sm" onClick={() => setShowCategoryInput(false)}>
-                    Cancel
-                  </Button>
-                </div>
-              ) : (
-                <FormSelect
-                  name="category"
-                  options={categories}
-                  value={form.category}
-                  onChange={(e) => set('category', e.target.value)}
-                  placeholder="Select category"
-                  required
-                />
-              )}
-            </div>
-            <FormSelect
-              label="Metal Type"
+                )}
+                {selectedCategoryId && (
+                  <div>
+                    <div className="mb-1.5 flex items-center justify-between gap-2">
+                      <span className="text-sm font-medium text-[var(--color-text)]">Subcategory</span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNewSubcategory('')
+                            setShowSubcategoryInput((v) => !v)
+                          }}
+                          title={showSubcategoryInput ? 'Close' : `Add subcategory under ${categories.find((c) => c.id === selectedCategoryId)?.label}`}
+                          className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-border)] px-2 py-1 text-xs font-medium text-[var(--color-primary)] transition-colors hover:bg-[var(--color-elevated)]"
+                        >
+                          <Plus size={14} /> {showSubcategoryInput ? 'Close' : 'Add'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={confirmRemoveSubcategory}
+                          disabled={!form.subcategory}
+                          title="Remove selected subcategory"
+                          className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-border)] px-2 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          <Trash2 size={14} /> Remove
+                        </button>
+                      </div>
+                    </div>
+                    {showSubcategoryInput ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          autoFocus
+                          value={newSubcategory}
+                          onChange={(e) => setNewSubcategory(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault()
+                              addSubcategory()
+                            }
+                            if (e.key === 'Escape') setShowSubcategoryInput(false)
+                          }}
+                          placeholder={`Subcategory under ${categories.find((c) => c.id === selectedCategoryId)?.label}`}
+                          className="w-full rounded-xl border border-[var(--color-border)] px-3.5 py-2.5 text-sm bg-[var(--color-card)] text-[var(--color-text)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20"
+                        />
+                        <Button type="button" size="sm" onClick={addSubcategory} disabled={!newSubcategory.trim()}>
+                          Save
+                        </Button>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setShowSubcategoryInput(false)}>
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : (
+                      <FormSelect
+                        name="subcategory"
+                        options={subcategoryOptions}
+                        value={form.subcategory}
+                        onChange={(e) => set('subcategory', e.target.value)}
+                        placeholder="Select subcategory"
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
+              <FormSelect
+                label="Metal Type"
               name="metalType"
               options={METAL_OPTIONS}
               value={form.metalType}
@@ -448,18 +573,84 @@ const LooseLotForm = ({ lot, onClose, onSuccess }) => {
             value={form.makingChargeValue}
             onChange={(e) => set('makingChargeValue', e.target.value)}
           />
-          <FormSelect
-            label="Assign Karigar"
-            name="karigarId"
-            options={karigars}
-            value={form.karigarId}
-            onChange={(e) => set('karigarId', e.target.value)}
-            placeholder="Unassigned"
-          />
-        </div>
+           <FormSelect
+             label="Assign Karigar"
+             name="karigarId"
+             options={karigars}
+             value={form.karigarId}
+             onChange={(e) => set('karigarId', e.target.value)}
+             placeholder="Unassigned"
+           />
+         </div>
 
-        <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-elevated)] p-4">
-          <p className="mb-3 text-sm font-medium text-[var(--color-text)]">Low stock alerts (0 = off)</p>
+         <div>
+           <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-200">
+             <h3 className="text-base font-semibold text-gray-900">Dimensions</h3>
+             <button
+               type="button"
+               onClick={() => setShowDimensions((v) => !v)}
+               title={showDimensions ? 'Hide dimensions' : 'Add dimensions'}
+               className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-border)] px-2 py-1 text-xs font-medium text-[var(--color-primary)] transition-colors hover:bg-[var(--color-elevated)]"
+             >
+               {showDimensions ? <X size={14} /> : <Plus size={14} />} {showDimensions ? 'Close' : 'Add'}
+             </button>
+           </div>
+           {showDimensions && (
+             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+               <div className="flex items-center gap-2">
+                 <FormInput
+                   label="Length"
+                   name="length"
+                   type="number"
+                   step="0.01"
+                   min="0"
+                   value={form.length}
+                   onChange={(e) => set('length', e.target.value)}
+                   placeholder="0.00"
+                   className="flex-1"
+                 />
+                 <FormSelect
+                   name="lengthUnit"
+                   value={form.lengthUnit}
+                   onChange={(e) => set('lengthUnit', e.target.value)}
+                   options={[
+                     { value: 'mm', label: 'mm' },
+                     { value: 'cm', label: 'cm' },
+                     { value: 'inch', label: 'inch' },
+                   ]}
+                   className="w-20"
+                 />
+               </div>
+               <div className="flex items-center gap-2">
+                 <FormInput
+                   label="Diameter"
+                   name="diameter"
+                   type="number"
+                   step="0.01"
+                   min="0"
+                   value={form.diameter}
+                   onChange={(e) => set('diameter', e.target.value)}
+                   placeholder="0.00"
+                   className="flex-1"
+                 />
+                 <FormSelect
+                   name="diameterUnit"
+                   value={form.diameterUnit}
+                   onChange={(e) => set('diameterUnit', e.target.value)}
+                   options={[
+                     { value: 'mm', label: 'mm' },
+                     { value: 'cm', label: 'cm' },
+                     { value: 'inch', label: 'inch' },
+                   ]}
+                   className="w-20"
+                 />
+               </div>
+             </div>
+           )}
+         </div>
+
+         <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-elevated)] p-4">
+           <p className="mb-3 text-sm font-medium text-[var(--color-text)]">Low stock alerts (0 = off)</p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormInput
               label="Alert at (pieces)"
@@ -503,17 +694,26 @@ const LooseLotForm = ({ lot, onClose, onSuccess }) => {
         </div>
       </form>
 
-      <ConfirmDialog
-        isOpen={!!categoryToDelete}
-        onClose={() => setCategoryToDelete(null)}
-        onConfirm={handleRemoveCategory}
-        title="Remove category"
-        message={`Delete category "${categoryToDelete?.label}"? Items already using it keep their category name.`}
-        confirmText="Remove"
-        variant="danger"
-      />
-    </Modal>
-  )
-}
+       <ConfirmDialog
+         isOpen={!!categoryToDelete}
+         onClose={() => setCategoryToDelete(null)}
+         onConfirm={handleRemoveCategory}
+         title="Remove category"
+         message={`Delete category "${categoryToDelete?.label}"? Items already using it keep their category name.`}
+         confirmText="Remove"
+         variant="danger"
+       />
+       <ConfirmDialog
+         isOpen={!!subcategoryToDelete}
+         onClose={() => setSubcategoryToDelete(null)}
+         onConfirm={handleRemoveSubcategory}
+         title="Remove subcategory"
+         message={`Delete subcategory "${subcategoryToDelete?.label}"? Items already using it keep their subcategory name.`}
+         confirmText="Remove"
+         variant="danger"
+       />
+     </Modal>
+   )
+ }
 
 export default LooseLotForm

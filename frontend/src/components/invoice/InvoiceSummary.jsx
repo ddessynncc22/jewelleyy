@@ -62,9 +62,7 @@ export default function InvoiceSummary({
             <tr>
               <th colSpan="2" className="border border-black px-1 py-0.5 font-bold">बेपत्ता सुन (Old Gold)</th>
             </tr>
-            <tr>
-              <td colSpan="2" className="border border-black px-1 py-0.5 font-bold text-center">Weight (g)</td>
-            </tr>
+           
             <tr>
               <td colSpan="2" className="border border-black px-1 py-0.5 text-center">{grossWeight ? grossWeight.toFixed(3) : ''}</td>
             </tr>
@@ -96,9 +94,7 @@ export default function InvoiceSummary({
                   <td className="border border-black px-1.5 py-0.5 text-left">
                     बेपत्ता सुन (Old Gold Exchange)
                     <br />
-                    <span className="text-[8px] text-gray-500">
-                      {grossWeight.toFixed(3)}g · {karat}K → {netWeight.toFixed(3)}g net
-                    </span>
+                    
                   </td>
                   <td className="border border-black px-1.5 py-0.5 text-right">{fmt(oldGoldAmount)}</td>
                 </tr>

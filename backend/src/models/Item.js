@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const { tenantPlugin } = require('../middleware/tenantPlugin');
 const { GRAMS_PER_LAAL, gramsToLaal } = require('../utils/rates');
+const { generateQrToken } = require('../services/barcode');
 
 const itemSchema = new mongoose.Schema(
   {
@@ -19,10 +20,21 @@ const itemSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    qrToken: {
+      // Opaque, non-guessable token embedded in the printed QR tag. Random UUID
+      // per item; used by the tenant-scoped QR lookup, never the raw item id.
+      type: String,
+      index: true,
+    },
     category: {
       type: String,
       required: [true, 'Category is required'],
       trim: true,
+    },
+    subcategory: {
+      type: String,
+      trim: true,
+      default: '',
     },
     designCode: {
       type: String,
@@ -93,6 +105,21 @@ const itemSchema = new mongoose.Schema(
     karat: {
       type: Number,
       default: 0,
+    },
+    length: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    lengthUnit: {
+      type: String,
+      enum: ['inch', 'cm', 'mm'],
+      default: 'mm',
+    },
+    diameter: {
+      type: Number,
+      default: 0,
+      min: 0,
     },
     karigarId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -274,6 +301,7 @@ itemSchema.index({ tenantId: 1, category: 1, status: 1 });
 itemSchema.index({ tenantId: 1, status: 1, quantity: 1 });
 itemSchema.index({ tenantId: 1, metalType: 1, purity: 1 });
 itemSchema.index({ tenantId: 1, barcode: 1 });
+itemSchema.index({ tenantId: 1, qrToken: 1 }, { unique: true, sparse: true });
 
 itemSchema.methods.softDelete = function () {
   this.isDeleted = true;
@@ -288,6 +316,11 @@ itemSchema.methods.restore = function () {
 };
 
 itemSchema.pre('save', function (next) {
+  // Mint a QR token on every creation path (create, clone, bulk, custom-order
+  // delivery, karigar receive, loose parent), so no item can persist without one.
+  if (!this.qrToken) {
+    this.qrToken = generateQrToken();
+  }
   this.grossWeightInLaal = gramsToLaal(this.grossWeight);
   this.netMetalWeightInLaal = gramsToLaal(this.netMetalWeight);
   this.stoneWeightInLaal = gramsToLaal(this.stoneWeight);

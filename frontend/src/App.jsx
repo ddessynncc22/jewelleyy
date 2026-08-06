@@ -99,6 +99,8 @@ import DeletedRecords from "./pages/audit/DeletedRecords";
 
 import Settings from "./pages/settings/Settings";
 
+import QrAccounts from "./pages/settings/QrAccounts";
+
 import AdminDashboard from "./pages/admin/AdminDashboard";
 
 import TenantList from "./pages/admin/TenantList";
@@ -113,6 +115,8 @@ import BroadcastNotification from "./pages/admin/BroadcastNotification";
 import RateHistory from "./pages/admin/RateHistory";
 
 import AdminRequests from "./pages/admin/AdminRequests";
+
+import QRLookup from "./pages/qr/QRLookup";
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
@@ -131,6 +135,7 @@ function HomeRoute() {
   const { user } = useAuth();
   const { allowsSuperadmin } = useHostContext();
   if (user?.role === 'superadmin' && allowsSuperadmin) return <Navigate to="/admin" replace />;
+  if (user?.role === 'qr_lookup') return <Navigate to="/lookup" replace />;
   return <Dashboard />;
 }
 
@@ -238,6 +243,9 @@ export default function App() {
         <Route path="/audit/reconciliation" element={<StockReconciliation />} />
         <Route path="/audit/deleted" element={<DeletedRecords />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/qr-accounts" element={<QrAccounts />} />
+        <Route path="/lookup" element={<QRLookup />} />
+        <Route path="/lookup/:qrToken" element={<QRLookup />} />
 
         <Route path="/admin" element={<SuperadminRoute><AdminDashboard /></SuperadminRoute>} />
         <Route path="/admin/tenants" element={<SuperadminRoute><TenantList /></SuperadminRoute>} />

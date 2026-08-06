@@ -104,7 +104,7 @@ export default function PrintInvoice() {
     typeof customer === 'object' && customer !== null ? customer.address || '' : '';
   const customerCode =
     typeof customer === 'object' && customer !== null ? customer.customerCode || '' : '';
-  const salesPerson = sale.soldBy?.name || '';
+  const salesPerson = sale.cashierName || sale.soldBy?.name || '';
 
   const companyName = settings.storeName || 'My Jewellery Store';
   const address = settings.address || '';

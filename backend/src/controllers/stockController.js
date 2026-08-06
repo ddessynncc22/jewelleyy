@@ -36,7 +36,7 @@ exports.getStockMovements = async (req, res) => {
     }
     const skip = (Number(page) - 1) * Number(limit);
     const [movements, total] = await Promise.all([
-      StockMovement.find(query).populate('item', 'SKU itemName category metalType purity images').populate('performedBy', 'name email').sort({ movementDate: -1 }).skip(skip).limit(Number(limit)),
+      StockMovement.find(query).populate({ path: 'item', match: { isDeleted: { $exists: true } }, select: 'SKU itemName category metalType purity images isDeleted' }).populate('performedBy', 'name email').sort({ movementDate: -1 }).skip(skip).limit(Number(limit)),
       StockMovement.countDocuments(query),
     ]);
     return paginatedResponse(res, movements, total, Number(page), Number(limit));

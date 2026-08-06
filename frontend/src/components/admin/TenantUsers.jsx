@@ -59,6 +59,7 @@ export default function TenantUsers({ tenantId }) {
               <option value="staff">Staff</option>
               <option value="manager">Manager</option>
               <option value="admin">Admin</option>
+              <option value="qr_lookup">QR Lookup</option>
             </select>
             <input name="phone" placeholder="Phone" value={form.phone} onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))} className="rounded-xl border px-3.5 py-2.5 text-sm" />
           </div>

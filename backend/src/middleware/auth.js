@@ -47,6 +47,10 @@ const protect = async (req, res, next) => {
     if (hostError) {
       return errorResponse(res, hostError, 403);
     }
+    const roleError = qrLookupDenied(req, user);
+    if (roleError) {
+      return errorResponse(res, roleError, 403);
+    }
     req.user = user;
     req.tenantId = user.tenantId;
     return runWithTenant(user.tenantId, user, () => next());
@@ -65,6 +69,30 @@ const authorize = (...roles) => {
     }
     next();
   };
+};
+
+/**
+ * qr_lookup accounts are tenant-scoped read-only scanners: they may only reach
+ * the QR lookup endpoint plus the bare minimum to sign in and change their own
+ * password. This is enforced centrally on every authenticated request, so the
+ * role is locked out of inventory, POS, pawn, reports, and user APIs even if a
+ * token is forged for them.
+ */
+const QR_LOOKUP_ALLOWED = [
+  { method: 'GET', path: /^\/api\/items\/lookup\// },
+  { method: 'GET', path: /^\/api\/settings\/?$/ },
+  { method: 'GET', path: /^\/api\/auth\/me$/ },
+  { method: 'PUT', path: /^\/api\/auth\/profile$/ },
+  { method: 'PUT', path: /^\/api\/auth\/change-password$/ },
+  { method: 'POST', path: /^\/api\/auth\/logout$/ },
+];
+
+const qrLookupDenied = (req, user) => {
+  if (user.role !== 'qr_lookup') return null;
+  const allowed = QR_LOOKUP_ALLOWED.some(
+    (r) => r.method === req.method && r.path.test(req.originalUrl)
+  );
+  return allowed ? null : 'Not authorized for this action';
 };
 
 module.exports = { protect, authorize };

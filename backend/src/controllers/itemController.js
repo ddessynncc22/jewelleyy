@@ -6,13 +6,13 @@ const ActivityLog = require('../models/ActivityLog');
 const Rate = require('../models/Rate');
 const Settings = require('../models/Settings');
 const { successResponse, errorResponse, paginatedResponse } = require('../utils/response');
-const { generateBarcode, generateSKU } = require('../services/barcode');
+const { generateBarcode, generateSKU, generateQrToken } = require('../services/barcode');
 const { toPerGramRate } = require('../utils/rates');
 const { escapeRegex } = require('../utils/helpers');
 
 exports.getItems = async (req, res) => {
   try {
-    const { page = 1, limit = 20, status, category, metalType, purity, karat, karigarId, sort, search } = req.query;
+    const { page = 1, limit = 20, status, category, subcategory, metalType, purity, karat, karigarId, sort, search } = req.query;
     const query = {};
     if (req.query.itemType) {
       // Legacy tagged items may predate the itemType field and have it missing;
@@ -23,6 +23,7 @@ exports.getItems = async (req, res) => {
     }
     if (status) query.status = status;
     if (category) query.category = { $regex: category, $options: 'i' };
+    if (subcategory) query.subcategory = { $regex: subcategory, $options: 'i' };
     if (metalType) query.metalType = metalType;
     if (purity) query.purity = Number(purity);
     if (karat) query.karat = Number(karat);
@@ -118,6 +119,7 @@ const createItemWithRetry = async (data, retries = 3) => {
     try {
       data.SKU = generateSKU(data.category, data.metalType, data.purity);
       data.barcode = generateBarcode();
+      data.qrToken = generateQrToken();
       return await Item.create(data);
     } catch (error) {
       if (error.code === 11000 && attempt < retries - 1) continue;
@@ -128,7 +130,7 @@ const createItemWithRetry = async (data, retries = 3) => {
 
 exports.createItem = async (req, res) => {
   try {
-    const { category, metalType, purity, karat, itemName, grossWeight, stoneWeight, netMetalWeight, designCode, description, stoneType, carat, stoneCarat, stoneWeightGram, stoneQuantity, stoneRate, stoneAmount, cut, clarity, certificationNumber, costPrice, costMakingCharge, costWastagePercent, costStonePrice, sellingPrice, sellingMakingCharge, sellingWastagePercent, sellingStonePrice, makingCharge, wastagePercent, tags, status, currentLocation, quantity, karigarId } = req.body;
+    const { category, subcategory, metalType, purity, karat, itemName, grossWeight, stoneWeight, netMetalWeight, designCode, description, stoneType, carat, stoneCarat, stoneWeightGram, stoneQuantity, stoneRate, stoneAmount, cut, clarity, certificationNumber, costPrice, costMakingCharge, costWastagePercent, costStonePrice, sellingPrice, sellingMakingCharge, sellingWastagePercent, sellingStonePrice, makingCharge, wastagePercent, tags, status, currentLocation, quantity, karigarId, length, lengthUnit, diameter } = req.body;
     if (!category || !metalType || !purity || !itemName || !grossWeight) {
       return errorResponse(res, 'Category, metalType, purity, itemName, and grossWeight are required', 400);
     }
@@ -138,7 +140,7 @@ exports.createItem = async (req, res) => {
     }
     if (!req.tenantId) return errorResponse(res, 'Tenant context required to create item', 400);
     const item = await createItemWithRetry({
-      tenantId: req.tenantId, category, metalType, purity, karat, itemName, grossWeight, stoneWeight, netMetalWeight, designCode, description, stoneType, carat, stoneCarat, stoneWeightGram, stoneQuantity, stoneRate, stoneAmount, cut, clarity, certificationNumber, costPrice, costMakingCharge: costMakingCharge || 0, costWastagePercent: costWastagePercent || 0, costStonePrice: costStonePrice || 0, sellingPrice, sellingMakingCharge: sellingMakingCharge || 0, sellingWastagePercent: sellingWastagePercent || 0, sellingStonePrice: sellingStonePrice || 0, makingCharge: makingCharge || 0, wastagePercent: wastagePercent || 0, tags: tags || [], images, status: status || 'In Stock', currentLocation, quantity: quantity || 1, karigarId: karigarId || null,
+      tenantId: req.tenantId, category, subcategory, metalType, purity, karat, itemName, grossWeight, stoneWeight, netMetalWeight, designCode, description, stoneType, carat, stoneCarat, stoneWeightGram, stoneQuantity, stoneRate, stoneAmount, cut, clarity, certificationNumber, costPrice, costMakingCharge: costMakingCharge || 0, costWastagePercent: costWastagePercent || 0, costStonePrice: costStonePrice || 0, sellingPrice, sellingMakingCharge: sellingMakingCharge || 0, sellingWastagePercent: sellingWastagePercent || 0, sellingStonePrice: sellingStonePrice || 0,       makingCharge: makingCharge || 0, wastagePercent: wastagePercent || 0, tags: tags || [], images, status: status || 'In Stock', currentLocation, quantity: quantity || 1, karigarId: karigarId || null, length: length || 0, lengthUnit: lengthUnit || 'mm', diameter: diameter || 0,
     });
     await StockMovement.create({
       item: item._id,
@@ -171,7 +173,12 @@ exports.updateItem = async (req, res) => {
     if (!item) {
       return errorResponse(res, 'Item not found', 404);
     }
-    const allowedFields = ['itemType', 'category', 'metalType', 'purity', 'karat', 'itemName', 'grossWeight', 'stoneWeight', 'netMetalWeight', 'designCode', 'description', 'stoneType', 'carat', 'stoneCarat', 'stoneWeightGram', 'stoneQuantity', 'stoneRate', 'stoneAmount', 'cut', 'clarity', 'certificationNumber', 'costPrice', 'costMakingCharge', 'costWastagePercent', 'costStonePrice', 'sellingPrice', 'sellingMakingCharge', 'sellingWastagePercent', 'sellingStonePrice', 'makingCharge', 'wastagePercent', 'tags', 'status', 'currentLocation', 'quantity', 'karigarId'];
+    // Pre-existing items created before the QR feature have no token; mint one
+    // the first time they are edited so old stock still gets a scannable tag.
+    if (!item.qrToken) {
+      item.qrToken = generateQrToken();
+    }
+    const allowedFields = ['itemType', 'category', 'subcategory', 'metalType', 'purity', 'karat', 'itemName', 'grossWeight', 'stoneWeight', 'netMetalWeight', 'designCode', 'description', 'stoneType', 'carat', 'stoneCarat', 'stoneWeightGram', 'stoneQuantity', 'stoneRate', 'stoneAmount', 'cut', 'clarity', 'certificationNumber', 'costPrice', 'costMakingCharge', 'costWastagePercent', 'costStonePrice', 'sellingPrice', 'sellingMakingCharge', 'sellingWastagePercent', 'sellingStonePrice', 'makingCharge', 'wastagePercent', 'tags', 'status', 'currentLocation', 'quantity', 'karigarId', 'length', 'lengthUnit', 'diameter'];
     const previousStatus = item.status;
     const previousQuantity = item.quantity || 0;
     allowedFields.forEach((field) => {
@@ -279,6 +286,91 @@ exports.getItemByBarcode = async (req, res) => {
   }
 };
 
+/**
+ * Resolves a QR code to an item. Accepts either the opaque qrToken (for tags
+ * printed with one) or the barcode (fallback used by older items that predate
+ * the qrToken field). The value alone is never enough: the item is first
+ * located across tenants, then ownership is checked against the caller's
+ * tenantId. A valid token belonging to another shop is rejected with 403 so a
+ * leaked token cannot be used cross-tenant.
+ */
+exports.getItemByQrToken = async (req, res) => {
+  try {
+    const qrToken = String(req.params.qrToken || '').trim();
+    if (!qrToken) {
+      return errorResponse(res, 'Invalid QR code', 400);
+    }
+    // `tenantId: { $ne: null }` is an explicit condition, so tenantPlugin does
+    // not inject the ambient tenant — the doc is located across all tenants.
+    // The ownership check below is the actual security gate.
+    const item = await Item.findOne({
+      $or: [{ qrToken }, { barcode: qrToken }],
+      tenantId: { $ne: null },
+    });
+    if (!item) {
+      return errorResponse(res, 'Item not found for this QR code', 404);
+    }
+    if (Number(item.tenantId) !== Number(req.user.tenantId)) {
+      return errorResponse(res, 'This QR code belongs to a different shop', 403);
+    }
+    return successResponse(res, {
+      qrToken: item.qrToken,
+      SKU: item.SKU,
+      barcode: item.barcode,
+      itemName: item.itemName,
+      category: item.category,
+      designCode: item.designCode,
+      itemType: item.itemType,
+      metalType: item.metalType,
+      purity: item.purity,
+      karat: item.karat,
+      grossWeight: item.grossWeight,
+      stoneWeight: item.stoneWeight,
+      netMetalWeight: item.netMetalWeight,
+      stoneType: item.stoneType,
+      stoneCarat: item.stoneCarat,
+      stoneQuantity: item.stoneQuantity,
+      stoneWeightGram: item.stoneWeightGram,
+      cut: item.cut,
+      clarity: item.clarity,
+      certificationNumber: item.certificationNumber,
+      sellingPrice: item.sellingPrice,
+      makingCharge: item.makingCharge,
+      sellingMakingCharge: item.sellingMakingCharge,
+      wastagePercent: item.wastagePercent,
+      sellingWastagePercent: item.sellingWastagePercent,
+      stonePrice: item.stonePrice,
+      sellingStonePrice: item.sellingStonePrice,
+      status: item.status,
+      images: item.images,
+    });
+  } catch (error) {
+    return errorResponse(res, error.message, 500);
+  }
+};
+
+exports.regenerateItemQrToken = async (req, res) => {
+  try {
+    const item = await Item.findById(req.params.id);
+    if (!item) {
+      return errorResponse(res, 'Item not found', 404);
+    }
+    item.qrToken = generateQrToken();
+    await item.save();
+    await ActivityLog.create({
+      action: 'update',
+      module: 'item',
+      description: `QR token regenerated for item ${item.SKU}`,
+      performedBy: req.user._id,
+      referenceId: item._id,
+      referenceModel: 'Item',
+    });
+    return successResponse(res, item, 'QR token regenerated');
+  } catch (error) {
+    return errorResponse(res, error.message, 500);
+  }
+};
+
 exports.getLowStock = async (req, res) => {
   try {
     const settings = await Settings.getSettings();
@@ -303,6 +395,7 @@ exports.cloneItem = async (req, res) => {
     delete data.isDeleted;
     delete data.deletedAt;
     delete data.priceHistory;
+    delete data.qrToken;
     data.itemName = `${source.itemName} (Copy)`;
     data.status = 'In Stock';
     data.images = [];
@@ -346,6 +439,14 @@ exports.bulkDeleteItems = async (req, res) => {
     if (items.length === 0) return errorResponse(res, 'No items found', 404);
 
     await Promise.all(items.map((item) => item.softDelete()));
+
+    // A loose parent retires all of its lots too (mirrors deleteItem), so they
+    // don't linger as sellable in Loose POS with an orphaned parent item.
+    const looseItems = items.filter((item) => item.itemType === 'loose');
+    if (looseItems.length > 0) {
+      const lots = await LooseLot.find({ item: { $in: looseItems.map((i) => i._id) } });
+      await Promise.all(lots.map((lot) => lot.softDelete()));
+    }
 
     const logs = items.map((item) => ({
       action: 'delete',

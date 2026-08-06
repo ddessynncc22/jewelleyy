@@ -85,14 +85,14 @@ export default function TodaysRate() {
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-amber-50 rounded-xl p-4 text-center">
                 <p className="text-xs font-medium text-amber-600 uppercase tracking-wide">Per Tola</p>
-                <p className="text-2xl font-bold text-amber-800 mt-1">
+                <p className="text-2xl font-bold text-amber-800 mt-1 card-value">
                   {gold?.rate?.toLocaleString() || '-'}
                 </p>
                 <p className="text-xs text-amber-500 mt-0.5">NPR</p>
               </div>
               <div className="bg-amber-50 rounded-xl p-4 text-center">
                 <p className="text-xs font-medium text-amber-600 uppercase tracking-wide">Per Gram</p>
-                <p className="text-2xl font-bold text-amber-800 mt-1">
+                <p className="text-2xl font-bold text-amber-800 mt-1 card-value">
                   {goldPerGram?.toLocaleString() || '-'}
                 </p>
                 <p className="text-xs text-amber-500 mt-0.5">NPR</p>
@@ -120,14 +120,14 @@ export default function TodaysRate() {
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-gray-50 rounded-xl p-4 text-center">
                 <p className="text-xs font-medium text-gray-600 uppercase tracking-wide">Per Tola</p>
-                <p className="text-2xl font-bold text-gray-800 mt-1">
+                <p className="text-2xl font-bold text-gray-800 mt-1 card-value">
                   {silver?.rate?.toLocaleString() || '-'}
                 </p>
                 <p className="text-xs text-gray-500 mt-0.5">NPR</p>
               </div>
               <div className="bg-gray-50 rounded-xl p-4 text-center">
                 <p className="text-xs font-medium text-gray-600 uppercase tracking-wide">Per Gram</p>
-                <p className="text-2xl font-bold text-gray-800 mt-1">
+                <p className="text-2xl font-bold text-gray-800 mt-1 card-value">
                   {silverPerGram?.toLocaleString() || '-'}
                 </p>
                 <p className="text-xs text-gray-500 mt-0.5">NPR</p>

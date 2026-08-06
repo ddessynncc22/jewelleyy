@@ -184,7 +184,7 @@ export default function TaxReport() {
                     </span>
                     <span className="text-xs text-[var(--color-text-secondary)]">{t.count} sale(s)</span>
                   </div>
-                  <p className="mt-3 text-3xl font-bold tracking-tight text-[var(--color-text)]">{fmtMoney(t.amount)}</p>
+                  <p className="mt-3 text-3xl font-bold tracking-tight text-[var(--color-text)] card-value">{fmtMoney(t.amount)}</p>
                   <p className="mt-1 text-xs text-[var(--color-text-secondary)]">Taxable base {fmtMoney(t.taxableBase)}</p>
                 </div>
                 <div className="shrink-0 rounded-xl px-3 py-2 text-right">

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 
 import toast from 'react-hot-toast'
 
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2, X } from 'lucide-react'
 
 import { createItem, updateItem } from '../../services/itemService'
 import { getKarigars } from '../../services/karigarService'
@@ -117,6 +117,7 @@ const STATUS_OPTIONS = [
 const initialState = {
   name: '',
   category: '',
+  subcategory: '',
   designCode: '',
   description: '',
   grossWeight: '',
@@ -126,6 +127,10 @@ const initialState = {
   metalType: '',
   purity: '',
   karat: '',
+  length: '',
+  lengthUnit: 'mm',
+  diameter: '',
+  diameterUnit: 'mm',
   karigarId: '',
   stoneType: '',
   carat: '',
@@ -183,7 +188,11 @@ const ItemForm = ({ item, onClose, onSuccess }) => {
   const [karigars, setKarigars] = useState([])
   const [newCategoryName, setNewCategoryName] = useState('')
   const [showCategoryInput, setShowCategoryInput] = useState(false)
+  const [showDimensions, setShowDimensions] = useState(false)
   const [categoryToDelete, setCategoryToDelete] = useState(null)
+  const [newSubcategoryName, setNewSubcategoryName] = useState('')
+  const [showSubcategoryInput, setShowSubcategoryInput] = useState(false)
+  const [subcategoryToDelete, setSubcategoryToDelete] = useState(null)
   const [images, setImages] = useState([])
   const [newFiles, setNewFiles] = useState([])
 
@@ -200,9 +209,11 @@ const ItemForm = ({ item, onClose, onSuccess }) => {
 
   useEffect(() => {
     if (item) {
+      if (item.length || item.diameter) setShowDimensions(true)
       setForm({
         name: item.itemName || item.name || '',
         category: item.category || '',
+        subcategory: item.subcategory || '',
         designCode: item.designCode || '',
         description: item.description || '',
         grossWeight: item.grossWeight ?? '',
@@ -216,6 +227,10 @@ const ItemForm = ({ item, onClose, onSuccess }) => {
             ? item.karat
             : `${item.karat}K`
           : '',
+        length: item.length ?? '',
+        lengthUnit: item.lengthUnit || 'mm',
+        diameter: item.diameter ?? '',
+        diameterUnit: item.diameterUnit || 'mm',
         karigarId: item.karigarId || '',
         stoneType: item.stoneType || '',
         carat: item.carat ?? '',
@@ -415,6 +430,7 @@ const ItemForm = ({ item, onClose, onSuccess }) => {
       const formData = new FormData()
       formData.append('itemName', form.name.trim())
       formData.append('category', form.category)
+      formData.append('subcategory', form.subcategory || '')
       formData.append('designCode', form.designCode)
       formData.append('description', form.description)
       formData.append('grossWeight', form.grossWeight)
@@ -424,6 +440,10 @@ const ItemForm = ({ item, onClose, onSuccess }) => {
       formData.append('purity', form.purity)
       formData.append('karat', form.karat ? form.karat.replace('K', '') : '')
       formData.append('karigarId', form.karigarId)
+      formData.append('length', form.length || '0')
+      formData.append('lengthUnit', form.lengthUnit || 'mm')
+      formData.append('diameter', form.diameter || '0')
+      formData.append('diameterUnit', form.diameterUnit || 'mm')
       formData.append('stoneType', form.stoneType)
       formData.append('carat', form.carat)
       formData.append('stoneCarat', form.stoneCarat || '0')
@@ -502,13 +522,74 @@ const ItemForm = ({ item, onClose, onSuccess }) => {
       await deleteCategory(categoryToDelete._id)
       setCategories((prev) => prev.filter((c) => c._id !== categoryToDelete._id))
       if (form.category === categoryToDelete.name) {
-        setForm((prev) => ({ ...prev, category: '' }))
+        setForm((prev) => ({ ...prev, category: '', subcategory: '' }))
       }
       toast.success('Category removed')
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to remove category')
     } finally {
       setCategoryToDelete(null)
+    }
+  }
+
+  const handleCategoryChange = (e) => {
+    const { value } = e.target
+    setForm((prev) => ({ ...prev, category: value, subcategory: '' }))
+    if (errors.category) setErrors((prev) => ({ ...prev, category: '' }))
+  }
+
+  const selectedCategory = categories.find((c) => c.name === form.category)
+  const subcategoryOptions =
+    selectedCategory && !selectedCategory.parent
+      ? categories.filter(
+          (c) =>
+            c.parent &&
+            String(c.parent?._id || c.parent) === String(selectedCategory._id),
+        )
+      : []
+
+  const handleAddSubcategory = async () => {
+    const name = newSubcategoryName.trim()
+    if (!name) return
+    if (!selectedCategory || selectedCategory.parent) {
+      toast.error('Select a top-level category first')
+      return
+    }
+    try {
+      const res = await createCategory({ name, parent: selectedCategory._id })
+      const sub = res.data?.data || res.data
+      setCategories((prev) => [...prev, sub].sort((a, b) => a.name.localeCompare(b.name)))
+      setForm((prev) => ({ ...prev, subcategory: sub.name }))
+      setNewSubcategoryName('')
+      setShowSubcategoryInput(false)
+      toast.success('Subcategory created')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to create subcategory')
+    }
+  }
+
+  const confirmRemoveSubcategory = () => {
+    const sub = subcategoryOptions.find((c) => c.name === form.subcategory)
+    if (!sub) {
+      toast.error('Select a subcategory to remove')
+      return
+    }
+    setSubcategoryToDelete(sub)
+  }
+
+  const handleRemoveSubcategory = async () => {
+    if (!subcategoryToDelete) return
+    try {
+      await deleteCategory(subcategoryToDelete._id)
+      setCategories((prev) => prev.filter((c) => c._id !== subcategoryToDelete._id))
+      if (form.subcategory === subcategoryToDelete.name) {
+        setForm((prev) => ({ ...prev, subcategory: '' }))
+      }
+      toast.success('Subcategory removed')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to remove subcategory')
+    } finally {
+      setSubcategoryToDelete(null)
     }
   }
 
@@ -566,8 +647,8 @@ const ItemForm = ({ item, onClose, onSuccess }) => {
               <FormSelect
                 name="category"
                 value={form.category}
-                onChange={handleChange}
-                options={categories.map((c) => ({ value: c.name, label: c.name }))}
+                onChange={handleCategoryChange}
+                options={categories.filter((c) => !c.parent).map((c) => ({ value: c.name, label: c.name }))}
                 placeholder="Select category"
                 error={errors.category}
               />
@@ -594,6 +675,67 @@ const ItemForm = ({ item, onClose, onSuccess }) => {
                   <Button type="button" variant="ghost" size="sm" onClick={() => setShowCategoryInput(false)}>
                     Cancel
                   </Button>
+                </div>
+              )}
+              {selectedCategory && !selectedCategory.parent && (
+                <div className="mt-2">
+                  <div className="mb-1.5 flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium text-[var(--color-text)]">Subcategory</span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewSubcategoryName('')
+                          setShowSubcategoryInput((v) => !v)
+                        }}
+                        title={showSubcategoryInput ? 'Close' : `Add subcategory under ${selectedCategory.name}`}
+                        className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-border)] px-2 py-1 text-xs font-medium text-[var(--color-primary)] transition-colors hover:bg-[var(--color-elevated)]"
+                      >
+                        <Plus size={14} /> {showSubcategoryInput ? 'Close' : 'Add'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={confirmRemoveSubcategory}
+                        disabled={!form.subcategory}
+                        title="Remove selected subcategory"
+                        className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-border)] px-2 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        <Trash2 size={14} /> Remove
+                      </button>
+                    </div>
+                  </div>
+                  <FormSelect
+                    name="subcategory"
+                    value={form.subcategory}
+                    onChange={handleChange}
+                    options={subcategoryOptions.map((c) => ({ value: c.name, label: c.name }))}
+                    placeholder={`Select subcategory`}
+                  />
+                  {showSubcategoryInput && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <input
+                        autoFocus
+                        type="text"
+                        value={newSubcategoryName}
+                        onChange={(e) => setNewSubcategoryName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            handleAddSubcategory()
+                          }
+                          if (e.key === 'Escape') setShowSubcategoryInput(false)
+                        }}
+                        placeholder={`Subcategory under ${selectedCategory.name}`}
+                        className="flex-1 rounded-xl border border-[var(--color-border)] px-3 py-1.5 text-xs bg-[var(--color-card)] text-[var(--color-text)] placeholder-[var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:border-[var(--color-primary)] focus:ring-[var(--color-primary)]/20"
+                      />
+                      <Button type="button" size="sm" onClick={handleAddSubcategory} disabled={!newSubcategoryName.trim()}>
+                        Save
+                      </Button>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setShowSubcategoryInput(false)}>
+                        Cancel
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -669,6 +811,72 @@ const ItemForm = ({ item, onClose, onSuccess }) => {
               placeholder="1"
             />
           </div>
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-200">
+            <h3 className="text-base font-semibold text-gray-900">Dimensions</h3>
+            <button
+              type="button"
+              onClick={() => setShowDimensions((v) => !v)}
+              title={showDimensions ? 'Hide dimensions' : 'Add dimensions'}
+              className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-border)] px-2 py-1 text-xs font-medium text-[var(--color-primary)] transition-colors hover:bg-[var(--color-elevated)]"
+            >
+              {showDimensions ? <X size={14} /> : <Plus size={14} />} {showDimensions ? 'Close' : 'Add'}
+            </button>
+          </div>
+          {showDimensions && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="flex items-center gap-2">
+                <FormInput
+                  label="Length"
+                  name="length"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={form.length}
+                  onChange={handleChange}
+                  placeholder="0.00"
+                  className="flex-1"
+                />
+                <FormSelect
+                  name="lengthUnit"
+                  value={form.lengthUnit}
+                  onChange={handleChange}
+                  options={[
+                    { value: 'mm', label: 'mm' },
+                    { value: 'cm', label: 'cm' },
+                    { value: 'inch', label: 'inch' },
+                  ]}
+                  className="w-20"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <FormInput
+                  label="Diameter"
+                  name="diameter"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={form.diameter}
+                  onChange={handleChange}
+                  placeholder="0.00"
+                  className="flex-1"
+                />
+                <FormSelect
+                  name="diameterUnit"
+                  value={form.diameterUnit || 'mm'}
+                  onChange={(e) => setForm((f) => ({ ...f, diameterUnit: e.target.value }))}
+                  options={[
+                    { value: 'mm', label: 'mm' },
+                    { value: 'cm', label: 'cm' },
+                    { value: 'inch', label: 'inch' },
+                  ]}
+                  className="w-20"
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         <div>
@@ -1001,6 +1209,14 @@ const ItemForm = ({ item, onClose, onSuccess }) => {
         onConfirm={handleRemoveCategory}
         title="Remove category"
         message={`Delete category "${categoryToDelete?.name}"? Items already using it keep their category name.`}
+        confirmText="Remove"
+      />
+      <ConfirmDialog
+        isOpen={!!subcategoryToDelete}
+        onClose={() => setSubcategoryToDelete(null)}
+        onConfirm={handleRemoveSubcategory}
+        title="Remove subcategory"
+        message={`Delete subcategory "${subcategoryToDelete?.name}"? Items already using it keep their subcategory name.`}
         confirmText="Remove"
       />
     </Modal>

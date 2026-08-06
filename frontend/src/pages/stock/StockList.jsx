@@ -217,7 +217,7 @@ const StockList = () => {
       render: (_, row) => {
         const item = row.item
         if (!item) {
-          return <span className="text-sm text-[var(--color-text-secondary)]">—</span>
+          return <span className="text-sm text-gray-400">—</span>
         }
         const imgSrc = getImageSrc(item.images?.[0])
         return (
@@ -242,6 +242,9 @@ const StockList = () => {
               </p>
               {item.SKU && (
                 <p className="font-mono text-xs text-[var(--color-text-secondary)]">{item.SKU}</p>
+              )}
+              {item.isDeleted && (
+                <span className="inline-block mt-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">deleted</span>
               )}
             </div>
           </div>

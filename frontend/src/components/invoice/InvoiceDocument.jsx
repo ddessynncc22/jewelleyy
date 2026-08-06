@@ -33,10 +33,9 @@ export default function InvoiceDocument({
   grandTotal,
   paymentType,
   paidAmount,
-  oldGoldWeight,
+
   oldGoldAmount,
-  oldGoldPurity,
-  oldGoldDeductionPercent,
+
   cashier,
 }) {
   return (
@@ -85,10 +84,7 @@ export default function InvoiceDocument({
         grandTotal={grandTotal}
         paymentType={paymentType}
         paidAmount={paidAmount}
-        oldGoldWeight={oldGoldWeight}
         oldGoldAmount={oldGoldAmount}
-        oldGoldPurity={oldGoldPurity}
-        oldGoldDeductionPercent={oldGoldDeductionPercent}
       />
 
       <InvoiceFooter companyName={companyName} cashier={cashier} />

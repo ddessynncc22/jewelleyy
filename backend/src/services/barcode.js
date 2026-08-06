@@ -6,6 +6,8 @@ const generateBarcode = () => {
   return `JWL${timestamp}${random}`;
 };
 
+const generateQrToken = () => crypto.randomUUID();
+
 const generateSKU = (category, metalType, purity) => {
   const cat = category.substring(0, 3).toUpperCase();
   const metalMap = { gold: 'GLD', silver: 'SLV', diamond: 'DMD', gemstone: 'GEM' };
@@ -15,4 +17,4 @@ const generateSKU = (category, metalType, purity) => {
   return `${cat}-${metal}-${pur}-${unique}`;
 };
 
-module.exports = { generateBarcode, generateSKU };
+module.exports = { generateBarcode, generateSKU, generateQrToken };

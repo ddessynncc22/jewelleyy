@@ -106,43 +106,95 @@ exports.getInventoryValue = async (req, res) => {
 
     const allItems = await Item.find({ status: 'In Stock' }).lean();
     const looseMap = await getLooseStockMap(allItems);
-    const goldItems = allItems
-      .filter((i) => i.metalType === 'gold' && i.stoneType !== 'diamond')
-      .map((i) => itemValue(i, goldRate, silverRate, looseMap));
-    const goldDiamondItems = allItems
-      .filter((i) => i.metalType === 'gold' && i.stoneType === 'diamond')
-      .map((i) => itemValue(i, goldRate, silverRate, looseMap));
-    const silverItems = allItems
-      .filter((i) => i.metalType === 'silver')
-      .map((i) => itemValue(i, goldRate, silverRate, looseMap));
-    const otherItems = allItems
-      .filter((i) => i.metalType !== 'gold' && i.metalType !== 'silver')
-      .map((i) => itemValue(i, goldRate, silverRate, looseMap));
 
-    const buildGroup = (key, label, items, rate) => ({
-      key,
-      label,
-      count: items.length,
-      totalItems: items.reduce((s, i) => s + i.pieces, 0),
-      totalQuantity: items.reduce((s, i) => s + i.pieces, 0),
-      totalWeight: items.reduce((s, i) => s + i.weight, 0),
-      rate,
-      totalValue: items.reduce((s, i) => s + i.value, 0),
-      items,
+    const metals = ['gold', 'silver', 'diamond'];
+    const metalLabels = { gold: 'Gold', silver: 'Silver', diamond: 'Diamond / Gemstone' };
+    const metalRates = { gold: goldRate.rate, silver: silverRate.rate, diamond: 0 };
+
+    const metalGroups = metals.map((metal) => {
+      const filtered = allItems.filter((i) => {
+        if (metal === 'diamond') return i.metalType !== 'gold' && i.metalType !== 'silver';
+        return i.metalType === metal;
+      });
+
+      const categoryMap = new Map();
+      for (const item of filtered) {
+        const cat = item.category || 'Uncategorized';
+        const subcat = item.subcategory || null;
+        if (!categoryMap.has(cat)) categoryMap.set(cat, new Map());
+        const subMap = categoryMap.get(cat);
+        if (!subMap.has(subcat)) subMap.set(subcat, []);
+        subMap.get(subcat).push(itemValue(item, goldRate, silverRate, looseMap));
+      }
+
+      const categories = [];
+      for (const [catName, subMap] of categoryMap) {
+        let catTotalValue = 0;
+        let catTotalWeight = 0;
+        let catTotalQuantity = 0;
+        let catTotalPieces = 0;
+
+        const subcategories = [];
+        for (const [subcatName, items] of subMap) {
+          const subValue = items.reduce((s, i) => s + i.value, 0);
+          const subWeight = items.reduce((s, i) => s + i.weight, 0);
+          const subPieces = items.reduce((s, i) => s + i.pieces, 0);
+          catTotalValue += subValue;
+          catTotalWeight += subWeight;
+          catTotalQuantity += items.length;
+          catTotalPieces += subPieces;
+          subcategories.push({
+            key: subcatName,
+            label: subcatName || '(no subcategory)',
+            totalValue: subValue,
+            totalWeight: subWeight,
+            totalQuantity: items.length,
+            totalPieces: subPieces,
+            items,
+          });
+        }
+
+        categories.push({
+          key: catName,
+          label: catName,
+          totalValue: catTotalValue,
+          totalWeight: catTotalWeight,
+          totalQuantity: catTotalQuantity,
+          totalPieces: catTotalPieces,
+          subcategories,
+        });
+      }
+
+      const metalTotalValue = categories.reduce((s, c) => s + c.totalValue, 0);
+      const metalTotalWeight = categories.reduce((s, c) => s + c.totalWeight, 0);
+      const metalTotalQuantity = categories.reduce((s, c) => s + c.totalQuantity, 0);
+      const metalTotalPieces = categories.reduce((s, c) => s + c.totalPieces, 0);
+
+      return {
+        key: metal,
+        label: metalLabels[metal],
+        rate: metalRates[metal],
+        totalValue: metalTotalValue,
+        totalWeight: metalTotalWeight,
+        totalQuantity: metalTotalQuantity,
+        totalPieces: metalTotalPieces,
+        categories,
+      };
     });
 
-    const groups = [
-      buildGroup('gold', 'Gold', goldItems, goldRate.rate),
-      buildGroup('gold-diamond', 'Gold & Diamond', goldDiamondItems, goldRate.rate),
-      buildGroup('silver', 'Silver', silverItems, silverRate.rate),
-      buildGroup('other', 'Diamond / Gemstone', otherItems, 0),
-    ];
+    const totalValue = metalGroups.reduce((s, m) => s + m.totalValue, 0);
+    const totalQuantity = metalGroups.reduce((s, m) => s + m.totalQuantity, 0);
+    const totalPieces = metalGroups.reduce((s, m) => s + m.totalPieces, 0);
+    const totalWeight = metalGroups.reduce((s, m) => s + m.totalWeight, 0);
 
     return successResponse(res, {
       goldRate,
       silverRate,
-      totalValue: groups.reduce((s, g) => s + g.totalValue, 0),
-      groups,
+      totalValue,
+      totalQuantity,
+      totalPieces,
+      totalWeight,
+      metals: metalGroups,
     });
   } catch (error) {
     return errorResponse(res, error.message, 500);

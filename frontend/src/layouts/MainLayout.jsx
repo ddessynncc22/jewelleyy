@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Outlet, useLocation, Link, useNavigate } from 'react-router-dom'
+import { Outlet, useLocation, Link, useNavigate, Navigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useAuth } from '../hooks/useAuth'
 import Sidebar from './Sidebar'
@@ -11,12 +11,12 @@ import Modal from '../components/ui/Modal'
 import FormInput from '../components/ui/FormInput'
 import Button from '../components/ui/Button'
 
-const breadcrumbMap = {
+  const breadcrumbMap = {
   '/': 'Dashboard', '/items': 'Items', '/stock': 'Stock Movement',
   '/loose-lots': 'Loose Items',
   '/karigar': 'Karigar', '/karigar/pending-jobs': 'Pending Jobs', '/pawn': 'Bandaki', '/custom-orders': 'Custom Orders', '/pos': 'POS', '/pos/diamond': 'Diamond POS',
   '/customers': 'Customers', '/rates': 'Rates', '/reports': 'Reports',
-  '/audit': 'Audit', '/settings': 'Settings',
+  '/audit': 'Audit', '/settings': 'Settings', '/lookup': 'QR Lookup',
   '/admin': 'Dashboard',
   '/admin/tenants': 'Tenants',
   '/admin/requests': 'Requests',
@@ -49,6 +49,14 @@ export default function MainLayout() {
   const segments = location.pathname.split('/').filter(Boolean)
   const fullPath = '/' + segments.join('/')
   const label = breadcrumbMap[fullPath] || breadcrumbMap['/' + segments[0]] || 'Page'
+
+  const isQrLookup = user?.role === 'qr_lookup'
+
+  // qr_lookup accounts may only ever see the QR lookup page; the backend also
+  // rejects every other API, this just keeps the UI from mounting other screens.
+  if (isQrLookup && !location.pathname.startsWith('/lookup')) {
+    return <Navigate to="/lookup" replace />
+  }
 
   const handleChangePassword = async (e) => {
     e.preventDefault()
@@ -96,8 +104,8 @@ export default function MainLayout() {
           </button>
 
           <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-[var(--color-text-secondary)] min-w-0">
-            <Link to={user?.role === 'superadmin' ? '/admin' : '/'} className="hidden sm:inline hover:text-[var(--color-text)] transition-colors shrink-0">
-              {user?.role === 'superadmin' ? 'Admin' : 'Home'}
+            <Link to={isQrLookup ? '/lookup' : user?.role === 'superadmin' ? '/admin' : '/'} className="hidden sm:inline hover:text-[var(--color-text)] transition-colors shrink-0">
+              {isQrLookup ? 'QR Lookup' : user?.role === 'superadmin' ? 'Admin' : 'Home'}
             </Link>
             <span className="hidden sm:inline text-[var(--color-border)]">/</span>
             <span className="text-[var(--color-text)] font-medium truncate">{label}</span>
@@ -105,7 +113,7 @@ export default function MainLayout() {
 
           <div className="flex-1 min-w-0" />
 
-          {user?.role !== 'superadmin' && (
+          {user?.role !== 'superadmin' && user?.role !== 'qr_lookup' && (
             <div className="hidden sm:flex items-center bg-[var(--color-elevated)] rounded-xl px-3 py-1.5 max-w-xs w-full border border-[var(--color-border)]/50">
               <Search size={16} className="text-[var(--color-text-secondary)] mr-2 shrink-0" />
               <input
@@ -124,7 +132,7 @@ export default function MainLayout() {
             </div>
           )}
 
-          {user?.role !== 'superadmin' && <NotificationBell />}
+          {user?.role !== 'superadmin' && user?.role !== 'qr_lookup' && <NotificationBell />}
 
           <div className="relative">
             <button
@@ -148,7 +156,7 @@ export default function MainLayout() {
                     <p className="text-xs text-[var(--color-text-secondary)] truncate">{user?.email}</p>
                   </div>
                   <div className="pt-1">
-                    {user?.role !== 'superadmin' && (
+                    {user?.role !== 'superadmin' && user?.role !== 'qr_lookup' && (
                       <button
                         onClick={() => { setShowUser(false); navigate('/settings') }}
                         className="flex items-center gap-2.5 px-4 py-2 text-sm text-[var(--color-text)] hover:bg-[var(--color-elevated)] transition-colors w-full text-left"
