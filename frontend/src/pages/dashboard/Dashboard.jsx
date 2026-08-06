@@ -1,11 +1,11 @@
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 
-import { Gem, Wrench, Package, TrendingUp, Activity, Grid3X3, Layers, Plus, ArrowRightLeft, ExternalLink, Clock, CheckCircle2 } from 'lucide-react'
+import { Gem, Wrench, Package, TrendingUp, Activity, Grid3X3, Layers, Plus, ArrowRightLeft, ExternalLink, Clock, CheckCircle2, Landmark } from 'lucide-react'
 
 import { getDashboardStats } from '../../services/dashboardService'
 
-import { applyTransportRate, getTransportCharges } from '../../utils/helpers'
+import { applyTransportRate, getTransportCharges, formatCurrency } from '../../utils/helpers'
 
 import StatCard from '../../components/ui/StatCard'
 
@@ -197,11 +197,12 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard title="Total Inventory" value={stats.totalInventory || 0} icon={Gem} color="gold" subtitle="Items in stock" />
-        <StatCard title="Inventory Value" value={`Rs. ${(stats.totalValue || 0).toLocaleString()}`} icon={Package} color="green" subtitle="At today's rates" onClick={() => navigate('/inventory-value')} />
+        <StatCard title="Inventory Value" value={formatCurrency(stats.totalValue)} icon={Package} color="green" subtitle="At today's rates" onClick={() => navigate('/inventory-value')} />
         <StatCard title="Pending Karigar Jobs" value={stats.pendingKarigarJobs || 0} icon={Wrench} color="orange" subtitle="Work in progress" />
         <StatCard title="Low Stock Alerts" value={stats.lowStockItems || 0} icon={Activity} color="red" subtitle="Below threshold" onClick={() => navigate('/stock')} />
+        <StatCard title="Active Pawn Loans" value={stats.activePawnLoans || 0} icon={Landmark} color="purple" subtitle="Dhito outstanding" onClick={() => navigate('/pawn')} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
