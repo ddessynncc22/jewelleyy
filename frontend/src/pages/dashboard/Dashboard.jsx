@@ -44,30 +44,30 @@ const todayLabel = new Date().toLocaleDateString('en-US', {
 })
 
 const statusColors = {
-  'In Stock': 'text-emerald-600 bg-emerald-50',
-  Sold: 'text-blue-600 bg-blue-50',
-  'With Karigar': 'text-amber-600 bg-amber-50',
-  'Pawn Collateral': 'text-purple-600 bg-purple-50',
-  'Branch Transfer': 'text-orange-600 bg-orange-50',
-  Damaged: 'text-red-600 bg-red-50',
-  Melted: 'text-gray-600 bg-gray-50',
+  'In Stock': 'text-success bg-success/10',
+  Sold: 'text-info bg-info/10',
+  'With Karigar': 'text-warning bg-warning/10',
+  'Pawn Collateral': 'text-violet-700 bg-violet-50',
+  'Branch Transfer': 'text-orange-700 bg-orange-50',
+  Damaged: 'text-danger bg-danger/10',
+  Melted: 'text-ink-600 bg-ink-100',
 }
 
 const statusBarColors = {
-  'In Stock': 'bg-emerald-500',
-  Sold: 'bg-blue-500',
-  'With Karigar': 'bg-amber-500',
-  'Pawn Collateral': 'bg-purple-500',
+  'In Stock': 'bg-success',
+  Sold: 'bg-info',
+  'With Karigar': 'bg-warning',
+  'Pawn Collateral': 'bg-violet-500',
   'Branch Transfer': 'bg-orange-500',
-  Damaged: 'bg-red-500',
-  Melted: 'bg-gray-400',
+  Damaged: 'bg-danger',
+  Melted: 'bg-ink-400',
 }
 
 const metalColors = {
-  gold: 'bg-yellow-500',
-  silver: 'bg-gray-400',
-  platinum: 'bg-slate-500',
-  diamond: 'bg-cyan-500',
+  gold: 'bg-[var(--color-gold-500)]',
+  silver: 'bg-ink-300',
+  platinum: 'bg-slate-400',
+  diamond: 'bg-cyan-400',
   other: 'bg-pink-400',
 }
 
@@ -75,16 +75,16 @@ function DistributionRow({ label, count, total, pct, barColor, badgeClass }) {
   const share = total ? Math.round((count / total) * 100) : 0
   return (
     <div className="py-2">
-      <div className="flex items-center justify-between gap-2 mb-1.5">
-        <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${badgeClass} flex-shrink-0`}>
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <span className={`flex-shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${badgeClass}`}>
           {label}
         </span>
-        <span className="text-sm font-semibold text-[var(--color-text)] text-right flex-shrink-0">
+        <span className="flex-shrink-0 text-right text-sm font-semibold text-[var(--color-text)] num">
           {count}
           <span className="text-xs font-normal text-[var(--color-text-secondary)]"> · {share}%</span>
         </span>
       </div>
-      <div className="h-1.5 rounded-full bg-[var(--color-elevated)] overflow-hidden">
+      <div className="h-1.5 overflow-hidden rounded-full bg-[var(--color-elevated)]">
         <div
           className={`h-full rounded-full transition-all duration-500 ${barColor}`}
           style={{ width: `${pct}%` }}
@@ -125,7 +125,7 @@ export default function Dashboard() {
   const recentCols = [
     { key: 'movementDate', label: 'Date', render: (v) => (
       <span className="inline-flex items-center gap-1" title={new Date(v).toLocaleString()}>
-        <Clock className="w-3 h-3 text-gray-400" />
+        <Clock className="h-3 w-3 text-[var(--color-ink-400)]" />
         {timeAgo(v)}
       </span>
     )},
@@ -149,23 +149,25 @@ export default function Dashboard() {
         </div>
       </PageHeader>
 
-      <div className="rounded-2xl border border-[var(--color-border)] bg-gradient-to-r from-[var(--color-primary-light)] via-[var(--color-card)] to-[var(--color-primary-light)] shadow-sm px-6 py-5">
-        <div className="flex items-center justify-between mb-4">
+      {/* Market rates */}
+      <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-6 shadow-sm">
+        <div className="mb-4 flex items-center justify-between">
           <h2 className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--color-text)]">
-            <TrendingUp size={16} className="text-[var(--color-primary)]" />
-            Today's Market Rates
+            <TrendingUp size={16} className="text-[var(--color-gold-600)]" />
+            Today&apos;s Market Rates
           </h2>
           <a
             href="/todays-rate"
-            className="inline-flex items-center gap-1 text-xs font-medium text-[var(--color-primary-hover)] hover:text-[var(--color-primary)]"
+            className="inline-flex items-center gap-1 text-xs font-medium text-[var(--color-gold-700)] hover:text-[var(--color-gold-800)] transition-colors"
           >
             View full rates <ExternalLink size={12} />
           </a>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="flex items-center justify-between gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] px-5 py-4 shadow-sm">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-primary-bg)] px-5 py-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--color-gold-100)] text-[var(--color-gold-700)]">
                 <Gem size={20} />
               </div>
               <div className="min-w-0">
@@ -173,15 +175,15 @@ export default function Dashboard() {
                 <p className="text-xs text-[var(--color-text-secondary)]">NPR {goldPerGram.toLocaleString()} / gram</p>
               </div>
             </div>
-            <div className="text-right shrink-0">
-              <p className="text-xl font-bold tracking-tight text-amber-700">{goldRate.toLocaleString()}</p>
+            <div className="shrink-0 text-right">
+              <p className="num text-xl font-bold tracking-tight text-[var(--color-gold-800)]">{goldRate.toLocaleString()}</p>
               <p className="text-xs text-[var(--color-text-secondary)]">per {goldUnit}</p>
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] px-5 py-4 shadow-sm">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-gray-500">
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] px-5 py-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-ink-100 text-ink-500">
                 <Gem size={20} />
               </div>
               <div className="min-w-0">
@@ -189,8 +191,8 @@ export default function Dashboard() {
                 <p className="text-xs text-[var(--color-text-secondary)]">NPR {silverPerGram.toLocaleString()} / gram</p>
               </div>
             </div>
-            <div className="text-right shrink-0">
-              <p className="text-xl font-bold tracking-tight text-gray-700">{silverRate.toLocaleString()}</p>
+            <div className="shrink-0 text-right">
+              <p className="num text-xl font-bold tracking-tight text-ink-700">{silverRate.toLocaleString()}</p>
               <p className="text-xs text-[var(--color-text-secondary)]">per {silverUnit}</p>
             </div>
           </div>
@@ -207,7 +209,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <Card title="Items by Status" icon={Grid3X3} className="min-h-[200px]">
           {byStatus.length === 0 ? (
-            <div className="text-center py-8 text-sm text-gray-500">No data</div>
+            <div className="py-8 text-center text-sm text-[var(--color-text-secondary)]">No data</div>
           ) : (
             <div className="space-y-3">
               {byStatus.map((s) => (
@@ -217,8 +219,8 @@ export default function Dashboard() {
                   count={s.count}
                   total={totalStatusCount}
                   pct={Math.round((s.count / maxStatusCount) * 100)}
-                  barColor={statusBarColors[s._id] || 'bg-gray-400'}
-                  badgeClass={statusColors[s._id] || 'text-gray-600 bg-gray-100'}
+                  barColor={statusBarColors[s._id] || 'bg-ink-400'}
+                  badgeClass={statusColors[s._id] || 'text-ink-600 bg-ink-100'}
                 />
               ))}
             </div>
@@ -227,7 +229,7 @@ export default function Dashboard() {
 
         <Card title="Items by Metal Type" icon={Layers} className="min-h-[200px]">
           {byMetal.length === 0 ? (
-            <div className="text-center py-8 text-sm text-gray-500">No data</div>
+            <div className="py-8 text-center text-sm text-[var(--color-text-secondary)]">No data</div>
           ) : (
             <div className="space-y-3">
               {byMetal.map((m) => (
@@ -237,8 +239,8 @@ export default function Dashboard() {
                   count={m.count}
                   total={totalMetalCount}
                   pct={Math.round((m.count / maxMetalCount) * 100)}
-                  barColor={metalColors[m._id] || 'bg-gray-400'}
-                  badgeClass="text-gray-600 bg-gray-100 capitalize"
+                  barColor={metalColors[m._id] || 'bg-ink-400'}
+                  badgeClass="text-ink-600 bg-ink-100 capitalize"
                 />
               ))}
             </div>
@@ -249,12 +251,12 @@ export default function Dashboard() {
           {stats.lowStockItemList?.length > 0 ? (
             <div className="space-y-2">
               {stats.lowStockItemList.map((item) => (
-                <div key={item._id} className="flex items-center justify-between gap-3 rounded-xl border border-red-100 bg-red-50/60 px-3.5 py-2.5">
+                <div key={item._id} className="flex items-center justify-between gap-3 rounded-xl border border-danger/20 bg-danger/5 px-3.5 py-2.5">
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-[var(--color-text)] truncate">{item.itemName}</p>
-                    <p className="text-xs text-[var(--color-text-secondary)] truncate">{item.SKU} · {item.metalType}</p>
+                    <p className="truncate text-sm font-medium text-[var(--color-text)]">{item.itemName}</p>
+                    <p className="truncate text-xs text-[var(--color-text-secondary)]">{item.SKU} · {item.metalType}</p>
                   </div>
-                  <span className="shrink-0 rounded-full bg-red-600 text-white text-xs font-semibold px-2.5 py-0.5">
+                  <span className="shrink-0 rounded-full bg-danger px-2.5 py-0.5 text-xs font-semibold text-white">
                     {item.quantity} left
                   </span>
                 </div>
@@ -262,9 +264,9 @@ export default function Dashboard() {
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-10 text-center">
-              <CheckCircle2 className="h-9 w-9 text-emerald-400 mb-2" />
+              <CheckCircle2 className="mb-2 h-9 w-9 text-success" />
               <p className="text-sm font-medium text-[var(--color-text)]">All stocked up</p>
-              <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">No items below the stock threshold</p>
+              <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">No items below the stock threshold</p>
             </div>
           )}
         </Card>

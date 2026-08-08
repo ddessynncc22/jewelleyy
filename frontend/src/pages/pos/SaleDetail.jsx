@@ -4,7 +4,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 
 import toast from 'react-hot-toast'
 
-import { ArrowLeft, Trash2, User, Calendar, Hash, CreditCard, Package, DollarSign } from 'lucide-react'
+import { ArrowLeft, Trash2, User, Calendar, Hash, CreditCard, Package, DollarSign, Scale, Gem } from 'lucide-react'
 
 import { getSale, deleteSale, getSales } from '../../services/posService'
 
@@ -20,7 +20,7 @@ import LoadingSkeleton from '../../components/ui/LoadingSkeleton'
 
 import ErrorState from '../../components/ui/ErrorState'
 
-import { formatCurrency, formatDateTime, formatWeight } from '../../utils/helpers'
+import { formatCurrency, formatDateTime, formatWeight, formatWeightTolaLaal } from '../../utils/helpers'
 
 const SaleDetail = () => {
   const { id } = useParams()
@@ -145,10 +145,47 @@ const SaleDetail = () => {
                 <span className="text-green-600 font-medium">- {formatCurrency(sale.discountAmount)}</span>
               </div>
             )}
-            {sale.actualAmountReceived != null && (
+            <div className="flex justify-between pt-1 border-t border-dashed">
+              <span className="font-medium text-gray-800">Bill Total</span>
+              <span className="font-semibold text-gray-900">
+                {formatCurrency((sale.totalAmount + (sale.taxDetails?.totalTax || 0) - (sale.discountAmount || 0)))}
+              </span>
+            </div>
+            {sale.oldGoldDetails?.deductibleAmount > 0 && (
               <div className="flex justify-between">
-                <span className="text-gray-600">Amount Received</span>
-                <span className="text-blue-600">{formatCurrency(sale.actualAmountReceived)}</span>
+                <span className="text-gray-600 flex items-center gap-1">
+                  <Gem className="h-3.5 w-3.5 text-amber-600" />
+                  Old Gold Credit
+                </span>
+                <span className="font-medium text-amber-700">- {formatCurrency(sale.oldGoldDetails.deductibleAmount)}</span>
+              </div>
+            )}
+            {sale.cashAmount > 0 && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">Cash Paid</span>
+                <span className="text-gray-900">{formatCurrency(sale.cashAmount)}</span>
+              </div>
+            )}
+            {sale.khaataAmount > 0 && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">Khaata Added</span>
+                <span className="text-blue-600">{formatCurrency(sale.khaataAmount)}</span>
+              </div>
+            )}
+            {Array.isArray(sale.payments) && sale.payments.length > 0 && (
+              <div className="space-y-1">
+                {sale.payments.map((p, i) => (
+                  <div key={i} className="flex justify-between text-xs text-gray-500">
+                    <span>{(p.method || 'cash').toUpperCase()}{p.bank ? ` · ${p.bank}` : ''}</span>
+                    <span>{formatCurrency(p.amount)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {sale.changeReturned > 0 && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">Change Returned</span>
+                <span className="text-red-600">- {formatCurrency(sale.changeReturned)}</span>
               </div>
             )}
             <div className="flex justify-between pt-2 border-t">
@@ -163,6 +200,67 @@ const SaleDetail = () => {
             </div>
           </div>
         </Card>
+
+        {sale.oldGoldDetails && sale.oldGoldDetails.weight > 0 && (
+          <Card title="Old Gold Exchange" icon={Scale} className="lg:col-span-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+              <div>
+                <p className="text-xs text-gray-500">Gross Weight</p>
+                <p className="font-semibold text-gray-900">{formatWeight(sale.oldGoldDetails.weight)} g <span className="text-xs text-gray-400">({formatWeightTolaLaal(sale.oldGoldDetails.weight)})</span></p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Karat / Purity</p>
+                <p className="font-semibold text-gray-900">
+                  {sale.oldGoldDetails.purity > 0 ? `${sale.oldGoldDetails.purity}K` : '-'}
+                  <span className="text-xs text-gray-400 ml-1">({sale.oldGoldDetails.purity > 0 ? Math.round((sale.oldGoldDetails.purity / 24) * 1000) : 0})</span>
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Deduction</p>
+                <p className="font-semibold text-gray-900">{sale.oldGoldDetails.deductionPercent || 0}%</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Net Weight</p>
+                <p className="font-semibold text-gray-900">{formatWeight(sale.oldGoldDetails.netWeight)} g <span className="text-xs text-gray-400">({formatWeightTolaLaal(sale.oldGoldDetails.netWeight)})</span></p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Old Gold Value</p>
+                <p className="font-semibold text-amber-700">{formatCurrency(sale.oldGoldDetails.value)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Amount Credited</p>
+                <p className="font-semibold text-green-700">{formatCurrency(sale.oldGoldDetails.deductibleAmount)}</p>
+              </div>
+              {sale.oldGoldDetails.valuedAmount > 0 && (
+                <div>
+                  <p className="text-xs text-gray-500">Valued Amount (entered)</p>
+                  <p className="font-semibold text-gray-900">{formatCurrency(sale.oldGoldDetails.valuedAmount)}</p>
+                </div>
+              )}
+              {sale.cashierName && (
+                <div>
+                  <p className="text-xs text-gray-500">Cashier</p>
+                  <p className="font-semibold text-gray-900">{sale.cashierName}</p>
+                </div>
+              )}
+            </div>
+            <div className="mt-4 pt-3 border-t border-gray-100 flex flex-wrap gap-4 text-sm">
+              {sale.cashAmount > 0 && (
+                <div className="flex items-center gap-2">
+                  <Gem size={13} className="text-amber-600" />
+                  <span className="text-gray-600">Cash paid:</span>
+                  <span className="font-semibold text-gray-900">{formatCurrency(sale.cashAmount)}</span>
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <Scale size={13} className="text-blue-600" />
+                <span className="text-gray-600">Gold handed over:</span>
+                <span className="font-semibold text-gray-900">{formatWeight(sale.oldGoldDetails.weight)} g ({sale.oldGoldDetails.purity > 0 ? `${sale.oldGoldDetails.purity}K` : ''})</span>
+              </div>
+            </div>
+          </Card>
+        )}
+
       </div>
       <Card title="Items Sold" icon={Package}>
         <div className="overflow-x-auto">
@@ -173,6 +271,8 @@ const SaleDetail = () => {
                 <th className="px-4 py-3 text-left font-medium text-gray-600">SKU</th>
                 <th className="px-4 py-3 text-right font-medium text-gray-600">Weight</th>
                 <th className="px-4 py-3 text-right font-medium text-gray-600">Purity</th>
+                <th className="px-4 py-3 text-right font-medium text-gray-600">Rate/g</th>
+                <th className="px-4 py-3 text-right font-medium text-gray-600">Making</th>
                 <th className="px-4 py-3 text-right font-medium text-gray-600">Price</th>
                 <th className="px-4 py-3 text-right font-medium text-gray-600">Qty</th>
                 <th className="px-4 py-3 text-right font-medium text-gray-600">Total</th>
@@ -181,25 +281,50 @@ const SaleDetail = () => {
             <tbody className="divide-y divide-gray-100">
               {items.map((entry, idx) => {
                 const item = entry.item || entry
+                // Loose-lot lines store `price` as the TOTAL line price
+                // (metal value of the whole weighed weight + making charge),
+                // while tagged items store a per-unit price.
+                const isLoose = item?.itemType === 'loose' || (!item?.itemName && !item?.SKU)
                 const qty = entry.quantity || entry.qty || 1
                 const price = entry.price || item.sellingPrice || item.price || 0
+                const lineTotal = isLoose ? price : price * qty
+                const weight = entry.weight || item.grossWeight || item.weight || 0
+                const purity = entry.purity || item.purity || item.karat || '-'
                 return (
                   <tr key={item._id || idx} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-sm font-medium text-gray-900">{item.itemName || item.name || '-'}</td>
                     <td className="px-4 py-3 text-sm text-gray-600">{item.SKU || item.sku || '-'}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600 text-right">{formatWeight(item.grossWeight || item.weight)}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600 text-right">{item.purity || item.karat || '-'}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900 text-right">{formatCurrency(price)}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600 text-right">{formatWeight(weight)}{isLoose ? ' (weighed)' : ''}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600 text-right">{purity}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600 text-right">{entry.ratePerGram ? formatCurrency(entry.ratePerGram) : '-'}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600 text-right">{entry.makingCharge ? formatCurrency(entry.makingCharge) : '-'}</td>
+                    <td className="px-4 py-3 text-sm text-gray-900 text-right">{formatCurrency(price)}{isLoose ? ' (line)' : ''}</td>
                     <td className="px-4 py-3 text-sm text-gray-900 text-right">{qty}</td>
-                    <td className="px-4 py-3 text-sm font-semibold text-gray-900 text-right">{formatCurrency(price * qty)}</td>
+                    <td className="px-4 py-3 text-sm font-semibold text-gray-900 text-right">{formatCurrency(lineTotal)}</td>
                   </tr>
                 )
               })}
             </tbody>
             <tfoot className="bg-gray-50">
               <tr>
-                <td colSpan={6} className="px-4 py-3 text-sm font-semibold text-gray-900 text-right">Total:</td>
+                <td colSpan={8} className="px-4 py-3 text-sm font-semibold text-gray-900 text-right">Subtotal:</td>
                 <td className="px-4 py-3 text-sm font-bold text-blue-600 text-right">{formatCurrency(sale.totalAmount)}</td>
+              </tr>
+              {sale.taxDetails?.totalTax > 0 && (
+                <tr>
+                  <td colSpan={8} className="px-4 py-3 text-sm text-gray-600 text-right">Tax Total:</td>
+                  <td className="px-4 py-3 text-sm font-semibold text-gray-900 text-right">{formatCurrency(sale.taxDetails.totalTax)}</td>
+                </tr>
+              )}
+              {sale.discountAmount > 0 && (
+                <tr>
+                  <td colSpan={8} className="px-4 py-3 text-sm text-gray-600 text-right">Discount:</td>
+                  <td className="px-4 py-3 text-sm font-semibold text-green-600 text-right">- {formatCurrency(sale.discountAmount)}</td>
+                </tr>
+              )}
+              <tr>
+                <td colSpan={8} className="px-4 py-3 text-sm font-semibold text-gray-900 text-right">Total:</td>
+                <td className="px-4 py-3 text-sm font-bold text-blue-600 text-right">{formatCurrency((sale.totalAmount + (sale.taxDetails?.totalTax || 0) - (sale.discountAmount || 0)))}</td>
               </tr>
             </tfoot>
           </table>

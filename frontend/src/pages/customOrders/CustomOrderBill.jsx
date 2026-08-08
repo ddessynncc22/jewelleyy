@@ -131,8 +131,7 @@ export default function CustomOrderBill() {
   const taxableAmount = Math.max(0, price - oldGoldAmount);
   const taxAmount = Number((taxableAmount * 0.005).toFixed(2));
   const rawTotal = price + taxAmount;
-  const grandTotal = Math.round(rawTotal);
-  const roundOff = Number((grandTotal - rawTotal).toFixed(2));
+  const grandTotal = Math.floor(rawTotal);
   const amountReceived = Number(order.actualAmountReceived || 0);
   const balanceDue = Math.max(0, grandTotal - oldGoldAmount - advanceAmount - amountReceived);
   const words = `${numberToWords(grandTotal)} only`;
@@ -215,7 +214,6 @@ export default function CustomOrderBill() {
           discount={discount}
             taxableAmount={taxableAmount}
             totalTax={taxAmount}
-            roundOff={roundOff}
             grandTotal={grandTotal}
             paymentType="Cash"
             paidAmount={grandTotal}
@@ -253,7 +251,6 @@ export default function CustomOrderBill() {
             discount={discount}
             taxableAmount={taxableAmount}
             totalTax={taxAmount}
-            roundOff={roundOff}
             grandTotal={grandTotal}
             advanceAmount={advanceAmount}
             balanceDue={balanceDue}

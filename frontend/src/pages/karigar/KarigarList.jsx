@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 
 import toast from 'react-hot-toast'
 
-import { Plus, Edit2, Trash2, Eye } from 'lucide-react'
+import { Plus, Edit2, Trash2, Eye, BarChart3 } from 'lucide-react'
 
 import { getKarigars, deleteKarigar } from '../../services/karigarService'
 
@@ -161,13 +161,33 @@ const KarigarList = () => {
       key: 'totalIssued',
       label: 'Total Issued',
       sortable: true,
-      render: (val) => val ?? 0,
+      render: (val) => (val ? `${val}g` : '0g'),
     },
     {
       key: 'totalReturned',
       label: 'Total Returned',
       sortable: true,
-      render: (val) => val ?? 0,
+      render: (val) => (val ? `${val}g` : '0g'),
+    },
+    {
+      key: 'outstandingWeight',
+      label: 'Outstanding',
+      sortable: true,
+      render: (val, row) => {
+        const metals = Object.entries(row.outstandingByMetal || {}).filter(([, w]) => Number(w) > 0)
+        return (
+          <div>
+            <span className={`font-medium ${Number(val) > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
+              {Number(val || 0).toFixed(3)}g
+            </span>
+            {metals.length > 1 && (
+              <span className="block text-[11px] text-gray-400">
+                {metals.map(([m, w]) => `${m}: ${Number(w).toFixed(2)}g`).join(', ')}
+              </span>
+            )}
+          </div>
+        )
+      },
     },
     {
       key: 'isActive',
@@ -219,6 +239,9 @@ const KarigarList = () => {
   return (
     <div className="space-y-6">
       <PageHeader title="Karigars" subtitle="Manage artisans and craftsmen">
+        <Button variant="outline" icon={BarChart3} onClick={() => navigate('/karigar/summary')}>
+          Summary
+        </Button>
         <Button icon={Plus} onClick={handleAdd}>
           Add Karigar
         </Button>

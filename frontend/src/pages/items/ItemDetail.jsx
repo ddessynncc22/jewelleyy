@@ -31,8 +31,6 @@ import { printBarcodeLabels } from '../../utils/barcodeLabels'
 
 import { getActivityLogs } from '../../services/auditService'
 
-import ItemForm from './ItemForm'
-
 const DetailRow = ({ label, value }) => (
   <div className="flex justify-between py-2.5 border-b border-gray-100 last:border-0">
     <span className="text-sm font-medium text-gray-500">{label}</span>
@@ -64,7 +62,6 @@ const ItemDetail = () => {
   const [historyLoading, setHistoryLoading] = useState(false)
   const [activityLogs, setActivityLogs] = useState([])
   const [activityLoading, setActivityLoading] = useState(false)
-  const [showForm, setShowForm] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [previewIndex, setPreviewIndex] = useState(null)
@@ -157,11 +154,6 @@ const ItemDetail = () => {
     }
   }
 
-  const handleFormSuccess = () => {
-    setShowForm(false)
-    fetchItem()
-  }
-
   if (loading) {
     return (
       <div className="space-y-6">
@@ -244,7 +236,7 @@ const ItemDetail = () => {
               Regenerate QR
             </Button>
           )}
-          <Button variant="outline" icon={Edit} onClick={() => setShowForm(true)} size="sm">
+          <Button variant="outline" icon={Edit} onClick={() => navigate(`/items/${id}/edit`)} size="sm">
             Edit
           </Button>
           <Button variant="danger" icon={Trash2} onClick={() => setShowDeleteDialog(true)} size="sm">
@@ -488,10 +480,6 @@ const ItemDetail = () => {
           )}
         </div>
       </div>
-
-      {showForm && (
-        <ItemForm item={item} onClose={() => setShowForm(false)} onSuccess={handleFormSuccess} />
-      )}
 
       <ConfirmDialog
         isOpen={showDeleteDialog}

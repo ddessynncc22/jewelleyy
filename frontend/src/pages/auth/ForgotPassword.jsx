@@ -12,6 +12,9 @@ import { forgotPassword } from "../../services/authService";
 
 import Button from "../../components/ui/Button";
 
+const fieldClass =
+  "w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] py-2.5 px-3.5 text-sm text-[var(--color-text)] placeholder-[var(--color-ink-400)] hover:border-[var(--color-ink-300)] focus:border-[var(--color-gold-500)] focus:outline-none focus:ring-2 focus:ring-[var(--color-gold-500)]/20 transition-all";
+
 export default function ForgotPassword() {
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -39,14 +42,14 @@ export default function ForgotPassword() {
 
   if (submitted) {
     return (
-      <div className="text-center py-6">
-        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-green-50">
-          <CheckCircle2 className="h-7 w-7 text-green-600" />
+      <div className="py-6 text-center animate-fade-up">
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-success/10">
+          <CheckCircle2 className="h-7 w-7 text-success" />
         </div>
-        <h2 className="text-xl font-bold text-gray-900 mb-2">
+        <h2 className="mb-2 text-xl font-bold tracking-tight text-[var(--color-text)]">
           Request sent
         </h2>
-        <p className="text-sm text-gray-500 mb-6">
+        <p className="mb-6 text-sm text-[var(--color-text-secondary)]">
           Your password reset request has been sent to the administrator.
           You will be able to sign in with the new password once it has been
           approved.
@@ -64,34 +67,36 @@ export default function ForgotPassword() {
 
   return (
     <div>
-      <h2 className="text-xl font-bold text-gray-900 mb-1">Forgot password?</h2>
-      <p className="text-sm text-gray-500 mb-6">
+      <h2 className="mb-1 text-xl font-bold tracking-tight text-[var(--color-text)]">
+        Forgot password?
+      </h2>
+      <p className="mb-6 text-sm text-[var(--color-text-secondary)]">
         Enter your account email and we will notify the administrator to reset
         your password for you.
       </p>
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+          <label className="mb-1.5 block text-sm font-medium text-[var(--color-text)]">
             Name
           </label>
           <input
             {...register("name")}
-            className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20 transition-all"
+            className={fieldClass}
             placeholder="Your name (optional)"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+          <label className="mb-1.5 block text-sm font-medium text-[var(--color-text)]">
             Email
           </label>
           <input
             type="email"
             {...register("email", { required: "Email is required" })}
-            className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20 transition-all"
+            className={fieldClass}
             placeholder="Enter your email"
           />
           {errors.email && (
-            <p className="text-red-500 text-xs mt-1">{errors.email.message}</p>
+            <p className="mt-1 text-xs text-danger">{errors.email.message}</p>
           )}
         </div>
         <Button
@@ -103,10 +108,10 @@ export default function ForgotPassword() {
           Request Password Reset
         </Button>
       </form>
-      <div className="mt-6 flex flex-col items-center gap-2 text-sm text-gray-500">
+      <div className="mt-6 flex flex-col items-center gap-2 text-sm text-[var(--color-text-secondary)]">
         <Link
           to="/login"
-          className="inline-flex items-center gap-1.5 text-[var(--color-primary)] hover:text-[var(--color-primary-hover)]"
+          className="inline-flex items-center gap-1.5 text-[var(--color-gold-700)] hover:text-[var(--color-gold-800)]"
         >
           <ArrowLeft size={14} /> Back to sign in
         </Link>
@@ -114,7 +119,7 @@ export default function ForgotPassword() {
           No account?{" "}
           <Link
             to="/register"
-            className="text-[var(--color-primary)] hover:text-[var(--color-primary-hover)]"
+            className="text-[var(--color-gold-700)] hover:text-[var(--color-gold-800)]"
           >
             Register
           </Link>

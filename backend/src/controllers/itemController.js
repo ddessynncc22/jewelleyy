@@ -130,7 +130,7 @@ const createItemWithRetry = async (data, retries = 3) => {
 
 exports.createItem = async (req, res) => {
   try {
-    const { category, subcategory, metalType, purity, karat, itemName, grossWeight, stoneWeight, netMetalWeight, designCode, description, stoneType, carat, stoneCarat, stoneWeightGram, stoneQuantity, stoneRate, stoneAmount, cut, clarity, certificationNumber, costPrice, costMakingCharge, costWastagePercent, costStonePrice, sellingPrice, sellingMakingCharge, sellingWastagePercent, sellingStonePrice, makingCharge, wastagePercent, tags, status, currentLocation, quantity, karigarId, length, lengthUnit, diameter } = req.body;
+    const { category, subcategory, metalType, purity, karat, itemName, grossWeight, stoneWeight, netMetalWeight, designCode, description, stoneType, carat, stoneCarat, stoneWeightGram, stoneQuantity, stoneRate, stoneAmount, cut, clarity, certificationNumber, costPrice, costMakingCharge, costWastagePercent, costStonePrice, sellingPrice, sellingMakingCharge, sellingWastagePercent, sellingStonePrice, makingCharge, wastagePercent, tags, status, currentLocation, quantity, karigarId, length, lengthUnit, diameter, ringSize } = req.body;
     if (!category || !metalType || !purity || !itemName || !grossWeight) {
       return errorResponse(res, 'Category, metalType, purity, itemName, and grossWeight are required', 400);
     }
@@ -140,7 +140,7 @@ exports.createItem = async (req, res) => {
     }
     if (!req.tenantId) return errorResponse(res, 'Tenant context required to create item', 400);
     const item = await createItemWithRetry({
-      tenantId: req.tenantId, category, subcategory, metalType, purity, karat, itemName, grossWeight, stoneWeight, netMetalWeight, designCode, description, stoneType, carat, stoneCarat, stoneWeightGram, stoneQuantity, stoneRate, stoneAmount, cut, clarity, certificationNumber, costPrice, costMakingCharge: costMakingCharge || 0, costWastagePercent: costWastagePercent || 0, costStonePrice: costStonePrice || 0, sellingPrice, sellingMakingCharge: sellingMakingCharge || 0, sellingWastagePercent: sellingWastagePercent || 0, sellingStonePrice: sellingStonePrice || 0,       makingCharge: makingCharge || 0, wastagePercent: wastagePercent || 0, tags: tags || [], images, status: status || 'In Stock', currentLocation, quantity: quantity || 1, karigarId: karigarId || null, length: length || 0, lengthUnit: lengthUnit || 'mm', diameter: diameter || 0,
+      tenantId: req.tenantId, category, subcategory, metalType, purity, karat, itemName, grossWeight, stoneWeight, netMetalWeight, designCode, description, stoneType, carat, stoneCarat, stoneWeightGram, stoneQuantity, stoneRate, stoneAmount, cut, clarity, certificationNumber, costPrice, costMakingCharge: costMakingCharge || 0, costWastagePercent: costWastagePercent || 0, costStonePrice: costStonePrice || 0, sellingPrice, sellingMakingCharge: sellingMakingCharge || 0, sellingWastagePercent: sellingWastagePercent || 0, sellingStonePrice: sellingStonePrice || 0,       makingCharge: makingCharge || 0, wastagePercent: wastagePercent || 0, tags: tags || [], images, status: status || 'In Stock', currentLocation, quantity: quantity || 1, karigarId: karigarId || null, length: length || 0, lengthUnit: lengthUnit || 'mm', diameter: diameter || 0, ringSize: ringSize || 0,
     });
     await StockMovement.create({
       item: item._id,
@@ -178,7 +178,7 @@ exports.updateItem = async (req, res) => {
     if (!item.qrToken) {
       item.qrToken = generateQrToken();
     }
-    const allowedFields = ['itemType', 'category', 'subcategory', 'metalType', 'purity', 'karat', 'itemName', 'grossWeight', 'stoneWeight', 'netMetalWeight', 'designCode', 'description', 'stoneType', 'carat', 'stoneCarat', 'stoneWeightGram', 'stoneQuantity', 'stoneRate', 'stoneAmount', 'cut', 'clarity', 'certificationNumber', 'costPrice', 'costMakingCharge', 'costWastagePercent', 'costStonePrice', 'sellingPrice', 'sellingMakingCharge', 'sellingWastagePercent', 'sellingStonePrice', 'makingCharge', 'wastagePercent', 'tags', 'status', 'currentLocation', 'quantity', 'karigarId', 'length', 'lengthUnit', 'diameter'];
+    const allowedFields = ['itemType', 'category', 'subcategory', 'metalType', 'purity', 'karat', 'itemName', 'grossWeight', 'stoneWeight', 'netMetalWeight', 'designCode', 'description', 'stoneType', 'carat', 'stoneCarat', 'stoneWeightGram', 'stoneQuantity', 'stoneRate', 'stoneAmount', 'cut', 'clarity', 'certificationNumber', 'costPrice', 'costMakingCharge', 'costWastagePercent', 'costStonePrice', 'sellingPrice', 'sellingMakingCharge', 'sellingWastagePercent', 'sellingStonePrice', 'makingCharge', 'wastagePercent', 'tags', 'status', 'currentLocation', 'quantity', 'karigarId', 'length', 'lengthUnit', 'diameter', 'ringSize'];
     const previousStatus = item.status;
     const previousQuantity = item.quantity || 0;
     allowedFields.forEach((field) => {

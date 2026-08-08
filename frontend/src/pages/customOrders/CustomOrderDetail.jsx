@@ -133,9 +133,17 @@ const CustomOrderDetail = () => {
   const handleAction = async (status, payload = {}) => {
     setSaving(true)
     try {
-      await updateOrderStatus(id, { status, ...payload })
+      const res = await updateOrderStatus(id, { status, ...payload })
       toast.success(`Order moved to ${STEP_LABELS[status] || status}`)
       closeModal()
+      if (status === 'material_issued') {
+        const data = res.data?.data || res.data
+        const materialIndex = Number(data?.materialIndex)
+        if (payload.karigarId && Number.isInteger(materialIndex) && materialIndex >= 0) {
+          navigate(`/karigar/bill/${payload.karigarId}/${materialIndex}?print=1`)
+          return
+        }
+      }
       fetchOrder()
     } catch (err) {
       toast.error(err?.response?.data?.message || 'Action failed')

@@ -10,6 +10,9 @@ export const receiveFinished = (id, data) =>
   api.post(`/karigars/${id}/receive`, data);
 export const getPendingJobs = (params) =>
   api.get("/karigars/pending-jobs", { params });
+export const getKarigarSummary = () => api.get("/karigars/summary");
+export const getKarigarReturn = (id, materialIndex) =>
+  api.get(`/karigars/${id}/return/${materialIndex}`);
 export const getKarigarReport = (id, params) =>
   api.get(`/karigars/${id}/report`, { params });
 export const updateMaterialStatus = (id, materialIndex, status) =>

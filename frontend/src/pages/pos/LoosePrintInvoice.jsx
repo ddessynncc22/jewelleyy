@@ -81,8 +81,7 @@ export default function LoosePrintInvoice() {
   const totalTax = Number(taxDetails.totalTax) || taxLines.reduce((sum, t) => sum + Number(t.amount || 0), 0);
   const discount = sale.discountAmount || taxDetails.discountAmount || 0;
   const rawTotal = Number((subtotal + totalTax).toFixed(2));
-  const grandTotal = Math.round(rawTotal - discount);
-  const roundOff = Number((grandTotal - rawTotal + discount).toFixed(2));
+  const grandTotal = Math.floor(rawTotal - discount);
   const paidAmount = Number(sale.paidAmount) || 0;
   const words = `${numberToWords(grandTotal)} only`;
 
@@ -233,10 +232,6 @@ export default function LoosePrintInvoice() {
                     <td className="border border-black px-2 py-0.5 text-right">- {fmtMoney(discount)}</td>
                   </tr>
                 )}
-                <tr>
-                  <td className="border border-black px-2 py-0.5 text-right">Round Off</td>
-                  <td className="border border-black px-2 py-0.5 text-right">{roundOff >= 0 ? '+' : ''}{fmtMoney(roundOff)}</td>
-                </tr>
                 <tr className="invoice-total-row">
                   <td className="border border-black px-2 py-0.5 text-right font-bold">Grand Total</td>
                   <td className="border border-black px-2 py-0.5 text-right font-bold">{fmtMoney(grandTotal)}</td>

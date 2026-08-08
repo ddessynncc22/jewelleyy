@@ -21,6 +21,8 @@ import { formatWeight } from '../../utils/helpers'
 
 const STOCK_IN_TYPES = [
   { value: 'Purchase', label: 'Purchase' },
+  { value: 'Buy-back', label: 'Buy-back' },
+  { value: 'Refinery', label: 'Refinery' },
   { value: 'Manufacturing', label: 'Manufacturing' },
   { value: 'Return from Karigar', label: 'Return from Karigar' },
   { value: 'Pawn Redemption', label: 'Bandaki Redemption' },
@@ -36,7 +38,7 @@ const STOCK_OUT_TYPES = [
   { value: 'With Karigar', label: 'With Karigar' },
   { value: 'Pawn Issuance', label: 'Bandaki Intake' },
   { value: 'Melted', label: 'Melted' },
-  { value: 'Purchase Return', label: 'Purchase Return' },
+  { value: 'Refinery', label: 'Refinery' },
   { value: 'Transfer Out', label: 'Transfer Out' },
   { value: 'Adjustment', label: 'Adjustment' },
 ]

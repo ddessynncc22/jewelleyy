@@ -4,9 +4,11 @@ import { useNavigate } from 'react-router-dom'
 
 import toast from 'react-hot-toast'
 
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, AlertTriangle, Scale } from 'lucide-react'
 
 import { createCustomOrder } from '../../services/customOrderService'
+
+import { getPurchaseSummary } from '../../services/purchaseService'
 
 import { getCustomers } from '../../services/customerService'
 
@@ -120,6 +122,14 @@ const CustomOrderForm = () => {
   const [showCustomerModal, setShowCustomerModal] = useState(false)
 
   const [rateData, setRateData] = useState({ rates: null, charges: { gold: 0, silver: 0 } })
+
+  const [refinedBalance, setRefinedBalance] = useState(null)
+
+  useEffect(() => {
+    getPurchaseSummary()
+      .then((res) => setRefinedBalance(res.data?.data?.refinedStock?.balanceG ?? null))
+      .catch(() => setRefinedBalance(null))
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -407,6 +417,25 @@ const CustomOrderForm = () => {
             <FormInput label="Target Completion Date" name="targetCompletionDate" type="date" value={form.targetCompletionDate} onChange={handleChange} />
             <FormInput label="Item Name" name="itemName" value={form.itemName} onChange={handleChange} error={errors.itemName} placeholder="e.g. Gold chain" />
           </div>
+          {form.category === 'gold' && refinedBalance !== null && Number(form.requestedWeight) > 0 && (() => {
+            const purityValue = Number(form.purity) || (form.karat ? Number(KARAT_TO_PURITY[form.karat]) : 0) || 0
+            const factor = purityValue > 0 ? purityValue / 1000 : 0.916
+            const fineNeeded = Number(form.requestedWeight) * factor
+            const enough = refinedBalance >= fineNeeded
+            return (
+              <div className={`mt-4 flex items-center gap-2 rounded-xl px-3 py-2 text-sm border ${enough ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                <Scale size={15} className="shrink-0" />
+                {enough ? (
+                  <span>Refined gold in stock: <strong>{refinedBalance} g</strong> — enough for this order&apos;s fine gold ({fineNeeded.toFixed(4)} g)</span>
+                ) : (
+                  <span>
+                    <AlertTriangle size={15} className="inline shrink-0 mr-1" />
+                    Not enough refined gold! In stock: <strong>{refinedBalance} g</strong>, this order needs <strong>{fineNeeded.toFixed(4)} g</strong> fine gold. Record a purchase or receive refined gold before issuing material.
+                  </span>
+                )}
+              </div>
+            )
+          })()}
           <div className="mt-4">
             <FormTextarea label="Design Reference" name="designReference" value={form.designReference} onChange={handleChange} error={errors.designReference} rows={3} placeholder="Describe the design, reference sketch, measurements, stone settings..." />
           </div>

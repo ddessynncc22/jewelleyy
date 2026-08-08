@@ -15,7 +15,7 @@ import { login as loginApi } from "../../services/authService";
 import Button from "../../components/ui/Button";
 
 const fieldClass =
-  "w-full rounded-xl border border-[var(--color-border)] bg-white py-2.5 pl-10 pr-4 text-sm text-gray-900 placeholder-gray-400 focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20 transition-all";
+  "w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] py-2.5 pl-10 pr-4 text-sm text-[var(--color-text)] placeholder-[var(--color-ink-400)] hover:border-[var(--color-ink-300)] focus:border-[var(--color-gold-500)] focus:outline-none focus:ring-2 focus:ring-[var(--color-gold-500)]/20 transition-all";
 
 export default function Login() {
   const { login } = useAuth();
@@ -65,14 +65,14 @@ export default function Login() {
       </div>
 
       {wrongHost && (
-        <div className="mb-6 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+        <div className="mb-6 flex items-start gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-amber-900">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
           <div>
             <p>{wrongHost.message}</p>
             {wrongHost.redirectTo && (
               <a
                 href={wrongHost.redirectTo}
-                className="mt-1.5 inline-block font-semibold text-[var(--color-primary-hover)] underline underline-offset-2"
+                className="mt-1.5 inline-block font-semibold text-[var(--color-gold-700)] underline underline-offset-2"
               >
                 Go to {wrongHost.shopName || wrongHost.redirectTo}
               </a>
@@ -83,11 +83,11 @@ export default function Login() {
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+          <label className="mb-1.5 block text-sm font-medium text-[var(--color-text)]">
             Email
           </label>
           <div className="relative">
-            <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-ink-400)]" />
             <input
               type="email"
               autoComplete="email"
@@ -97,16 +97,16 @@ export default function Login() {
             />
           </div>
           {errors.email && (
-            <p className="text-red-500 text-xs mt-1">{errors.email.message}</p>
+            <p className="mt-1 text-xs text-danger">{errors.email.message}</p>
           )}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+          <label className="mb-1.5 block text-sm font-medium text-[var(--color-text)]">
             Password
           </label>
           <div className="relative">
-            <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-ink-400)]" />
             <input
               type={showPassword ? "text" : "password"}
               autoComplete="current-password"
@@ -120,7 +120,7 @@ export default function Login() {
             <button
               type="button"
               onClick={() => setShowPassword((s) => !s)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 transition-colors hover:text-gray-600"
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-[var(--color-ink-400)] transition-colors hover:text-[var(--color-ink-600)]"
               title={showPassword ? "Hide password" : "Show password"}
             >
               {showPassword ? (
@@ -131,38 +131,36 @@ export default function Login() {
             </button>
           </div>
           {errors.password && (
-            <p className="text-red-500 text-xs mt-1">
-              {errors.password.message}
-            </p>
+            <p className="mt-1 text-xs text-danger">{errors.password.message}</p>
           )}
         </div>
 
         <div className="flex items-center justify-between">
-          <label className="flex cursor-pointer select-none items-center gap-2 text-sm text-gray-600">
+          <label className="flex cursor-pointer select-none items-center gap-2 text-sm text-[var(--color-text-secondary)]">
             <input
               type="checkbox"
-              className="h-4 w-4 rounded border-gray-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)]"
+              className="h-4 w-4 rounded border-[var(--color-ink-300)] text-[var(--color-gold-600)] focus:ring-[var(--color-gold-500)]"
             />
             Remember me
           </label>
           <Link
             to="/forgot-password"
-            className="text-sm font-medium text-[var(--color-primary)] transition-colors hover:text-[var(--color-primary-hover)]"
+            className="text-sm font-medium text-[var(--color-gold-700)] transition-colors hover:text-[var(--color-gold-800)]"
           >
             Forgot password?
           </Link>
         </div>
 
-        <Button type="submit" loading={loading} className="w-full" icon={LogIn}>
+        <Button type="submit" loading={loading} className="w-full py-2.5" icon={LogIn}>
           Sign In
         </Button>
       </form>
 
-      <div className="mt-6 flex items-center justify-center gap-1.5 text-sm text-gray-500">
+      <div className="mt-6 flex items-center justify-center gap-1.5 text-sm text-[var(--color-text-secondary)]">
         <span>No account?</span>
         <Link
           to="/register"
-          className="font-medium text-[var(--color-primary)] transition-colors hover:text-[var(--color-primary-hover)]"
+          className="font-medium text-[var(--color-gold-700)] transition-colors hover:text-[var(--color-gold-800)]"
         >
           Request an account
         </Link>

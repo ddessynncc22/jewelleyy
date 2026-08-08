@@ -1,0 +1,173 @@
+{
+  "meta": {
+    "name": "jewelcore-aurum",
+    "description": "Clean and modern jewellery management UI — warm paper neutrals, rich antique-gold accent, dark ink sidebar, glass surfaces, Sora display + Inter body. Designed for the shopkeeper: calm, premium, information-dense without noise.",
+    "source_references": ["user brief: 'clean and modern' (no screenshots provided, feature-extracted from described style)"],
+    "created_at": "2026-08-08"
+  },
+  "design_system": {
+    "color": {
+      "palette_type": "analogous",
+      "primary": { "hex": "#b98d2f", "role": "brand/CTA, gold of the trade" },
+      "secondary": { "hex": "#1c1a15", "role": "ink — text, dark sidebar shell" },
+      "accent": { "hex": "#e5c877", "role": "highlight gradient light, shimmering gold" },
+      "neutral": {
+        "scale": ["#ffffff", "#f7f6f1", "#f1efe8", "#e6e3d8", "#c9c5b6", "#8a867a", "#6f6c60", "#4a473e", "#26241d", "#1c1a15", "#17150f"],
+        "usage": "warm paper background with white cards; ink text; warm-gray borders"
+      },
+      "semantic": { "success": "#16a34a", "warning": "#d97706", "error": "#dc2626", "info": "#0ea5e9" },
+      "surface": { "background": "#f7f6f1", "card": "#ffffff", "elevated": "#f1efe8" },
+      "contrast_strategy": "dark-on-light dominant; gold gradients carry dark ink text to hold WCAG AA"
+    },
+    "typography": {
+      "type_scale": {
+        "heading_1": { "size": "24px", "weight": 800, "line_height": 1.2, "tracking": "-0.03em" },
+        "heading_2": { "size": "18px", "weight": 700, "line_height": 1.3, "tracking": "-0.02em" },
+        "heading_3": { "size": "15px", "weight": 650, "line_height": 1.4, "tracking": "-0.01em" },
+        "body": { "size": "14px", "weight": 400, "line_height": 1.55, "tracking": "0em" },
+        "body_small": { "size": "13px", "weight": 400, "line_height": 1.5, "tracking": "0em" },
+        "caption": { "size": "12px", "weight": 500, "line_height": 1.4, "tracking": "0.01em" },
+        "overline": { "size": "11px", "weight": 700, "line_height": 1.3, "tracking": "0.08em" }
+      },
+      "font_families": {
+        "heading": "'Sora', 'Inter', system-ui, sans-serif",
+        "body": "'Inter', system-ui, sans-serif",
+        "mono": "'JetBrains Mono', 'SFMono-Regular', Consolas, monospace"
+      },
+      "font_style_notes": "geometric display head for headings, humanist body for data; tabular numerals for prices/weights"
+    },
+    "spacing": {
+      "base_unit": 4,
+      "scale": ["0", "4", "8", "12", "16", "20", "24", "32", "40", "48", "64"],
+      "content_density": "comfortable",
+      "section_rhythm": "24px between cards, 32px between page sections, 20px inside cards"
+    },
+    "layout": {
+      "grid_system": "12-column fluid with 4-col stat breakpoints",
+      "max_content_width": "1280px",
+      "columns": 12,
+      "gutter": 20,
+      "breakpoints": ["640", "768", "1024", "1280"],
+      "alignment_tendency": "mixed — strict grid for data, asymmetric for hero stats"
+    },
+    "shape": {
+      "border_radius": { "small": "8px", "medium": "12px", "large": "16px", "pill": "9999px" },
+      "border_usage": "subtle 1px warm borders on cards and inputs, none inside tables",
+      "divider_style": "1px solid warm-gray"
+    },
+    "elevation": {
+      "shadow_style": "soft diffused",
+      "levels": {
+        "low": "0 1px 2px rgba(28,25,15,0.04), 0 1px 3px rgba(28,25,15,0.05)",
+        "medium": "0 2px 4px rgba(28,25,15,0.04), 0 8px 24px rgba(28,25,15,0.07)",
+        "high": "0 4px 8px rgba(28,25,15,0.05), 0 16px 40px rgba(28,25,15,0.10)"
+      },
+      "depth_cues": "shadows + color intensity (no glass on cards, glass reserved for topbar)"
+    },
+    "iconography": {
+      "style": "stroke",
+      "stroke_weight": 2,
+      "size_scale": ["14", "16", "18", "20", "22", "24", "28", "32"],
+      "preferred_set": "lucide-react (already vendored)"
+    },
+    "motion": {
+      "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+      "duration_scale": { "micro": "120ms", "normal": "200ms", "macro": "400ms" },
+      "entrance_pattern": "fade-up 8px",
+      "exit_pattern": "fade-down 8px",
+      "philosophy": "minimal functional — moves only where it signals state"
+    },
+    "components": {
+      "button_style": "primary: gold gradient + ink text; secondary: gold-soft; ghost: ink on hover",
+      "input_style": "rounded-md, 1px border, 2px gold focus ring, no inner shadow",
+      "card_style": "white, 1px hairline, soft diffused shadow, 16px radius",
+      "navigation_pattern": "dark ink rail, gold gradient active pill, section overlines",
+      "modal_style": "centered sheet, glass overlay, slide-up, 16px radius",
+      "list_style": "divide-lines only, hover background tint",
+      "component_notes": "tables keep visible header strip; page headers show title extrabold with tracking"
+    }
+  },
+  "design_style": {
+    "aesthetic": {
+      "mood": ["warm", "precise", "premium", "calm"],
+      "visual_metaphor": "a jeweller's bench — quiet gold on soft felt",
+      "era_influence": "contemporary premium SaaS",
+      "genre": "premium operational tool",
+      "personality_traits": ["meticulous", "confident", "welcoming", "fast"],
+      "adjectives": ["clean", "modern", "warm", "scannable"]
+    },
+    "visual_language": {
+      "complexity": "moderate",
+      "ornamentation": "subtle accents (gradient sheens, gold orbs)",
+      "whitespace_usage": "generous card padding, tight data rows",
+      "visual_weight_distribution": "heavy on values and CTAs, light on chrome",
+      "focal_strategy": "progressive reveal — hero stats first, secondary detail below",
+      "contrast_level": "moderate",
+      "texture_usage": "none on paper; gradient light sheen on brand surfaces"
+    },
+    "composition": {
+      "hierarchy_method": "type scale, color weight",
+      "balance_type": "symmetric grid with asymmetric accents",
+      "flow_direction": "top-down scan, left-to-right tables",
+      "grouping_strategy": "domain cards separated by whitespace",
+      "negative_space_role": "reset between dense data sections"
+    },
+    "imagery": {
+      "photo_treatment": "none",
+      "illustration_style": "line-art lucide icons with soft tint tiles",
+      "graphic_elements": "gold gradient orbs on auth panels",
+      "pattern_usage": "none",
+      "image_shape": "rounded squares"
+    },
+    "interaction_feel": {
+      "feedback_style": "instant: full-target scrolling, pressed scale, gold glow on hover",
+      "hover_behavior": "background tint + soft shadow lift",
+      "transition_personality": "smooth glide",
+      "loading_style": "shimmer skeletons with low-noise pulse",
+      "microinteraction_density": "sparse — interactions carry meaning"
+    },
+    "brand_voice_in_ui": {
+      "tone": "direct and calm",
+      "formality": "professional",
+      "cta_style": "direct imperative",
+      "empty_state_approach": "gentle nudge with call-to-action",
+      "error_tone": "plain and actionable"
+    }
+  },
+  "visual_effects": {
+    "overview": {
+      "effect_intensity": "subtle-accent",
+      "performance_tier": "lightweight",
+      "fallback_strategy": "prefers-reduced-motion disables drift/orb animation; effects degrade to static gradients",
+      "primary_technology": "CSS only"
+    },
+    "background_effects": {
+      "type": "gradient-animation",
+      "description": "Dual gold light orbs drifting slowly behind the auth panel and sidebar brand tile",
+      "technology": "CSS keyframes + radial-gradient",
+      "params": { "color_palette": ["#b98d2f", "#e5c877", "#f7f6f1"], "speed": "18000ms", "density": "2 orbs", "opacity": "0.35", "blend_mode": "screen" }
+    },
+    "glassmorphism_neumorphism": {
+      "enabled": true,
+      "style": "glass",
+      "params": { "blur_radius": "16px", "transparency": "rgba(255,255,255,0.72)", "border_treatment": "1px rgba(255,255,255,0.5)", "shadow_type": "soft diffused", "light_source_angle": "top" }
+    },
+    "particle_systems": { "enabled": false },
+    "3d_elements": { "enabled": false },
+    "shader_effects": { "enabled": false },
+    "cursor_effects": { "enabled": false },
+    "text_effects": {
+      "type": "gradient-fill",
+      "description": "Gold gradient wordmark in sidebar brand tile",
+      "technology": "background-clip: text",
+      "params": { "effect_style": "gold 135deg gradient" }
+    },
+    "svg_animations": {
+      "enabled": true,
+      "type": "logo-reveal",
+      "description": "Slow rotating conic she ring behind the auth brand mark",
+      "params": { "animation_method": "CSS rotate" }
+    },
+    "composite_notes": "All effects are CSS-only for a low-power POS environment; shimmer keyframe preserved for skeletons; motion wound obediently under prefers-reduced-motion."
+  }
+}

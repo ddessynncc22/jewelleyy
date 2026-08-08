@@ -250,11 +250,10 @@ const LoosePOS = () => {
   const diamondTaxAmount = Number((diamondSubtotal * diamondTaxRate / 100).toFixed(2))
   const totalTaxAmount = Number((feeAmount + diamondTaxAmount).toFixed(2))
   let rawTotal = Number((subtotal + totalTaxAmount).toFixed(2))
-  let billTotal = Math.round(rawTotal)
-  const roundOff = Number((billTotal - rawTotal).toFixed(2))
+  let billTotal = Math.floor(rawTotal)
   if (received > 0 && received < billTotal) {
     discount = Number((billTotal - received).toFixed(2))
-    billTotal = Math.round(received)
+    billTotal = Math.floor(received)
   }
   const changeDue = received > 0 ? Number((received - billTotal).toFixed(2)) : 0
 
@@ -556,10 +555,6 @@ const LoosePOS = () => {
                 <span>- {formatCurrency(discount)}</span>
               </div>
             )}
-            <div className="flex justify-between items-center text-sm text-gray-500">
-              <span>Round Off</span>
-              <span>{roundOff >= 0 ? '+' : ''}{formatCurrency(roundOff)}</span>
-            </div>
             <div className="flex justify-between items-center">
               <span className="text-sm font-semibold text-gray-900">Grand Total</span>
               <span className="text-xl font-bold text-amber-700">{formatCurrency(billTotal)}</span>
@@ -669,14 +664,8 @@ const LoosePOS = () => {
                   ...(diamondTaxAmount > 0 ? [{ name: diamondTaxRate >= 13 ? 'VAT (Diamond)' : 'Service Fee (Diamond)', rate: diamondTaxRate, amount: diamondTaxAmount }] : []),
                 ]
                 const previewTotalTax = Number((feeAmount + diamondTaxAmount).toFixed(2))
-                const previewReceived = Number(actualAmountReceived) || 0
                 const previewRawTotal = Number((previewSubtotal + previewTotalTax - discount).toFixed(2))
-                let previewGrandTotal = Math.round(previewRawTotal)
-                let previewRoundOff = Number((previewGrandTotal - previewRawTotal).toFixed(2))
-                if (discount > 0 && previewReceived > 0) {
-                  previewGrandTotal = Math.round(previewReceived)
-                  previewRoundOff = Number((previewGrandTotal - previewRawTotal).toFixed(2))
-                }
+                const previewGrandTotal = Math.floor(previewRawTotal)
                 const previewWords = `${numberToWords(previewGrandTotal)} only`
                 const now = new Date()
                 const dateAD = now.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
@@ -709,7 +698,6 @@ const LoosePOS = () => {
                     taxableAmount={Number((previewSubtotal - discount).toFixed(2))}
                     totalTax={previewTotalTax}
                     taxLines={previewTaxLines}
-                    roundOff={previewRoundOff}
                     grandTotal={previewGrandTotal}
                     paymentType={paymentType}
                     paidAmount={paymentType === 'cash' ? previewGrandTotal : (Number(cashAmount) || 0) + (Number(khaataAmount) || 0)}

@@ -1,57 +1,75 @@
-import { useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 
-import { BarChart3, ArrowLeftRight, DollarSign, Banknote, Wrench, Users, TrendingUp, ReceiptText } from 'lucide-react'
+import { BarChart3, ArrowLeftRight, DollarSign, Banknote, Wrench, Users, TrendingUp, ReceiptText, BookOpen, BookOpenText, CalendarDays, HandCoins, ChevronRight } from 'lucide-react'
 
 import PageHeader from '../../components/ui/PageHeader'
 
-import Card from '../../components/ui/Card'
 const reportTypes = [
-  { type: 'current-stock', title: 'Current Stock', description: 'View full inventory listing with quantities and values', icon: BarChart3, color: 'blue' },
-  { type: 'stock-movement', title: 'Stock Movement', description: 'Track all stock in and out movements by date range', icon: ArrowLeftRight, color: 'green' },
-  { type: 'valuation', title: 'Inventory Valuation', description: 'Total valuation by metal type using latest market rates', icon: DollarSign, color: 'green' },
-  { type: 'pawn', title: 'Bandaki Report', description: 'Bandaki summary with active, redeemed, and forfeited loans', icon: Banknote, color: 'red' },
-  { type: 'karigar', title: 'Karigar Report', description: 'Karigar performance summary with issued and returned materials', icon: Wrench, color: 'cyan' },
-  { type: 'customer-ledger', title: 'Customer Ledger', description: 'Customer balances, credits, and payment history', icon: Users, color: 'blue' },
-  { type: 'profit-summary', title: 'Profit Summary', description: 'Basic profit calculation from sales data', icon: TrendingUp, color: 'indigo' },
-  { type: 'tax', title: 'Tax Report', description: 'Service fee and diamond VAT collected on sales', icon: ReceiptText, color: 'yellow' },
+  { to: '/reports/current-stock', title: 'Current Stock', description: 'Full inventory listing with quantities and values', icon: BarChart3 },
+  { to: '/reports/stock-movement', title: 'Stock Movement', description: 'Stock in and out movements by date range', icon: ArrowLeftRight },
+  { to: '/reports/valuation', title: 'Inventory Valuation', description: 'Total valuation by metal type using latest market rates', icon: DollarSign },
+  { to: '/reports/pawn', title: 'Bandaki Report', description: 'Bandaki summary with active, redeemed, and forfeited loans', icon: Banknote },
+  { to: '/reports/karigar', title: 'Karigar Report', description: 'Karigar performance summary with issued and returned materials', icon: Wrench },
+  { to: '/reports/customer-ledger', title: 'Customer Ledger', description: 'Customer balances, credits, and payment history', icon: Users },
+  { to: '/reports/profit-summary', title: 'Profit Summary', description: 'Basic profit calculation from sales data', icon: TrendingUp },
+  { to: '/reports/tax', title: 'Tax Report', description: 'Service fee and diamond VAT collected on sales', icon: ReceiptText },
 ]
 
-const colorMap = {
-  blue: 'bg-blue-50 text-blue-600 border-blue-200',
-  green: 'bg-green-50 text-green-600 border-green-200',
-  orange: 'bg-orange-50 text-orange-600 border-orange-200',
-  purple: 'bg-purple-50 text-purple-600 border-purple-200',
-  yellow: 'bg-yellow-50 text-yellow-600 border-yellow-200',
-  red: 'bg-red-50 text-red-600 border-red-200',
-  cyan: 'bg-cyan-50 text-cyan-600 border-cyan-200',
-  indigo: 'bg-indigo-50 text-indigo-600 border-indigo-200',
+const accountingTypes = [
+  { to: '/accounting', title: 'Accounting Overview', description: 'Chart of accounts and voucher entry hub', icon: BookOpen },
+  { to: '/accounting/vouchers', title: 'Vouchers', description: 'All vouchers, filter by type, date range, and party', icon: ReceiptText },
+  { to: '/accounting/ledgers', title: 'Ledger Report', description: 'T-account view with opening, entries, and closing balance', icon: BookOpenText },
+  { to: '/accounting/day-book', title: 'Day Book', description: 'Every voucher entry for a date, chronological, both sides', icon: CalendarDays },
+  { to: '/accounting/debtors', title: 'Sundry Debtors', description: 'Debtor ledgers with outstanding balances', icon: Users },
+  { to: '/accounting/creditors', title: 'Sundry Creditors', description: 'Creditor ledgers with outstanding balances', icon: HandCoins },
+]
+
+function QuickLink({ to, title, description, icon: Icon }) {
+  return (
+    <Link
+      to={to}
+      className="group flex items-center gap-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-4 shadow-sm transition-colors hover:border-[var(--color-gold-400)] hover:bg-[var(--color-primary-bg)]"
+    >
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--color-primary-bg)] text-[var(--color-gold-700)]">
+        <Icon size={18} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-medium text-[var(--color-text)]">{title}</span>
+        <span className="mt-0.5 block text-xs leading-snug text-[var(--color-text-secondary)]">{description}</span>
+      </span>
+      <ChevronRight size={16} className="shrink-0 text-[var(--color-ink-300)]" />
+    </Link>
+  )
 }
 
-export default function Reports() {
-  const navigate = useNavigate()
+function LinkSection({ title, subtitle, items }) {
   return (
-    <div className="space-y-6">
-      <PageHeader title="Reports" subtitle="Generate and export inventory reports" />
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {reportTypes.map(({ type, title, description, icon: Icon, color }) => (
-          <button
-            key={type}
-            onClick={() => navigate(`/reports/${type}`)}
-            className={`p-5 rounded-xl border text-left transition-all hover:shadow-md hover:-translate-y-0.5 ${colorMap[color]}`}
-          >
-            <div className="flex items-start gap-4">
-              <div className="p-2 rounded-lg bg-white/50">
-                <Icon size={24} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="font-semibold text-sm">{title}</h3>
-                <p className="text-xs mt-1 opacity-75">{description}</p>
-              </div>
-            </div>
-          </button>
+    <div>
+      {title && (
+        <div className="mb-3">
+          <h2 className="text-sm font-semibold text-[var(--color-text)]">{title}</h2>
+          {subtitle && <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">{subtitle}</p>}
+        </div>
+      )}
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        {items.map((item) => (
+          <QuickLink key={item.to} {...item} />
         ))}
       </div>
     </div>
   )
 }
 
+export default function Reports() {
+  return (
+    <div className="max-w-4xl space-y-8">
+      <PageHeader title="Reports" subtitle="Generate and export inventory reports" />
+      <LinkSection items={reportTypes} />
+      <LinkSection
+        title="Accounting"
+        subtitle="Double-entry vouchers, ledgers, and day books"
+        items={accountingTypes}
+      />
+    </div>
+  )
+}

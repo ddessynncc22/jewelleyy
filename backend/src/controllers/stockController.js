@@ -84,7 +84,7 @@ exports.createStockIn = async (req, res) => {
     if (!item) {
       return errorResponse(res, 'Item not found', 404);
     }
-    const validInCategories = ['Purchase', 'Manufacturing', 'Return from Karigar', 'Pawn Redemption', 'Sale Return', 'Transfer In', 'Adjustment'];
+    const validInCategories = ['Purchase', 'Buy-back', 'Refinery', 'Manufacturing', 'Return from Karigar', 'Pawn Redemption', 'Sale Return', 'Transfer In', 'Adjustment'];
     if (!validInCategories.includes(category)) {
       return errorResponse(res, 'Invalid stock-in category', 400);
     }
@@ -129,7 +129,7 @@ exports.createStockOut = async (req, res) => {
     if (!item) {
       return errorResponse(res, 'Item not found', 404);
     }
-    const validOutCategories = ['Sale', 'Branch Transfer', 'Damaged', 'With Karigar', 'Custom Order', 'Pawn Issuance', 'Melted', 'Purchase Return', 'Transfer Out', 'Adjustment'];
+    const validOutCategories = ['Sale', 'Branch Transfer', 'Damaged', 'With Karigar', 'Custom Order', 'Pawn Issuance', 'Melted', 'Refinery', 'Transfer Out', 'Adjustment'];
     if (!validOutCategories.includes(category)) {
       return errorResponse(res, 'Invalid stock-out category', 400);
     }

@@ -23,6 +23,11 @@ const karigarSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    panNumber: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     isActive: {
       type: Boolean,
       default: true,
@@ -36,6 +41,11 @@ const karigarSchema = new mongoose.Schema(
         itemName: {
           type: String,
           required: true,
+        },
+        metalType: {
+          type: String,
+          enum: ['gold', 'silver', 'diamond', 'gemstone'],
+          default: 'gold',
         },
         grossWeight: {
           type: Number,

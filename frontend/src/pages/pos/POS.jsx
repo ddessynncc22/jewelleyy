@@ -127,10 +127,10 @@ const POS = ({ mode = 'standard' }) => {
   const [metalTypes, setMetalTypes] = useState([])
   const [rates, setRates] = useState({ gold: null, silver: null })
   const [cart, setCart] = useState([])
-  const [paymentType, setPaymentType] = useState('cash')
-  const [cashAmount, setCashAmount] = useState('')
-  const [khaataAmount, setKhaataAmount] = useState('')
-  const [actualAmountReceived, setActualAmountReceived] = useState('')
+const [paymentType, setPaymentType] = useState('cash')
+const [cashAmount, setCashAmount] = useState('')
+const [khaataAmount, setKhaataAmount] = useState('')
+const [actualAmountReceived, setActualAmountReceived] = useState('')
   const [selectedCustomer, setSelectedCustomer] = useState(null)
   const [customerSearch, setCustomerSearch] = useState('')
   const [customerResults, setCustomerResults] = useState([])
@@ -443,8 +443,7 @@ const POS = ({ mode = 'standard' }) => {
   const fullBill = Number((cartTotal + full.totalTaxAmount).toFixed(2))
 
   let { taxableAmount, feeAmount, diamondTaxAmount, totalTaxAmount, totalTaxable, rawTotal } = computeTax(0)
-  let billTotal = Math.round(rawTotal)
-  let roundOff = Number((billTotal - rawTotal).toFixed(2))
+  let billTotal = Math.floor(rawTotal)
 
   let computedDiscount = 0
   let receivedAmount = 0
@@ -476,8 +475,7 @@ const POS = ({ mode = 'standard' }) => {
       totalTaxable = t.totalTaxable
       rawTotal = t.rawTotal
       receivedAmount = oldGoldCredit + actualCashReceived
-      billTotal = Math.round(receivedAmount)
-      roundOff = Number((billTotal - rawTotal).toFixed(2))
+      billTotal = Math.floor(rawTotal)
       oldGoldAmountToPay = Math.max(0, billTotal - oldGoldCredit)
       oldGoldChange = Math.max(0, Math.round(oldGoldValue) - billTotal)
     } else {
@@ -496,8 +494,7 @@ const POS = ({ mode = 'standard' }) => {
       totalTaxAmount = t.totalTaxAmount
       totalTaxable = t.totalTaxable
       rawTotal = t.rawTotal
-      billTotal = Math.round(receivedAmount)
-      roundOff = Number((billTotal - rawTotal).toFixed(2))
+      billTotal = Math.floor(rawTotal)
     }
   }
 
@@ -695,7 +692,7 @@ const POS = ({ mode = 'standard' }) => {
   }
 
   const handleLoadHeldBill = (heldBill) => {
-    setCart(heldBill.cart || [])
+setCart(heldBill.cart || [])
     setPaymentType(heldBill.paymentType || 'cash')
     setCashAmount(heldBill.cashAmount || '')
     setKhaataAmount(heldBill.khaataAmount || '')
@@ -1188,10 +1185,6 @@ const POS = ({ mode = 'standard' }) => {
                 <span>- {formatCurrency(computedDiscount)}</span>
               </div>
             )}
-            <div className="flex justify-between items-center text-sm text-gray-500">
-              <span>Round Off</span>
-              <span>{roundOff >= 0 ? '+' : ''}{formatCurrency(roundOff)}</span>
-            </div>
             <div className="flex justify-between items-center">
               <span className="text-sm font-semibold text-gray-900">Grand Total</span>
               <span className="text-xl font-bold text-amber-700">{formatCurrency(billTotal)}</span>
@@ -1405,7 +1398,7 @@ const POS = ({ mode = 'standard' }) => {
                   {oldGoldChange > 0 && <div className="text-purple-600"><span className="font-medium">Change/Credit Due:</span> {formatCurrency(oldGoldChange)}</div>}
                 </>
               )}
-              {paymentType !== 'oldGoldExchange' && actualAmountReceived && <div className="text-blue-600"><span className="font-medium">Amount Received:</span> {formatCurrency(Number(actualAmountReceived))}</div>}
+{paymentType !== 'oldGoldExchange' && actualAmountReceived && <div className="text-blue-600"><span className="font-medium">Amount Received:</span> {formatCurrency(Number(actualAmountReceived))}</div>}
             </div>
           </div>
         }
@@ -1483,7 +1476,6 @@ const POS = ({ mode = 'standard' }) => {
                 { name: 'Service Fee', rate: feeRate, amount: feeAmount },
                 { name: diamondTaxRate >= 13 ? 'VAT (Diamond)' : 'Service Fee (Diamond)', rate: diamondTaxRate, amount: diamondTaxAmount },
               ].filter((t) => t.amount > 0)}
-              roundOff={roundOff}
               grandTotal={billTotal}
               paymentType={previewPaymentLabel}
               paidAmount={previewPaidAmount}

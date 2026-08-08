@@ -5,7 +5,9 @@ const StockMovement = require('../models/StockMovement');
 const ActivityLog = require('../models/ActivityLog');
 const Customer = require('../models/Customer');
 const CustomerLedger = require('../models/CustomerLedger');
+const Purchase = require('../models/Purchase');
 const { successResponse, errorResponse, paginatedResponse } = require('../utils/response');
+const { getNextPurchaseNumber } = require('../services/sequence');
 const {
   processLotLine,
   getTolerancePercent,
@@ -17,6 +19,114 @@ const {
 } = require('./looseLotController');
 
 exports.getDiamondVatStatus = getDiamondVatStatus;
+exports.recordOldGoldPurchase = recordOldGoldPurchase;
+exports.reverseOldGoldPurchase = reverseOldGoldPurchase;
+
+const round = (n, decimals = 4) => {
+  const f = Math.pow(10, decimals);
+  return Math.round((Number(n) || 0) * f) / f;
+};
+
+// When a POS sale carries an old-gold exchange (oldGoldDetails.weight > 0)
+// the gold the customer handed over is functionally a customer buy-back:
+// it enters the physical stock as unrefined metal and should be tracked as a
+// Purchase so it shows up in the Purchases list / Gold-in-stock view and can
+// be sent to the refinery like any other customer purchase.
+async function recordOldGoldPurchase(sale, ogd, req) {
+  if (!ogd || !ogd.weight || Number(ogd.weight) <= 0) return null;
+
+  const karat = Number(ogd.purity) || 0;
+  const purityPercent = karat > 0 && karat <= 24 ? Math.round((karat / 24) * 1000) : Math.round(Number(ogd.purityPercent || karat) || 0);
+  const grossWeightG = round(ogd.weight);
+  const fineWeightG = round((grossWeightG * purityPercent) / 1000);
+  const value = round(ogd.value || 0, 2);
+
+  let customerName = '';
+  if (sale.customer) {
+    const cust = await Customer.findById(sale.customer).lean().select('name');
+    customerName = cust ? cust.name : '';
+  }
+
+  const purchaseNumber = await getNextPurchaseNumber(req.tenantId);
+
+  const purchase = await Purchase.create({
+    purchaseNumber,
+    type: 'pos_exchange',
+    date: sale.saleDate || new Date(),
+    supplierName: '',
+    customer: sale.customer || null,
+    customerName,
+    items: [
+      {
+        itemType: 'item',
+        metalType: 'gold',
+        purityPercent,
+        karat: karat > 0 && karat <= 24 ? karat : 0,
+        grossWeightG,
+        stoneWeightG: 0,
+        fineWeightG,
+        ratePerGram: 0,
+        value,
+        description: `Old gold exchange via Sale ${sale.saleNumber}`,
+        refineStatus: 'none',
+        refineId: null,
+      },
+    ],
+    totals: {
+      grossWeightG,
+      fineWeightG,
+      goldValue: value,
+      silverValue: 0,
+      totalValue: value,
+    },
+    rateLocked: { goldPerGram: 0, silverPerGram: 0, source: 'manual', lockedAt: new Date() },
+    payments: [],
+    paidAmount: value,
+    balanceDue: 0,
+    paymentStatus: 'paid',
+    notes: `Auto-created from POS sale ${sale.saleNumber} (old gold exchange)`,
+    saleRef: sale._id,
+  });
+
+  // Physical metal movement: gold received from the customer (buy-back).
+  await StockMovement.create({
+    item: null,
+    type: 'stockIn',
+    category: 'Buy-back',
+    quantity: 1,
+    weight: grossWeightG,
+    purity: purityPercent,
+    reference: purchaseNumber,
+    notes: `Old gold exchange via Sale ${sale.saleNumber} — ${purchaseNumber}`,
+    performedBy: req.user._id,
+    movementDate: sale.saleDate || new Date(),
+  });
+
+  return purchase;
+}
+
+// Reverse the purchase + stock movement created for an old-gold exchange
+// when the originating sale is deleted. The purchase is soft-deleted so the
+// audit trail stays intact; if it has already been sent to refine we leave it
+// in place (the sale deletion already records a reversal stock movement).
+async function reverseOldGoldPurchase(sale, req) {
+  const purchase = await Purchase.findOne({ saleRef: sale._id });
+  if (!purchase) return;
+
+  await StockMovement.create({
+    item: null,
+    type: 'stockOut',
+    category: 'Buy-back',
+    quantity: 1,
+    weight: purchase.totals?.grossWeightG || 0,
+    purity: purchase.items?.[0]?.purityPercent || 0,
+    reference: purchase.purchaseNumber,
+    notes: `Reversal of old gold exchange via Sale ${sale.saleNumber} — ${purchase.purchaseNumber}`,
+    performedBy: req.user._id,
+  });
+
+  await purchase.softDelete();
+}
 
 exports.createSale = async (req, res) => {
   try {
@@ -136,6 +246,9 @@ exports.createSale = async (req, res) => {
       referenceId: sale._id,
       referenceModel: 'Sale',
     });
+    await recordOldGoldPurchase(sale, sale.oldGoldDetails, req).catch((e) => {
+      console.error(`Failed to record old gold purchase for sale ${saleNumber}:`, e.message);
+    });
     return successResponse(res, sale, 'Sale created successfully', 201);
   } catch (error) {
     return errorResponse(res, error.message, 500);
@@ -179,7 +292,7 @@ exports.getSales = async (req, res) => {
 
 exports.getSale = async (req, res) => {
   try {
-    const sale = await Sale.findById(req.params.id).populate('items.item', 'SKU itemName category metalType purity grossWeight netMetalWeight stoneWeight karat hsCode carat images').populate('customer', 'name phone customerCode address').populate('soldBy', 'name email');
+    const sale = await Sale.findById(req.params.id).populate('items.item', 'SKU itemName category metalType purity grossWeight netMetalWeight stoneWeight karat hsCode carat images itemType').populate('customer', 'name phone customerCode address').populate('soldBy', 'name email');
     if (!sale) {
       return errorResponse(res, 'Sale not found', 404);
     }
@@ -238,6 +351,9 @@ exports.deleteSale = async (req, res) => {
         });
       }
     }
+    await reverseOldGoldPurchase(sale, req).catch((e) => {
+      console.error(`Failed to reverse old gold purchase for sale ${sale.saleNumber}:`, e.message);
+    });
     await sale.softDelete();
     await ActivityLog.create({
       action: 'delete',
@@ -446,6 +562,9 @@ exports.createCombinedSale = async (req, res) => {
       performedBy: req.user._id,
       referenceId: sale._id,
       referenceModel: 'Sale',
+    });
+    await recordOldGoldPurchase(sale, sale.oldGoldDetails, req).catch((e) => {
+      console.error(`Failed to record old gold purchase for sale ${saleNumber}:`, e.message);
     });
 
     return successResponse(

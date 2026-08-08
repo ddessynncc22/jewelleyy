@@ -8,6 +8,7 @@ import {
   Wrench,
   Banknote,
   ShoppingCart,
+  FlaskConical,
   Users,
   TrendingUp,
   BarChart3,
@@ -25,6 +26,7 @@ import {
   ClipboardList,
   Layers,
   QrCode,
+  Scale,
 } from 'lucide-react'
 import { getCachedSettings } from '../services/settingsService'
 import { useAuth } from '../hooks/useAuth'
@@ -39,6 +41,15 @@ const tenantSections = [
     items: [
       { to: '/items', label: 'Items', icon: Gem },
       { to: '/stock', label: 'Stock Movement', icon: ArrowLeftRight },
+    ],
+  },
+  {
+    label: 'Purchase',
+    items: [
+      { to: '/purchases', label: 'Purchases', icon: ShoppingCart, end: true },
+      { to: '/purchases/new', label: 'New Purchase', icon: ShoppingCart },
+      { to: '/refines', label: 'Refine Gold', icon: FlaskConical },
+      { to: '/gold-in-stock', label: 'Gold in Stock', icon: Scale },
     ],
   },
   {
@@ -58,6 +69,7 @@ const tenantSections = [
         icon: Wrench,
         children: [
           { to: '/karigar', label: 'Karigars', end: true },
+          { to: '/karigar/summary', label: 'Summary' },
           { to: '/karigar/pending-jobs', label: 'Pending Jobs' },
         ],
       },
@@ -137,6 +149,8 @@ const qrLookupSections = [
   },
 ]
 
+const activeClasses = 'bg-[var(--color-primary-light)] text-[var(--color-gold-800)] font-medium'
+
 export default function Sidebar({ collapsed, storeName, onToggle, mobileOpen, onMobileClose }) {
   const location = useLocation()
   const { user } = useAuth()
@@ -155,10 +169,10 @@ export default function Sidebar({ collapsed, storeName, onToggle, mobileOpen, on
 
   const linkClass = ({ isActive }) =>
     [
-      'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-150',
+      'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150',
       isActive
-        ? 'bg-[var(--color-primary-light)] text-[var(--color-primary)]'
-        : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-elevated)] hover:text-[var(--color-text)]',
+        ? activeClasses
+        : 'text-[var(--color-sidebar-muted)] hover:bg-[var(--color-sidebar-hover)] hover:text-[var(--color-sidebar-text)]',
       collapsed ? 'justify-center px-0' : '',
     ].join(' ')
 
@@ -175,10 +189,10 @@ export default function Sidebar({ collapsed, storeName, onToggle, mobileOpen, on
             onClick={() => handleGroupClick(item.label)}
             title={collapsed ? item.label : undefined}
             className={[
-              'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-150',
+              'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150',
               isAnyChildActive
-                ? 'bg-[var(--color-primary-light)] text-[var(--color-primary)]'
-                : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-elevated)] hover:text-[var(--color-text)]',
+                ? activeClasses
+                : 'text-[var(--color-sidebar-muted)] hover:bg-[var(--color-sidebar-hover)] hover:text-[var(--color-sidebar-text)]',
               collapsed ? 'justify-center px-0' : '',
             ].join(' ')}
           >
@@ -202,9 +216,9 @@ export default function Sidebar({ collapsed, storeName, onToggle, mobileOpen, on
                   onClick={onMobileClose}
                   className={({ isActive }) =>
                     [
-                      'block rounded-lg px-3 py-2 text-sm transition-colors duration-150',
+                      'block rounded-lg px-3 py-2 text-sm transition-colors',
                       isActive
-                        ? 'bg-[var(--color-primary-light)] font-medium text-[var(--color-primary)]'
+                        ? 'bg-[var(--color-primary-light)] font-medium text-[var(--color-gold-800)]'
                         : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-elevated)] hover:text-[var(--color-text)]',
                     ].join(' ')
                   }
@@ -240,12 +254,12 @@ export default function Sidebar({ collapsed, storeName, onToggle, mobileOpen, on
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-[var(--color-border)] bg-[var(--color-card)] transition-[width,transform] duration-300 ease-in-out lg:static ${
+        className={`fixed inset-y-0 left-0 z-50 flex flex-col bg-[var(--color-card)] border-r border-[var(--color-border)] transition-[width,transform] duration-300 ease-in-out lg:static ${
           collapsed ? 'w-[72px]' : 'w-64'
         } ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
       >
         <div className="flex h-16 shrink-0 items-center gap-2.5 border-b border-[var(--color-border)] px-4">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--color-primary)] text-white">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--color-gold-600)] text-white">
             {isSuperAdmin ? <Globe size={16} /> : <Sparkles size={16} />}
           </div>
           {!collapsed && (

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
-import { Gem, Coins, Package, ChevronDown, ChevronRight, Table2, Tag } from "lucide-react";
+import { Gem, Coins, Package, ChevronDown, ChevronRight, Table2, Tag, Scale } from "lucide-react";
 
 import { getInventoryValue } from "../../services/dashboardService";
 import { formatCurrency, formatWeight } from "../../utils/helpers";
@@ -161,6 +161,7 @@ export default function InventoryValue() {
   const totalWeight = stats.totalWeight || 0;
   const goldRate = stats.goldRate?.rate || 0;
   const silverRate = stats.silverRate?.rate || 0;
+  const refinedStock = stats.refinedStock || { balanceG: 0, value: 0 };
 
   const toggleExpand = (key) => {
     setExpanded((prev) => {
@@ -178,7 +179,7 @@ export default function InventoryValue() {
     <div className="space-y-6">
       <PageHeader
         title="Inventory Value"
-        subtitle="Estimated value at latest per-gram rates (net metal weight × rate × purity)"
+        subtitle="Estimated value at latest per-gram rates (metal weight × rate × purity + diamond / stone value)"
       >
         <div className="flex items-center gap-2 text-xs text-[var(--color-text-secondary)]">
           <span>Gold: Rs {goldRate.toLocaleString()}/g</span>
@@ -208,6 +209,13 @@ export default function InventoryValue() {
             />
           );
         })}
+        <StatCard
+          title="Refined / Purchased Gold Stock"
+          value={formatWeight(refinedStock.balanceG)}
+          icon={Scale}
+          color="amber"
+          subtitle={`${formatCurrency(refinedStock.value)} at Rs ${goldRate.toLocaleString()}/g fine gold`}
+        />
       </div>
 
       <Card>

@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import {
-  Plus, Eye, Edit, Trash2, Printer, AlertTriangle, Layers, Package, Banknote,
+  Eye, Edit, Trash2, Printer, AlertTriangle, Layers, Package, Banknote,
 } from 'lucide-react'
 import { getLooseLots, deleteLooseLot, getLooseLotByBarcode, getLooseStockSummary } from '../../services/looseLotService'
 import { printLooseLotLabels } from '../../utils/looseLotLabels'
@@ -19,7 +19,7 @@ import StatCard from '../../components/ui/StatCard'
 import ErrorState from '../../components/ui/ErrorState'
 import EmptyState from '../../components/ui/EmptyState'
 import ConfirmDialog from '../../components/ui/ConfirmDialog'
-import LooseLotForm from './LooseLotForm'
+import InventoryForm from '../inventory/InventoryForm'
 
 const METAL_CHIP = {
   gold: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -227,16 +227,6 @@ const LooseLotList = () => {
         <Button variant="outline" icon={AlertTriangle} onClick={() => setLowStockOnly((p) => !p)} className={lowStockOnly ? 'hidden' : ''}>
           Low Stock
         </Button>
-        <Button
-          icon={<Plus size={16} />}
-          size="sm"
-          onClick={() => {
-            setEditingLot(null)
-            setShowForm(true)
-          }}
-        >
-          Create Lot
-        </Button>
       </PageHeader>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -296,12 +286,7 @@ const LooseLotList = () => {
       ) : lots.length === 0 ? (
         <EmptyState
           title="No loose lots found"
-          description={search || lowStockOnly || status ? 'Try adjusting your search or filters' : 'Create your first loose lot to start tracking unbarcoded items'}
-          action={
-            search || lowStockOnly || status
-              ? undefined
-              : { label: 'Create Lot', onClick: () => setShowForm(true) }
-          }
+          description={search || lowStockOnly || status ? 'Try adjusting your search or filters' : 'No loose lots yet'}
         />
       ) : (
         <DataTable
@@ -314,7 +299,8 @@ const LooseLotList = () => {
       )}
 
       {showForm && (
-        <LooseLotForm
+        <InventoryForm
+          mode="loose"
           lot={editingLot}
           onClose={() => {
             setShowForm(false)

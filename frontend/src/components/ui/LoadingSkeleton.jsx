@@ -1,41 +1,35 @@
+const bone = "bg-[var(--color-ink-100)] animate-pulse"
 const tableRow = (
   <div className="flex gap-4 px-4 py-3.5">
-    {" "}
-    <div className="h-4 w-4 rounded bg-gray-200 animate-pulse shrink-0" />{" "}
+    <div className={`${bone} h-4 w-4 rounded`} />
     <div className="flex flex-1 gap-4">
-      {" "}
-      <div className="h-4 flex-1 rounded bg-gray-200 animate-pulse" />{" "}
-      <div className="h-4 flex-1 rounded bg-gray-200 animate-pulse" />{" "}
-      <div className="h-4 flex-1 rounded bg-gray-200 animate-pulse" />{" "}
-      <div className="h-4 w-20 rounded bg-gray-200 animate-pulse" />{" "}
-    </div>{" "}
+      <div className={`${bone} h-4 flex-1 rounded`} />
+      <div className={`${bone} h-4 flex-1 rounded`} />
+      <div className={`${bone} h-4 flex-1 rounded`} />
+      <div className={`${bone} h-4 w-20 rounded`} />
+    </div>
   </div>
 );
 const cardItem = (
   <div className="space-y-3 rounded-2xl border border-[var(--color-border)] p-5">
-    {" "}
     <div className="flex items-center gap-3">
-      {" "}
-      <div className="h-10 w-10 rounded-xl bg-gray-200 animate-pulse" />{" "}
+      <div className={`${bone} h-10 w-10 rounded-xl`} />
       <div className="flex-1 space-y-2">
-        {" "}
-        <div className="h-4 w-3/4 rounded bg-gray-200 animate-pulse" />{" "}
-        <div className="h-3 w-1/2 rounded bg-gray-200 animate-pulse" />{" "}
-      </div>{" "}
-    </div>{" "}
-    <div className="h-3 w-full rounded bg-gray-200 animate-pulse" />{" "}
-    <div className="h-3 w-2/3 rounded bg-gray-200 animate-pulse" />{" "}
+        <div className={`${bone} h-4 w-3/4 rounded`} />
+        <div className={`${bone} h-3 w-1/2 rounded`} />
+      </div>
+    </div>
+    <div className={`${bone} h-3 w-full rounded`} />
+    <div className={`${bone} h-3 w-2/3 rounded`} />
   </div>
 );
 const listItem = (
   <div className="flex items-center gap-3 px-4 py-3.5">
-    {" "}
-    <div className="h-10 w-10 rounded-xl bg-gray-200 animate-pulse shrink-0" />{" "}
+    <div className={`${bone} h-10 w-10 rounded-xl shrink-0`} />
     <div className="flex-1 space-y-2">
-      {" "}
-      <div className="h-4 w-1/2 rounded bg-gray-200 animate-pulse" />{" "}
-      <div className="h-3 w-1/3 rounded bg-gray-200 animate-pulse" />{" "}
-    </div>{" "}
+      <div className={`${bone} h-4 w-1/2 rounded`} />
+      <div className={`${bone} h-3 w-1/3 rounded`} />
+    </div>
   </div>
 );
 const layouts = {
@@ -64,8 +58,7 @@ const LoadingSkeleton = ({ count = 5, type = "table" }) => {
       : layout.rows;
   return (
     <div className={layout.wrapper} role="status" aria-label="Loading content">
-      {" "}
-      {items} <span className="sr-only">Loading...</span>{" "}
+      {items} <span className="sr-only">Loading...</span>
     </div>
   );
 };

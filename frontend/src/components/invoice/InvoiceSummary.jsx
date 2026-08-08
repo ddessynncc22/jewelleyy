@@ -8,7 +8,6 @@ export default function InvoiceSummary({
   taxableAmount,
   totalTax,
   taxLines,
-  roundOff,
   grandTotal,
   paymentType,
   paidAmount,
@@ -112,10 +111,6 @@ export default function InvoiceSummary({
                 <td className="border border-black px-1.5 py-0.5 text-right">{fmt(t.amount)}</td>
               </tr>
             ))}
-            <tr>
-              <td className="border border-black px-1.5 py-0.5 text-left">Round Off</td>
-              <td className="border border-black px-1.5 py-0.5 text-right">{fmt(roundOff)}</td>
-            </tr>
             <tr>
               <td className="border-t-2 border-black px-1.5 py-0.5 text-left font-bold text-[11px]">कुल जम्मा रकम (Grand Total)</td>
               <td className="border-t-2 border-black px-1.5 py-0.5 text-right font-bold text-[11px]">{fmt(grandTotal)}</td>

@@ -58,8 +58,6 @@ import {
 import { getCategories } from '../../services/categoryService'
 import { printBarcodeLabels } from '../../utils/barcodeLabels'
 
-import ItemForm from './ItemForm'
-
 const STATUS_OPTIONS = [
   { value: 'In Stock', label: 'In Stock' },
   { value: 'Sold', label: 'Sold' },
@@ -109,11 +107,56 @@ const metalChipColors = {
 const formatLabel = (value) =>
   value ? value.charAt(0).toUpperCase() + value.slice(1).replace(/_/g, ' ') : '-'
 
+const STONE_TYPE_LABELS = {
+  diamond: 'Diamond',
+  ruby: 'Ruby',
+  emerald: 'Emerald',
+  sapphire: 'Sapphire',
+  pearl: 'Pearl',
+}
+
+const CUT_LABELS = {
+  round: 'Round',
+  princess: 'Princess',
+  emerald: 'Emerald',
+  cushion: 'Cushion',
+  marquise: 'Marquise',
+  oval: 'Oval',
+  pear: 'Pear',
+}
+
+const formatStoneLine = (item) => {
+  const stoneType = (item.stoneType || '').toLowerCase()
+  if (!stoneType || stoneType === 'none') return null
+  const parts = [STONE_TYPE_LABELS[stoneType] || item.stoneType]
+  const carat = Number(item.stoneCarat || 0)
+  const qty = Number(item.stoneQuantity || 1)
+  if (carat > 0) parts.push(`${carat}ct${qty > 1 ? ` × ${qty}` : ''}`)
+  const cut = (item.cut || '').toLowerCase()
+  if (cut && cut !== 'none') {
+    const cutLabel = CUT_LABELS[cut] || item.cut
+    parts.push(stoneType === 'diamond' && cut !== 'round' ? `Fancy ${cutLabel}` : cutLabel)
+  }
+  if (item.clarity && item.clarity.toLowerCase() !== 'none') parts.push(item.clarity)
+  const stoneWeight = Number(item.stoneWeightGram || 0)
+  if (stoneWeight > 0) parts.push(`${stoneWeight}g`)
+  return parts.join(' · ')
+}
+
 const LooseBadge = () => (
   <span className="inline-flex shrink-0 items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
     Loose
   </span>
 )
+
+const DiamondBadge = () => (
+  <span className="inline-flex shrink-0 items-center rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+    Diamond
+  </span>
+)
+
+const hasDiamond = (item) =>
+  (item?.metalType || '').toLowerCase() === 'diamond' || (item?.stoneType || '') === 'diamond'
 
 const IconButton = ({ children, title, onClick, className = '' }) => (
   <button
@@ -198,6 +241,7 @@ const ItemCard = ({ item, selected, onToggleSelect, onOpen, onEdit, onDelete }) 
             >
               {item.itemName || 'Untitled item'}
             </h3>
+            {hasDiamond(item) && <DiamondBadge />}
             {item.itemType === 'loose' && <LooseBadge />}
           </div>
           <p className="mt-0.5 font-mono text-xs text-[var(--color-text-secondary)]">
@@ -227,11 +271,19 @@ const ItemCard = ({ item, selected, onToggleSelect, onOpen, onEdit, onDelete }) 
             </div>
           </div>
         ) : (
-          <div className="border-t border-[var(--color-border)] pt-2.5">
-            <p className="text-xs text-[var(--color-text-secondary)]">Gross weight</p>
-            <p className="text-sm font-semibold text-[var(--color-text)]">
-              {formatWeight(item.grossWeight)}
-            </p>
+          <div className="space-y-2.5">
+            <div className="border-t border-[var(--color-border)] pt-2.5">
+              <p className="text-xs text-[var(--color-text-secondary)]">Gross weight</p>
+              <p className="text-sm font-semibold text-[var(--color-text)]">
+                {formatWeight(item.grossWeight)}
+              </p>
+            </div>
+            {formatStoneLine(item) && (
+              <div className="border-t border-[var(--color-border)] pt-2.5">
+                <p className="text-xs text-[var(--color-text-secondary)]">Stone</p>
+                <p className="text-sm font-semibold text-[var(--color-text)]">{formatStoneLine(item)}</p>
+              </div>
+            )}
           </div>
         )}
 
@@ -287,8 +339,6 @@ const ItemList = () => {
   const [page, setPage] = useState(1)
   const [limit, setLimit] = useState(10)
   const [sort, setSort] = useState(null)
-  const [showForm, setShowForm] = useState(false)
-  const [editingItem, setEditingItem] = useState(null)
   const [deleteId, setDeleteId] = useState(null)
   const [lowStockOnly, setLowStockOnly] = useState(false)
   const [viewMode, setViewMode] = useState('table')
@@ -419,14 +469,7 @@ const ItemList = () => {
       navigate(`/loose-lots?item=${item._id}&itemName=${encodeURIComponent(item.itemName || '')}`)
       return
     }
-    setEditingItem(item)
-    setShowForm(true)
-  }
-
-  const handleFormSuccess = () => {
-    setShowForm(false)
-    setEditingItem(null)
-    invalidate()
+    navigate(`/items/${item._id}/edit`)
   }
 
   const handleSearch = (val) => {
@@ -548,6 +591,8 @@ const ItemList = () => {
     printBarcodeLabels({ items: selected, size, title: 'Barcode Labels' })
   }
 
+  const hasStones = items.some((i) => i.itemType !== 'loose' && formatStoneLine(i))
+
   const columns = [
     {
       key: 'select',
@@ -609,6 +654,7 @@ const ItemList = () => {
                 <p className="max-w-[220px] truncate text-sm font-medium text-[var(--color-text)]">
                   {name || '-'}
                 </p>
+                {hasDiamond(row) && <DiamondBadge />}
                 {row.itemType === 'loose' && <LooseBadge />}
               </div>
               <p className="font-mono text-xs text-[var(--color-text-secondary)]">
@@ -646,6 +692,19 @@ const ItemList = () => {
         </div>
       ),
     },
+    ...(hasStones
+      ? [
+          {
+            key: 'stone',
+            label: 'Stone',
+            sortable: false,
+            render: (_, row) => {
+              if (row.itemType === 'loose') return ''
+              return formatStoneLine(row) || ''
+            },
+          },
+        ]
+      : []),
     {
       key: 'stock',
       label: 'Stock',
@@ -771,10 +830,7 @@ const ItemList = () => {
           <Button
             icon={<Plus size={16} />}
             size="sm"
-            onClick={() => {
-              setEditingItem(null)
-              setShowForm(true)
-            }}
+            onClick={() => navigate('/items/new')}
           >
             Add Item
           </Button>
@@ -961,10 +1017,7 @@ const ItemList = () => {
                 ? undefined
                 : {
                     label: 'Add Item',
-                    onClick: () => {
-                      setEditingItem(null)
-                      setShowForm(true)
-                    },
+                    onClick: () => navigate('/items/new'),
                   }
             }
           />
@@ -994,17 +1047,6 @@ const ItemList = () => {
           pagination={itemsPagination}
           onSort={handleSort}
           onRowClick={(row) => openItem(row)}
-        />
-      )}
-
-      {showForm && (
-        <ItemForm
-          item={editingItem}
-          onClose={() => {
-            setShowForm(false)
-            setEditingItem(null)
-          }}
-          onSuccess={handleFormSuccess}
         />
       )}
 

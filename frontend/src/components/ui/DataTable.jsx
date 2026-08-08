@@ -26,11 +26,11 @@ const DataTable = ({
 
   const SortIcon = ({ colKey }) => {
     if (sortColumn !== colKey)
-      return <ChevronsUpDown className="h-3.5 w-3.5 text-gray-300" />;
+      return <ChevronsUpDown className="h-3.5 w-3.5 text-[var(--color-ink-300)]" />;
     return sortDirection === "asc" ? (
-      <ChevronUp className="h-3.5 w-3.5 text-[var(--color-primary)]" />
+      <ChevronUp className="h-3.5 w-3.5 text-[var(--color-gold-600)]" />
     ) : (
-      <ChevronDown className="h-3.5 w-3.5 text-[var(--color-primary)]" />
+      <ChevronDown className="h-3.5 w-3.5 text-[var(--color-gold-600)]" />
     );
   };
 
@@ -47,16 +47,16 @@ const DataTable = ({
     <div className="space-y-4 animate-fade-in">
       {FiltersComponent && <div>{FiltersComponent}</div>}
 
-      <div className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] shadow-sm">
+      <div className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] shadow-[var(--shadow-sm)]">
         <div className="hidden sm:block overflow-x-auto">
-          <table className="min-w-full divide-y divide-[var(--color-border)]">
+          <table className="min-w-full">
             <thead>
-              <tr className="bg-[var(--color-elevated)]">
+              <tr className="bg-[var(--color-primary-bg)]/70">
                 {columns.map((col) => (
                   <th
                     key={col.key}
                     scope="col"
-                    className={`px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-[var(--color-text-secondary)] ${col.sortable !== false ? "cursor-pointer select-none hover:bg-black/5" : ""}`}
+                    className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--color-text-secondary)] ${col.sortable !== false ? "cursor-pointer select-none hover:text-[var(--color-text)]" : ""}`}
                     onClick={() =>
                       col.sortable !== false && handleSort(col.key)
                     }
@@ -74,7 +74,9 @@ const DataTable = ({
                 <tr>
                   <td colSpan={columns.length} className="px-4 py-16">
                     <div className="flex flex-col items-center justify-center text-center">
-                      <Inbox className="mb-3 h-10 w-10 text-[var(--color-text-secondary)]" />
+                      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--color-primary-bg)]">
+                        <Inbox className="h-6 w-6 text-[var(--color-gold-600)]" />
+                      </div>
                       <p className="text-sm font-medium text-[var(--color-text-secondary)]">
                         No data found
                       </p>
@@ -85,7 +87,7 @@ const DataTable = ({
                 rows.map((row, rowIndex) => (
                   <tr
                     key={row._id || rowIndex}
-                    className={`hover:bg-[var(--color-elevated)] transition-colors ${onRowClick ? "cursor-pointer" : ""} ${rowClassName?.(row) || ""}`}
+                    className={`transition-colors hover:bg-[var(--color-ink-50)] ${onRowClick ? "cursor-pointer" : ""} ${rowClassName?.(row) || ""}`}
                     onClick={() => onRowClick?.(row)}
                   >
                     {columns.map((col) => (
@@ -108,7 +110,9 @@ const DataTable = ({
         <div className="sm:hidden divide-y divide-[var(--color-border)]">
           {rows.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
-              <Inbox className="mb-3 h-10 w-10 text-[var(--color-text-secondary)]" />
+              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--color-primary-bg)]">
+                <Inbox className="h-6 w-6 text-[var(--color-gold-600)]" />
+              </div>
               <p className="text-sm font-medium text-[var(--color-text-secondary)]">
                 No data found
               </p>

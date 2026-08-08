@@ -12,16 +12,16 @@ const Toast = () => (
         padding: "14px 18px",
         fontSize: "14px",
         fontWeight: "500",
-        boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
+        boxShadow: "0 8px 24px rgba(28,25,15,0.12)",
         border: "1px solid var(--color-border)",
         background: "var(--color-card)",
         color: "var(--color-text)",
       },
       success: {
-        iconTheme: { primary: "#10b981", secondary: "#fff" },
+        iconTheme: { primary: "#16a34a", secondary: "#fff" },
       },
       error: {
-        iconTheme: { primary: "#ef4444", secondary: "#fff" },
+        iconTheme: { primary: "#dc2626", secondary: "#fff" },
       },
     }}
   />

@@ -5,10 +5,12 @@ const Karigar = require('../models/Karigar');
 const Item = require('../models/Item');
 const StockMovement = require('../models/StockMovement');
 const ActivityLog = require('../models/ActivityLog');
+const Settings = require('../models/Settings');
 const { generateSKU, generateBarcode } = require('../services/barcode');
 const { getNextCustomerCode, getNextCustomOrderNumber } = require('../services/sequence');
 const { successResponse, errorResponse, paginatedResponse } = require('../utils/response');
 const { scopeAggregate } = require('../utils/tenant');
+const { getRefinedStockBalance, recordRefinedStock } = require('../services/refinedStock');
 
 const DAY_MS = 86400000;
 const ACTIVE_STATUSES = ['booked', 'material_issued', 'in_progress', 'ready'];
@@ -35,7 +37,7 @@ function enrichOrder(order) {
   const oldGoldAmount = Number(order.oldGoldDetails?.deductibleAmount || 0);
   const taxableAmount = Math.max(0, price - oldGoldAmount);
   const taxAmount = Number((taxableAmount * 0.005).toFixed(2));
-  const billTotal = Math.round(Number(price) + taxAmount);
+  const billTotal = Math.floor(Number(price) + taxAmount);
   const balanceDue = Math.max(0, billTotal - (order.advanceAmount || 0) - oldGoldAmount - (Number(order.actualAmountReceived) || 0));
   return {
     ...order,
@@ -289,16 +291,20 @@ exports.updateOrderStatus = async (req, res) => {
       return errorResponse(res, `Cannot move order from ${current} to ${newStatus}`, 400);
     }
 
+    let issuedMaterialIndex = -1;
+
     switch (newStatus) {
       case 'material_issued': {
-        const { karigarId } = req.body;
+        const { karigarId, metalType } = req.body;
         if (!karigarId) return errorResponse(res, 'A karigar is required to issue material', 400);
         const karigar = await Karigar.findById(karigarId);
         if (!karigar) return errorResponse(res, 'Karigar not found', 404);
+        const metal = ['gold', 'silver', 'diamond', 'gemstone'].includes(metalType) ? metalType : 'gold';
         order.karigarId = karigarId;
         karigar.materials.push({
           date: new Date(),
           itemName: order.itemName || `Custom order ${order.orderNumber}`,
+          metalType: metal,
           grossWeight: order.requestedWeight,
           stoneWeight: 0,
           purity: order.purity || 0,
@@ -307,9 +313,37 @@ exports.updateOrderStatus = async (req, res) => {
           wastage: 0,
           status: 'Issued',
         });
+        issuedMaterialIndex = karigar.materials.length - 1;
         karigar.pendingJobs = (karigar.pendingJobs || 0) + 1;
         karigar.totalIssued = (karigar.totalIssued || 0) + order.requestedWeight;
         await karigar.save();
+
+        // Gold custom orders draw their fine gold from the shop's refined
+        // gold stock. Refuse to issue when it would run out.
+        let refinedConsumed = 0;
+        if (metal === 'gold') {
+          const settings = await Settings.getSettings();
+          const purityFactor = Number(order.purity) > 0
+            ? Number(order.purity) / 1000
+            : (Number(settings.defaultPurity) || 916) / 1000;
+          const fineNeeded = Math.round(Number(order.requestedWeight) * purityFactor * 10000) / 10000;
+          const balance = await getRefinedStockBalance(req.tenantId);
+          if (balance < fineNeeded) {
+            return errorResponse(res, `Not enough refined gold in stock. Available ${balance} g fine gold, this order needs ${fineNeeded} g. Record a purchase or receive refined gold first.`, 400);
+          }
+          await recordRefinedStock({
+            tenantId: req.tenantId,
+            performedBy: req.user._id,
+            type: 'out',
+            source: 'custom_order',
+            sourceId: order._id,
+            referenceNumber: order.orderNumber,
+            weightG: fineNeeded,
+            note: `Custom order ${order.orderNumber} — ${fineNeeded} g fine gold issued to ${karigar.name}`,
+          });
+          refinedConsumed = fineNeeded;
+        }
+
         order.karigarJobId = karigar.materials[karigar.materials.length - 1]._id;
         await StockMovement.create({
           item: null,
@@ -319,7 +353,7 @@ exports.updateOrderStatus = async (req, res) => {
           weight: order.requestedWeight,
           purity: order.purity || 0,
           reference: `Order: ${order.orderNumber}`,
-          notes: `Raw material issued to ${karigar.name} for custom order ${order.orderNumber}`,
+          notes: `Raw material issued to ${karigar.name} for custom order ${order.orderNumber}${refinedConsumed ? ` (${refinedConsumed} g fine gold from refined stock)` : ''}`,
           performedBy: req.user._id,
         });
         break;
@@ -444,7 +478,7 @@ exports.updateOrderStatus = async (req, res) => {
         const oldGoldValue = Number(order.oldGoldDetails.deductibleAmount || 0);
         const taxableAmount = Math.max(0, Number(finalPrice) - oldGoldValue);
         const taxAmount = Number((taxableAmount * 0.005).toFixed(2));
-        const billTotal = Math.round(Number(finalPrice) + taxAmount);
+        const billTotal = Math.floor(Number(finalPrice) + taxAmount);
         const balanceDue = Math.max(0, billTotal - (order.advanceAmount || 0) - oldGoldValue - Number(order.actualAmountReceived || 0));
         if (balanceDue > 0 && order.customerId) {
           const lastLedger = await CustomerLedger.findOne({ customer: order.customerId }).sort({ transactionDate: -1 });
@@ -484,7 +518,12 @@ exports.updateOrderStatus = async (req, res) => {
     order.statusHistory.push({ status: newStatus, note: note || '', performedBy: req.user._id });
     await order.save();
     await logActivity(req, 'customOrder', 'updateStatus', `Custom order ${order.orderNumber} moved from ${current} to ${newStatus}`, order._id, 'CustomOrder');
-    return successResponse(res, enrichOrder(order.toObject()), `Order moved to ${newStatus}`);
+    const enriched = enrichOrder(order.toObject());
+    return successResponse(
+      res,
+      issuedMaterialIndex >= 0 ? { ...enriched, materialIndex: issuedMaterialIndex } : enriched,
+      `Order moved to ${newStatus}`,
+    );
   } catch (error) {
     return errorResponse(res, error.message, 500);
   }

@@ -14,7 +14,7 @@ import DataTable from '../../components/ui/DataTable'
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton'
 import ErrorState from '../../components/ui/ErrorState'
 import ConfirmDialog from '../../components/ui/ConfirmDialog'
-import LooseLotForm from './LooseLotForm'
+import InventoryForm from '../inventory/InventoryForm'
 
 const InfoTile = ({ label, value }) => (
   <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-4">
@@ -144,7 +144,8 @@ const LooseLotDetail = () => {
       </div>
 
       {showEdit && (
-        <LooseLotForm
+        <InventoryForm
+          mode="loose"
           lot={lot}
           onClose={() => setShowEdit(false)}
           onSuccess={() => {

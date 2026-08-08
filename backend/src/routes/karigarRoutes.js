@@ -1,10 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const { getKarigars, getKarigar, createKarigar, updateKarigar, deleteKarigar, issueMaterial, receiveFinished, getPendingJobs, getKarigarReport, updateMaterialStatus, recordKarigarPayment, recordGoldTaken, getKarigarPaymentHistory } = require('../controllers/karigarController');
+const { getKarigars, getKarigar, createKarigar, updateKarigar, deleteKarigar, issueMaterial, receiveFinished, getPendingJobs, getKarigarReport, getKarigarSummary, getKarigarReturn, updateMaterialStatus, recordKarigarPayment, recordGoldTaken, getKarigarPaymentHistory } = require('../controllers/karigarController');
 const { protect, authorize } = require('../middleware/auth');
 
 router.get('/', protect, getKarigars);
 router.get('/pending-jobs', protect, getPendingJobs);
+router.get('/summary', protect, getKarigarSummary);
+router.get('/:id/return/:materialIndex', protect, getKarigarReturn);
 router.get('/:id', protect, getKarigar);
 router.get('/:id/report', protect, authorize('admin', 'manager'), getKarigarReport);
 router.get('/:id/payments', protect, getKarigarPaymentHistory);

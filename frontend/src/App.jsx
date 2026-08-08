@@ -20,7 +20,7 @@ import InventoryValue from "./pages/dashboard/InventoryValue";
 
 import ItemList from "./pages/items/ItemList";
 
-import ItemForm from "./pages/items/ItemForm";
+import InventoryForm from "./pages/inventory/InventoryForm";
 
 import ItemDetail from "./pages/items/ItemDetail";
 
@@ -31,6 +31,12 @@ import KarigarList from "./pages/karigar/KarigarList";
 import KarigarForm from "./pages/karigar/KarigarForm";
 
 import KarigarDetail from "./pages/karigar/KarigarDetail";
+
+import KarigarIssueBill from "./pages/karigar/KarigarIssueBill";
+
+import KarigarReturnBill from "./pages/karigar/KarigarReturnBill";
+
+import KarigarSummary from "./pages/karigar/KarigarSummary";
 
 import KarigarPendingJobs from "./pages/karigar/KarigarPendingJobs";
 
@@ -90,6 +96,32 @@ import ProfitSummaryReport from "./pages/reports/ProfitSummaryReport";
 import TaxReport from "./pages/reports/TaxReport";
 
 import AuditLog from "./pages/audit/AuditLog";
+
+import AccountingHome from "./pages/accounting/AccountingHome";
+
+import LedgerList from "./pages/accounting/LedgerList";
+
+import LedgerReport from "./pages/accounting/LedgerReport";
+
+import VoucherList from "./pages/accounting/VoucherList";
+
+import VoucherForm from "./pages/accounting/VoucherForm";
+
+import VoucherDetail from "./pages/accounting/VoucherDetail";
+
+import DayBookReport from "./pages/accounting/DayBookReport";
+
+import DebtorsCreditorsReport from "./pages/accounting/DebtorsCreditorsReport";
+
+import PurchaseList from "./pages/purchases/PurchaseList";
+
+import PurchaseForm from "./pages/purchases/PurchaseForm";
+
+import PurchaseDetail from "./pages/purchases/PurchaseDetail";
+
+import RefineList from "./pages/purchases/RefineList";
+
+import GoldInStock from "./pages/purchases/GoldInStock";
 
 import InventoryLog from "./pages/audit/InventoryLog";
 
@@ -205,17 +237,25 @@ export default function App() {
         <Route path="/" element={<HomeRoute />} />
         <Route path="/inventory-value" element={<InventoryValue />} />
         <Route path="/items" element={<ItemList />} />
-        <Route path="/items/new" element={<ItemForm />} />
+        <Route path="/items/new" element={<InventoryForm mode="tagged" variant="page" />} />
         <Route path="/items/:id" element={<ItemDetail />} />
-        <Route path="/items/:id/edit" element={<ItemForm />} />
+        <Route path="/items/:id/edit" element={<InventoryForm mode="tagged" variant="page" />} />
         <Route path="/loose-lots" element={<LooseLotList />} />
         <Route path="/loose-lots/:id" element={<LooseLotDetail />} />
         <Route path="/loose-lots/reports/stock" element={<LooseStockReport />} />
         <Route path="/loose-lots/reports/day-end" element={<LooseDayEndReport />} />
         <Route path="/stock" element={<StockList />} />
+        <Route path="/purchases" element={<PurchaseList />} />
+        <Route path="/purchases/new" element={<PurchaseForm />} />
+        <Route path="/purchases/:id" element={<PurchaseDetail />} />
+        <Route path="/refines" element={<RefineList />} />
+        <Route path="/gold-in-stock" element={<GoldInStock />} />
         <Route path="/karigar" element={<KarigarList />} />
+        <Route path="/karigar/summary" element={<KarigarSummary />} />
         <Route path="/karigar/pending-jobs" element={<KarigarPendingJobs />} />
         <Route path="/karigar/new" element={<KarigarForm />} />
+        <Route path="/karigar/bill/:id/:materialIndex" element={<KarigarIssueBill />} />
+        <Route path="/karigar/return-bill/:id/:materialIndex" element={<KarigarReturnBill />} />
         <Route path="/karigar/:id" element={<KarigarDetail />} />
         <Route path="/custom-orders" element={<CustomOrderList />} />
         <Route path="/custom-orders/new" element={<CustomOrderForm />} />
@@ -239,6 +279,16 @@ export default function App() {
         <Route path="/reports/tax" element={<TaxReport />} />
         <Route path="/reports/:type" element={<ReportView />} />
         <Route path="/audit" element={<AuditLog />} />
+        <Route path="/accounting" element={<AccountingHome />} />
+        <Route path="/accounting/vouchers" element={<VoucherList />} />
+        <Route path="/accounting/vouchers/new" element={<VoucherForm />} />
+        <Route path="/accounting/vouchers/:id" element={<VoucherDetail />} />
+        <Route path="/accounting/vouchers/:id/edit" element={<VoucherForm />} />
+        <Route path="/accounting/ledgers" element={<LedgerList />} />
+        <Route path="/accounting/ledgers/:id" element={<LedgerReport />} />
+        <Route path="/accounting/day-book" element={<DayBookReport />} />
+        <Route path="/accounting/debtors" element={<DebtorsCreditorsReport kind="debtors" />} />
+        <Route path="/accounting/creditors" element={<DebtorsCreditorsReport kind="creditors" />} />
         <Route path="/audit/inventory" element={<InventoryLog />} />
         <Route path="/audit/reconciliation" element={<StockReconciliation />} />
         <Route path="/audit/deleted" element={<DeletedRecords />} />

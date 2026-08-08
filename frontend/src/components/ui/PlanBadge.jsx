@@ -1,9 +1,9 @@
 import { Gem, Star, Crown } from 'lucide-react'
 
 export const PLAN_META = {
-  standard: { label: 'Standard', icon: Gem, badge: 'bg-gray-100 text-gray-700' },
-  premium: { label: 'Premium', icon: Star, badge: 'bg-amber-50 text-amber-700' },
-  enterprise: { label: 'Enterprise', icon: Crown, badge: 'bg-violet-50 text-violet-700' },
+  standard: { label: 'Standard', icon: Gem, badge: 'bg-ink-100 text-ink-600' },
+  premium: { label: 'Premium', icon: Star, badge: 'bg-[var(--color-primary-bg)] text-[var(--color-gold-700)]' },
+  enterprise: { label: 'Enterprise', icon: Crown, badge: 'bg-violet-100 text-violet-700' },
 }
 
 export const PLAN_OPTIONS = [

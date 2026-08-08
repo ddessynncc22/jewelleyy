@@ -3,7 +3,7 @@ import { Outlet, useLocation, Link, useNavigate, Navigate } from 'react-router-d
 import toast from 'react-hot-toast'
 import { useAuth } from '../hooks/useAuth'
 import Sidebar from './Sidebar'
-import { Search, LogOut, User, Menu, KeyRound } from 'lucide-react'
+import { Search, LogOut, Menu, KeyRound, Keyboard, Settings } from 'lucide-react'
 import { getSettings } from '../services/settingsService'
 import { changePassword } from '../services/authService'
 import NotificationBell from '../components/notifications/NotificationBell'
@@ -11,17 +11,32 @@ import Modal from '../components/ui/Modal'
 import FormInput from '../components/ui/FormInput'
 import Button from '../components/ui/Button'
 
-  const breadcrumbMap = {
+const breadcrumbMap = {
   '/': 'Dashboard', '/items': 'Items', '/stock': 'Stock Movement',
+  '/purchases': 'Purchases', '/purchases/new': 'New Purchase', '/purchases/:id': 'Purchase Detail', '/refines': 'Refine Gold', '/gold-in-stock': 'Gold in Stock',
   '/loose-lots': 'Loose Items',
-  '/karigar': 'Karigar', '/karigar/pending-jobs': 'Pending Jobs', '/pawn': 'Bandaki', '/custom-orders': 'Custom Orders', '/pos': 'POS', '/pos/diamond': 'Diamond POS',
+  '/karigar': 'Karigar', '/karigar/pending-jobs': 'Pending Jobs', '/karigar/summary': 'Karigar Summary', '/pawn': 'Bandaki', '/custom-orders': 'Custom Orders', '/pos': 'POS', '/pos/diamond': 'Diamond POS',
   '/customers': 'Customers', '/rates': 'Rates', '/reports': 'Reports',
+  '/accounting': 'Accounting', '/accounting/vouchers': 'Vouchers', '/accounting/ledgers': 'Ledgers',
+  '/accounting/day-book': 'Day Book', '/accounting/debtors': 'Sundry Debtors', '/accounting/creditors': 'Sundry Creditors',
   '/audit': 'Audit', '/settings': 'Settings', '/lookup': 'QR Lookup',
   '/admin': 'Dashboard',
   '/admin/tenants': 'Tenants',
   '/admin/requests': 'Requests',
   '/admin/broadcast': 'Broadcast',
   '/admin/rates': 'Rate History',
+}
+
+const SHORTCUTS = [
+  { keys: 'Ctrl + I', label: 'New Item', description: 'Open the add-item form' },
+  { keys: 'Ctrl + S', label: 'New Sale', description: 'Open the POS screen to create a sale' },
+  { keys: 'Ctrl + K', label: 'New Purchase', description: 'Open the add-purchase form' },
+]
+
+function userInitial(name) {
+  if (!name) return 'U'
+  const parts = name.trim().split(/\s+/)
+  return (parts[0]?.[0] || 'U').toUpperCase()
 }
 
 export default function MainLayout() {
@@ -33,6 +48,7 @@ export default function MainLayout() {
   const [showChangePassword, setShowChangePassword] = useState(false)
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' })
   const [passwordLoading, setPasswordLoading] = useState(false)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
   const { user, logout } = useAuth()
@@ -45,6 +61,36 @@ export default function MainLayout() {
       }
     })
   }, [])
+
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (!e.ctrlKey || e.shiftKey || e.altKey || e.metaKey) return
+      const el = document.activeElement
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) return
+      const key = e.key.toLowerCase()
+      if (key === 'i') {
+        e.preventDefault()
+        navigate('/items/new')
+      } else if (key === 's') {
+        e.preventDefault()
+        navigate('/pos')
+      } else if (key === 'k') {
+        e.preventDefault()
+        navigate('/purchases/new')
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [navigate])
+
+  useEffect(() => {
+    if (!shortcutsOpen) return
+    const onEscape = (e) => {
+      if (e.key === 'Escape') setShortcutsOpen(false)
+    }
+    window.addEventListener('keydown', onEscape)
+    return () => window.removeEventListener('keydown', onEscape)
+  }, [shortcutsOpen])
 
   const segments = location.pathname.split('/').filter(Boolean)
   const fullPath = '/' + segments.join('/')
@@ -94,7 +140,7 @@ export default function MainLayout() {
         onMobileClose={() => setMobileOpen(false)}
       />
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-14 sm:h-16 bg-[var(--color-card)] border-b border-[var(--color-border)] flex items-center gap-2 sm:gap-3 px-3 sm:px-4 lg:px-6 shrink-0">
+        <header className="sticky top-0 z-30 flex h-14 sm:h-16 items-center gap-2 sm:gap-3 border-b border-[var(--color-border)] bg-[var(--color-card)] px-3 sm:px-4 lg:px-6 shrink-0">
           <button
             onClick={() => setMobileOpen(true)}
             className="lg:hidden p-2 rounded-xl hover:bg-[var(--color-elevated)] text-[var(--color-text-secondary)] transition-colors"
@@ -114,7 +160,7 @@ export default function MainLayout() {
           <div className="flex-1 min-w-0" />
 
           {user?.role !== 'superadmin' && user?.role !== 'qr_lookup' && (
-            <div className="hidden sm:flex items-center bg-[var(--color-elevated)] rounded-xl px-3 py-1.5 max-w-xs w-full border border-[var(--color-border)]/50">
+            <div className="hidden sm:flex items-center bg-[var(--color-card)] rounded-xl px-3 py-1.5 max-w-xs w-full border border-[var(--color-border)] focus-within:border-[var(--color-gold-500)] focus-within:ring-2 focus-within:ring-[var(--color-gold-500)]/20 transition-all">
               <Search size={16} className="text-[var(--color-text-secondary)] mr-2 shrink-0" />
               <input
                 type="text"
@@ -137,10 +183,10 @@ export default function MainLayout() {
           <div className="relative">
             <button
               onClick={() => setShowUser((p) => !p)}
-              className="flex items-center gap-1.5 sm:gap-2 p-1.5 rounded-xl hover:bg-[var(--color-elevated)] transition-colors"
+              className="flex items-center gap-1.5 sm:gap-2 p-1 rounded-xl hover:bg-[var(--color-elevated)]/70 transition-colors"
             >
-              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-[var(--color-primary-light)] flex items-center justify-center">
-                <User size={14} className="sm:size-4 text-[var(--color-primary)]" />
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-gold-600)] text-sm font-semibold text-white">
+                {userInitial(user?.name)}
               </div>
               <span className="hidden sm:block text-sm font-medium text-[var(--color-text)] truncate max-w-[100px]">
                 {user?.name}
@@ -150,9 +196,9 @@ export default function MainLayout() {
             {showUser && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setShowUser(false)} />
-                <div className="absolute right-0 top-full mt-2 z-50 w-56 bg-[var(--color-card)] rounded-2xl shadow-xl border border-[var(--color-border)] py-2 animate-fade-in">
+                <div className="absolute right-0 top-full mt-2 z-50 w-56 bg-[var(--color-card)] rounded-2xl shadow-[var(--shadow-lg)] border border-[var(--color-border)] py-2 animate-fade-up">
                   <div className="px-4 py-2.5 border-b border-[var(--color-border)]">
-                    <p className="text-sm font-medium text-[var(--color-text)] truncate">{user?.name}</p>
+                    <p className="text-sm font-semibold text-[var(--color-text)] truncate">{user?.name}</p>
                     <p className="text-xs text-[var(--color-text-secondary)] truncate">{user?.email}</p>
                   </div>
                   <div className="pt-1">
@@ -161,18 +207,18 @@ export default function MainLayout() {
                         onClick={() => { setShowUser(false); navigate('/settings') }}
                         className="flex items-center gap-2.5 px-4 py-2 text-sm text-[var(--color-text)] hover:bg-[var(--color-elevated)] transition-colors w-full text-left"
                       >
-                        Settings
+                        <Settings size={14} /> Settings
                       </button>
                     )}
                     <button
                       onClick={() => { setShowUser(false); setShowChangePassword(true) }}
                       className="flex items-center gap-2.5 px-4 py-2 text-sm text-[var(--color-text)] hover:bg-[var(--color-elevated)] transition-colors w-full text-left"
                     >
-                      Change Password
+                      <KeyRound size={14} /> Change Password
                     </button>
                     <button
                       onClick={() => { setShowUser(false); logout() }}
-                      className="flex items-center gap-2.5 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors w-full text-left"
+                      className="flex items-center gap-2.5 px-4 py-2 text-sm text-danger hover:bg-danger/5 transition-colors w-full text-left"
                     >
                       <LogOut size={14} /> Logout
                     </button>
@@ -184,11 +230,52 @@ export default function MainLayout() {
         </header>
 
         <main className="flex-1 overflow-auto">
-          <div className="max-w-7xl mx-auto p-3 sm:p-5 lg:p-8 animate-fade-in">
+          <div className="mx-auto max-w-7xl p-3 sm:p-5 lg:p-8 animate-fade-in">
             <Outlet />
           </div>
         </main>
       </div>
+
+      {user?.role !== 'superadmin' && user?.role !== 'qr_lookup' && (
+        <aside
+          className={`shrink-0 border-l border-[var(--color-border)] bg-[var(--color-card)] transition-[width] duration-200 ${
+            shortcutsOpen ? 'w-64' : 'w-10'
+          }`}
+        >
+          <div className="flex flex-col h-full">
+            <button
+              onClick={() => setShortcutsOpen((o) => !o)}
+              className="mx-auto mt-2 p-1.5 rounded-lg hover:bg-[var(--color-elevated)] text-[var(--color-text-secondary)] transition-colors"
+              title={shortcutsOpen ? 'Close shortcuts' : 'Keyboard shortcuts'}
+              aria-label="Toggle keyboard shortcuts"
+            >
+              <Keyboard size={18} />
+            </button>
+            {shortcutsOpen && (
+              <div className="w-full flex-1 overflow-y-auto px-4 py-3">
+                <h3 className="text-sm font-semibold tracking-tight text-[var(--color-text)]">Shortcut Keys</h3>
+                <p className="text-xs text-[var(--color-text-secondary)] mt-1 mb-3">
+                  Press a key combo anywhere to jump to that screen
+                </p>
+                {SHORTCUTS.map((s) => (
+                  <div
+                    key={s.keys}
+                    className="flex items-start justify-between gap-3 py-2.5 border-b border-[var(--color-border)] last:border-0"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-[var(--color-text)]">{s.label}</p>
+                      <p className="text-xs text-[var(--color-text-secondary)] mt-0.5 leading-snug">{s.description}</p>
+                    </div>
+                    <kbd className="shrink-0 rounded-md border border-[var(--color-border)] bg-[var(--color-elevated)] px-1.5 py-0.5 text-[11px] font-semibold text-[var(--color-text-secondary)] whitespace-nowrap">
+                      {s.keys}
+                    </kbd>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </aside>
+      )}
 
       <Modal
         isOpen={showChangePassword}

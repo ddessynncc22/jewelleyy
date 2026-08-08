@@ -5,6 +5,32 @@ const ActivityLog = require('../models/ActivityLog');
 const { successResponse, errorResponse, paginatedResponse } = require('../utils/response');
 const { generateSKU, generateBarcode } = require('../services/barcode');
 
+const METAL_KEYS = ['gold', 'silver', 'diamond', 'gemstone'];
+const WASSTAGE_ALERT_PERCENT = 10;
+
+const round = (n, d = 3) => Number(Number(n).toFixed(d));
+
+function computeBalances(karigar) {
+  const outstandingByMetal = { gold: 0, silver: 0, diamond: 0, gemstone: 0 };
+  let outstandingWeight = 0;
+  let pendingPayment = 0;
+  for (const m of karigar.materials || []) {
+    const metal = METAL_KEYS.includes(m.metalType) ? m.metalType : 'gold';
+    if (m.status !== 'Returned') {
+      const w = Number(m.grossWeight) || 0;
+      outstandingByMetal[metal] += w;
+      outstandingWeight += w;
+    }
+    const due = Number(m.paymentDue) || Number(m.payment) || 0;
+    pendingPayment += Math.max(0, due - (Number(m.paymentReceived) || 0));
+  }
+  return {
+    outstandingWeight: round(outstandingWeight),
+    outstandingByMetal,
+    pendingPayment: round(pendingPayment, 2),
+  };
+}
+
 exports.getKarigars = async (req, res) => {
   try {
     const { page = 1, limit = 20, search, status } = req.query;
@@ -22,7 +48,28 @@ exports.getKarigars = async (req, res) => {
       Karigar.find(query).sort({ createdAt: -1 }).skip(skip).limit(Number(limit)),
       Karigar.countDocuments({ ...query, isDeleted: false }),
     ]);
-    return paginatedResponse(res, karigars, total, Number(page), Number(limit));
+    const enriched = karigars.map((k) => ({ ...k.toObject(), ...computeBalances(k) }));
+    return paginatedResponse(res, enriched, total, Number(page), Number(limit));
+  } catch (error) {
+    return errorResponse(res, error.message, 500);
+  }
+};
+
+exports.getKarigarSummary = async (req, res) => {
+  try {
+    const karigars = await Karigar.find().sort({ name: 1 }).lean();
+    const rows = karigars.map((k) => ({ ...k, ...computeBalances(k) }));
+    const totals = {
+      totalKarigars: rows.length,
+      outstandingWeight: round(rows.reduce((s, r) => s + r.outstandingWeight, 0)),
+      outstandingByMetal: METAL_KEYS.reduce((acc, m) => {
+        acc[m] = round(rows.reduce((s, r) => s + (r.outstandingByMetal[m] || 0), 0));
+        return acc;
+      }, {}),
+      pendingJobs: rows.reduce((s, r) => s + (r.pendingJobs || 0), 0),
+      pendingPayment: round(rows.reduce((s, r) => s + r.pendingPayment, 0), 2),
+    };
+    return successResponse(res, { rows, totals });
   } catch (error) {
     return errorResponse(res, error.message, 500);
   }
@@ -35,7 +82,7 @@ exports.getKarigar = async (req, res) => {
     if (!karigar) {
       return errorResponse(res, 'Karigar not found', 404);
     }
-    return successResponse(res, karigar);
+    return successResponse(res, { ...karigar.toObject(), ...computeBalances(karigar) });
   } catch (error) {
     return errorResponse(res, error.message, 500);
   }
@@ -43,7 +90,7 @@ exports.getKarigar = async (req, res) => {
 
 exports.createKarigar = async (req, res) => {
   try {
-    const { name, phone, address, specialization } = req.body;
+    const { name, phone, address, specialization, panNumber } = req.body;
     if (!name || !phone) {
       return errorResponse(res, 'Name and phone are required', 400);
     }
@@ -52,7 +99,7 @@ exports.createKarigar = async (req, res) => {
     if (existing) {
       return errorResponse(res, 'Karigar with this phone already exists', 400);
     }
-    const karigar = await Karigar.create({ name, phone, address, specialization, tenantId: req.tenantId });
+    const karigar = await Karigar.create({ name, phone, address, specialization, panNumber, tenantId: req.tenantId });
     await ActivityLog.create({
       action: 'create',
       module: 'karigar',
@@ -69,7 +116,7 @@ exports.createKarigar = async (req, res) => {
 
 exports.updateKarigar = async (req, res) => {
   try {
-    const { name, phone, address, specialization, isActive } = req.body;
+    const { name, phone, address, specialization, panNumber, isActive } = req.body;
     const karigar = await Karigar.findById(req.params.id);
     if (!karigar) {
       return errorResponse(res, 'Karigar not found', 404);
@@ -82,6 +129,7 @@ exports.updateKarigar = async (req, res) => {
     }
     if (address !== undefined) karigar.address = address;
     if (specialization !== undefined) karigar.specialization = specialization;
+    if (panNumber !== undefined) karigar.panNumber = panNumber;
     if (isActive !== undefined) karigar.isActive = isActive;
     await karigar.save();
     await ActivityLog.create({
@@ -121,10 +169,11 @@ exports.deleteKarigar = async (req, res) => {
 
 exports.issueMaterial = async (req, res) => {
   try {
-    const { itemName, grossWeight, stoneWeight, purity, karat, labourCharge } = req.body;
+    const { itemName, metalType, grossWeight, stoneWeight, purity, karat, labourCharge } = req.body;
     if (!itemName || grossWeight === undefined || grossWeight === null || grossWeight === '' || purity === undefined || purity === null || purity === '') {
       return errorResponse(res, 'Item name, gross weight, and purity are required', 400);
     }
+    const metal = METAL_KEYS.includes(metalType) ? metalType : 'gold';
     const weightNum = Number(grossWeight);
     const purityNum = Number(purity);
     const stoneNum = Number(stoneWeight) || 0;
@@ -156,6 +205,7 @@ exports.issueMaterial = async (req, res) => {
     karigar.materials.push({
       date: Number.isNaN(issueDate.getTime()) ? new Date() : issueDate,
       itemName,
+      metalType: metal,
       grossWeight: weightNum,
       stoneWeight: stoneNum,
       purity: purityNum,
@@ -234,6 +284,8 @@ exports.receiveFinished = async (req, res) => {
     if (wastage < 0) {
       return errorResponse(res, 'Received weight cannot exceed issued weight (wastage cannot be negative)', 400);
     }
+    const wastagePercent = issuedWeight > 0 ? Number(((wastage / issuedWeight) * 100).toFixed(2)) : 0;
+    const highWastage = wastagePercent > WASSTAGE_ALERT_PERCENT;
     if (!req.tenantId) return errorResponse(res, 'Tenant context required', 400);
     const SKU = generateSKU(category, metalType, purityNum);
     const barcode = generateBarcode();
@@ -273,7 +325,37 @@ exports.receiveFinished = async (req, res) => {
       referenceId: karigar._id,
       referenceModel: 'Karigar',
     });
-    return successResponse(res, { karigar, finishedItem }, 'Finished item received successfully', 201);
+    return successResponse(res, { karigar, finishedItem, wastage, wastagePercent, highWastage }, 'Finished item received successfully', 201);
+  } catch (error) {
+    return errorResponse(res, error.message, 500);
+  }
+};
+
+exports.getKarigarReturn = async (req, res) => {
+  try {
+    const karigar = await Karigar.findById(req.params.id)
+      .populate('materials.finishedItem', 'SKU itemName category metalType purity grossWeight sellingPrice sellingMakingCharge sellingWastagePercent netMetalWeight');
+    if (!karigar) {
+      return errorResponse(res, 'Karigar not found', 404);
+    }
+    const material = karigar.materials[Number(req.params.materialIndex)];
+    if (!material) {
+      return errorResponse(res, 'Material record not found at given index', 404);
+    }
+    if (material.status !== 'Returned') {
+      return errorResponse(res, 'Material has not been returned yet', 400);
+    }
+    const issuedWeight = Number(material.grossWeight) || 0;
+    const receivedWeight = Number(material.finishedItem?.grossWeight) || issuedWeight - (Number(material.wastage) || 0);
+    const wastagePercent = issuedWeight > 0 ? Number(((Number(material.wastage) / issuedWeight) * 100).toFixed(2)) : 0;
+    return successResponse(res, {
+      karigar: { _id: karigar._id, name: karigar.name, phone: karigar.phone, panNumber: karigar.panNumber, address: karigar.address },
+      material: { ...material.toObject(), metalType: METAL_KEYS.includes(material.metalType) ? material.metalType : 'gold' },
+      finishedItem: material.finishedItem || null,
+      wastagePercent,
+      receivedWeight,
+      highWastage: wastagePercent > WASSTAGE_ALERT_PERCENT,
+    });
   } catch (error) {
     return errorResponse(res, error.message, 500);
   }
@@ -288,7 +370,11 @@ exports.getPendingJobs = async (req, res) => {
       karigar: { _id: k._id, name: k.name, phone: k.phone, specialization: k.specialization },
       pendingCount: k.pendingJobs,
       materials: k.materials
-        .map((m, index) => ({ ...m.toObject(), _index: index }))
+        .map((m, index) => ({
+          ...m.toObject(),
+          _index: index,
+          metalType: METAL_KEYS.includes(m.metalType) ? m.metalType : 'gold',
+        }))
         .filter((m) => m.status !== 'Returned'),
     }));
     return successResponse(res, pendingJobs, 'Pending jobs retrieved');
@@ -376,9 +462,10 @@ exports.getKarigarReport = async (req, res) => {
     const issuedCount = materials.length;
     const returnedCount = materials.filter((m) => m.status === 'Returned').length;
     const pendingCount = materials.filter((m) => m.status !== 'Returned').length;
+    const balances = computeBalances(karigar);
     return successResponse(res, {
       karigar: { _id: karigar._id, name: karigar.name, phone: karigar.phone, specialization: karigar.specialization },
-      summary: { issuedCount, returnedCount, pendingCount, totalIssuedWeight, totalReturnedWeight, totalWastage, totalLabour, totalJarti, totalPayment, pendingPayment, totalGoldTaken, totalPayments, wastagePercentage: totalIssuedWeight > 0 ? ((totalWastage / totalIssuedWeight) * 100).toFixed(2) : 0 },
+      summary: { issuedCount, returnedCount, pendingCount, totalIssuedWeight, totalReturnedWeight, totalWastage, totalLabour, totalJarti, totalPayment, pendingPayment, totalGoldTaken, totalPayments, wastagePercentage: totalIssuedWeight > 0 ? ((totalWastage / totalIssuedWeight) * 100).toFixed(2) : 0, outstandingWeight: balances.outstandingWeight, outstandingByMetal: balances.outstandingByMetal },
       materials,
     });
   } catch (error) {

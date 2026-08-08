@@ -10,6 +10,8 @@ const sizeClasses = {
   "3xl": "sm:max-w-3xl",
   "4xl": "sm:max-w-4xl",
   "5xl": "sm:max-w-5xl",
+  "6xl": "sm:max-w-6xl",
+  "7xl": "sm:max-w-7xl",
 };
 
 const Modal = ({ isOpen, onClose, title, size = "lg", children, footer }) => {
@@ -35,27 +37,27 @@ const Modal = ({ isOpen, onClose, title, size = "lg", children, footer }) => {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6"
       role="dialog"
       aria-modal="true"
     >
       <div
-        className="fixed inset-0 bg-black/40 backdrop-blur-sm"
+        className="fixed inset-0 bg-ink-900/50 backdrop-blur-sm animate-fade-in"
         onClick={onClose}
       />
       <div
-        className={`relative w-full ${sizeClasses[size]} bg-[var(--color-card)] rounded-t-2xl sm:rounded-2xl shadow-xl animate-slide-up sm:animate-fade-in max-h-[90vh] sm:max-h-[85vh] flex flex-col`}
+        className={`relative w-full ${sizeClasses[size]} bg-[var(--color-card)] rounded-t-2xl sm:rounded-2xl shadow-[var(--shadow-xl)] animate-slide-up max-h-[92vh] flex flex-col`}
       >
         <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-[var(--color-border)] shrink-0">
           {title && (
-            <h2 className="text-base sm:text-lg font-semibold text-[var(--color-text)] truncate">
+            <h2 className="text-base sm:text-lg font-semibold tracking-tight text-[var(--color-text)] truncate">
               {title}
             </h2>
           )}
           <button
             type="button"
             onClick={onClose}
-            className="ml-auto rounded-xl p-1.5 text-[var(--color-text-secondary)] hover:bg-gray-100 transition-colors"
+            className="ml-auto rounded-lg p-1.5 text-[var(--color-text-secondary)] hover:bg-[var(--color-ink-100)] hover:text-[var(--color-text)] transition-colors"
           >
             <X className="h-5 w-5" />
           </button>

@@ -13,13 +13,13 @@ const renderIcon = (icon) => {
 
 const variants = {
   primary:
-    "bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)] shadow-sm hover:shadow-md",
+    "bg-[var(--color-gold-600)] text-white shadow-sm hover:bg-[var(--color-gold-700)]",
   secondary:
-    "border border-[var(--color-primary)] text-[var(--color-primary)] hover:bg-[var(--color-primary-bg)]",
-  danger: "bg-red-600 text-white hover:bg-red-700 shadow-sm hover:shadow-md",
-  ghost: "text-gray-600 hover:bg-gray-100",
+    "border border-[var(--color-gold-300)] bg-[var(--color-gold-50)] text-[var(--color-gold-800)] hover:bg-[var(--color-gold-100)]",
+  danger: "bg-red-600 text-white hover:bg-red-700 shadow-sm",
+  ghost: "text-[var(--color-ink-500)] hover:bg-[var(--color-ink-100)] hover:text-[var(--color-ink-700)]",
   outline:
-    "border border-[var(--color-border)] text-[var(--color-text)] hover:bg-[var(--color-elevated)]",
+    "border border-[var(--color-border)] bg-[var(--color-card)] text-[var(--color-text)] hover:bg-[var(--color-elevated)]",
 };
 
 const sizes = {
@@ -47,7 +47,7 @@ const Button = ({
     type={type}
     disabled={disabled || loading}
     aria-busy={loading}
-    className={`inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none ${variants[variant]} ${sizes[size]} ${className}`}
+    className={`inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-gold-500)] focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none ${variants[variant]} ${sizes[size]} ${className}`}
     {...rest}
   >
     {loading ? (

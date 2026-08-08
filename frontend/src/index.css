@@ -1,38 +1,89 @@
 @import "tailwindcss";
 
+/* ============================================================
+   Clean, standard design tokens
+   Neutral surfaces · single flat gold accent · Inter type
+   ============================================================ */
+
 @theme {
-  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-  --color-gold: #d4a853;
-  --color-gold-light: #f0dfb8;
-  --color-gold-dark: #b8923a;
-  --color-amber: #f59e0b;
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Consolas, monospace;
+
+  /* Gold scale (accent family, used sparingly) */
+  --color-gold-50: #faf6e8;
+  --color-gold-100: #f5ecd0;
+  --color-gold-200: #ecd9a4;
+  --color-gold-300: #e2c377;
+  --color-gold-400: #d8b258;
+  --color-gold-500: #c9a23a;
+  --color-gold-600: #b98d2f;
+  --color-gold-700: #9a7223;
+  --color-gold-800: #7a581c;
+  --color-gold-900: #4a3712;
+
+  /* Ink scale (warm near-black) */
+  --color-ink-50: #fafaf8;
+  --color-ink-100: #f3f2ec;
+  --color-ink-200: #e6e3d8;
+  --color-ink-300: #c9c2b6;
+  --color-ink-400: #8a867a;
+  --color-ink-500: #6f6c60;
+  --color-ink-600: #4a473e;
+  --color-ink-700: #2c2a22;
+  --color-ink-800: #1e1c16;
+  --color-ink-900: #17150f;
+
+  /* Semantic */
+  --color-success: #16a34a;
+  --color-warning: #d97706;
+  --color-danger: #dc2626;
+  --color-info: #0ea5e9;
+
+  /* Motion — minimal */
+  --ease-aurum: cubic-bezier(0.22, 1, 0.36, 1);
+  --animate-fade-in: fade-in 0.25s ease-out both;
+  --animate-fade-up: fade-up 0.3s ease-out both;
+  --animate-slide-in: slide-in 0.2s ease-out both;
+  --animate-slide-up: slide-up 0.25s ease-out both;
 }
 
+/* Legacy variable names kept so every existing page restyles in place */
 :root {
-  --color-primary: #d4a853;
-  --color-primary-hover: #c49a3f;
-  --color-primary-light: #fdf6e3;
-  --color-primary-bg: #fffbeb;
+  --color-primary: #b98d2f;
+  --color-primary-hover: #a37a24;
+  --color-primary-light: #faf3dc;
+  --color-primary-bg: #fdf9ec;
   --color-surface: #ffffff;
-  --color-elevated: #f8f8f8;
-  --color-border: #ebebeb;
-  --color-text: #1a1a1a;
-  --color-text-secondary: #7a7a7a;
-  --color-bg: #f5f5f0;
+  --color-elevated: #f3f2ec;
+  --color-border: #e6e3d8;
+  --color-text: #1c1a15;
+  --color-text-secondary: #6f6c60;
+  --color-bg: #f7f6f1;
   --color-card: #ffffff;
-  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.03), 0 1px 2px -1px rgb(0 0 0 / 0.02);
-  --shadow-md: 0 4px 16px -4px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.03);
-  --shadow-lg: 0 12px 32px -8px rgb(0 0 0 / 0.06), 0 4px 8px -4px rgb(0 0 0 / 0.03);
-  --shadow-xl: 0 24px 48px -12px rgb(0 0 0 / 0.08);
-  --radius-sm: 6px;
-  --radius-md: 10px;
+
+  --color-sidebar: #ffffff;
+  --color-sidebar-hover: #f3f2ec;
+  --color-sidebar-muted: #6f6c60;
+  --color-sidebar-text: #1c1a15;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.06);
+  --shadow-xl: 0 12px 32px rgba(0, 0, 0, 0.12);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
   --radius-lg: 16px;
   --radius-xl: 24px;
 }
 
+/* ============================================================
+   Base
+   ============================================================ */
+
 body {
   margin: 0;
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
   background-color: var(--color-bg);
   color: var(--color-text);
   -webkit-font-smoothing: antialiased;
@@ -44,22 +95,27 @@ body {
 }
 
 ::selection {
-  background-color: var(--color-primary-light);
-  color: var(--color-primary-hover);
+  background-color: var(--color-gold-100);
+  color: var(--color-gold-800);
 }
 
-::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #d4d4d4; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #b0b0b0; }
+::-webkit-scrollbar-thumb { background: #c9c2b6; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #8a867a; }
+
+/* ============================================================
+   Keyframes
+   ============================================================ */
 
 @keyframes fade-in {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-.animate-fade-in {
-  animation: fade-in 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes slide-in {
@@ -67,21 +123,47 @@ body {
   to { opacity: 1; transform: translateX(0); }
 }
 
-.animate-slide-in {
-  animation: slide-in 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+/* ============================================================
+   Helpers kept for compatibility
+   ============================================================ */
+
+.gold-text {
+  color: var(--color-gold-600) !important;
 }
 
-.gold-border { border-color: var(--color-primary) !important; }
-.gold-bg { background-color: var(--color-primary-bg) !important; }
-.gold-text { color: var(--color-primary) !important; }
+.gold-border {
+  border-color: var(--color-gold-400) !important;
+}
+
+.gold-bg {
+  background-color: var(--color-primary-bg) !important;
+}
 
 .card-value {
   overflow: visible;
   white-space: normal;
   max-width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================
+   Accessibility — motion off
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

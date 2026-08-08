@@ -18,7 +18,8 @@ const stockMovementSchema = new mongoose.Schema(
       type: String,
       enum: [
         'Purchase',
-        'Purchase Return',
+        'Buy-back',
+        'Refinery',
         'Sale',
         'Sale Return',
         'Transfer In',

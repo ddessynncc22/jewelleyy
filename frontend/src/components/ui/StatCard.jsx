@@ -8,21 +8,21 @@ const isComp = (c) =>
 const trendIcons = { up: TrendingUp, down: TrendingDown, neutral: Minus };
 
 const trendColors = {
-  up: "text-emerald-600 bg-emerald-50",
-  down: "text-red-600 bg-red-50",
-  neutral: "text-gray-600 bg-gray-50",
+  up: "text-success bg-[var(--color-success)]/10",
+  down: "text-danger bg-[var(--color-danger)]/10",
+  neutral: "text-ink-500 bg-ink-100",
 };
 
 const accentColors = {
-  blue: "bg-blue-50 text-blue-600",
-  green: "bg-emerald-50 text-emerald-600",
-  red: "bg-red-50 text-red-600",
-  yellow: "bg-amber-50 text-amber-600",
-  purple: "bg-purple-50 text-purple-600",
-  cyan: "bg-cyan-50 text-cyan-600",
-  orange: "bg-orange-50 text-orange-600",
-  gold: "bg-[var(--color-primary-light)] text-[var(--color-primary)]",
-  gray: "bg-gray-100 text-gray-600",
+  blue: "bg-info/10 text-info",
+  green: "bg-success/10 text-success",
+  red: "bg-danger/10 text-danger",
+  yellow: "bg-warning/10 text-warning",
+  purple: "bg-violet-100 text-violet-700",
+  cyan: "bg-cyan-100 text-cyan-700",
+  orange: "bg-warning/10 text-warning",
+  gold: "bg-[var(--color-primary-bg)] text-[var(--color-gold-600)]",
+  gray: "bg-ink-100 text-ink-500",
 };
 
 const StatCard = ({
@@ -38,7 +38,7 @@ const StatCard = ({
   const TrendIcon = trend ? trendIcons[trend] : null;
   const accent = accentColors[color] || accentColors.blue;
 
-return (
+  return (
     <div
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}
@@ -53,10 +53,8 @@ return (
             }
           : undefined
       }
-      className={`group rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-5 shadow-sm transition-all duration-200 ${
-        onClick
-          ? "cursor-pointer hover:shadow-lg hover:-translate-y-0.5"
-          : ""
+      className={`group rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-5 shadow-sm transition-shadow duration-150 ${
+        onClick ? "cursor-pointer hover:shadow-md" : ""
       }`}
     >
       <div className="flex items-start justify-between gap-3">
@@ -68,9 +66,9 @@ return (
             {value}
           </p>
           {subtitle && (
-           <p className="mt-1 text-xs text-[var(--color-text-secondary)] break-words">
-               {subtitle}
-             </p>
+            <p className="mt-1 text-xs text-[var(--color-text-secondary)] break-words">
+              {subtitle}
+            </p>
           )}
           {trend && TrendIcon && (
             <div
@@ -83,7 +81,7 @@ return (
         </div>
         {icon && (
           <div
-            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${accent} transition-transform duration-200 group-hover:scale-110`}
+            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${accent}`}
             style={{ flexShrink: 0 }}
           >
             {isComp(icon) ? createElement(icon, { size: 22 }) : icon}

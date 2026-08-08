@@ -29,6 +29,7 @@ const KarigarForm = ({ isOpen, onClose, karigar, onSave }) => {
     phone: '',
     address: '',
     specialization: '',
+    panNumber: '',
     isActive: true,
   })
 
@@ -42,6 +43,7 @@ const KarigarForm = ({ isOpen, onClose, karigar, onSave }) => {
         phone: karigar.phone || '',
         address: karigar.address || '',
         specialization: karigar.specialization || '',
+        panNumber: karigar.panNumber || '',
         isActive: karigar.isActive !== undefined ? karigar.isActive : true,
       })
     } else {
@@ -50,6 +52,7 @@ const KarigarForm = ({ isOpen, onClose, karigar, onSave }) => {
         phone: '',
         address: '',
         specialization: '',
+        panNumber: '',
         isActive: true,
       })
     }
@@ -144,6 +147,14 @@ const KarigarForm = ({ isOpen, onClose, karigar, onSave }) => {
           onChange={handleChange}
           error={errors.specialization}
           placeholder="Select specialization"
+        />
+        <FormInput
+          label="PAN Number"
+          name="panNumber"
+          value={form.panNumber}
+          onChange={handleChange}
+          error={errors.panNumber}
+          placeholder="e.g. 123456789"
         />
         <div className="flex items-center gap-3">
           <label className="relative inline-flex items-center cursor-pointer">

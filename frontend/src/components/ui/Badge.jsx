@@ -1,12 +1,12 @@
 import { X } from "lucide-react";
 
 const variants = {
-  default: "bg-gray-100 text-gray-700",
-  primary: "bg-[var(--color-primary-light)] text-[var(--color-primary)]",
-  success: "bg-emerald-50 text-emerald-700",
-  warning: "bg-amber-50 text-amber-700",
-  danger: "bg-red-50 text-red-700",
-  info: "bg-cyan-50 text-cyan-700",
+  default: "bg-ink-100 text-ink-600",
+  primary: "bg-[var(--color-primary-bg)] text-[var(--color-gold-700)] border border-[var(--color-gold-200)]",
+  success: "bg-success/10 text-success",
+  warning: "bg-warning/10 text-warning",
+  danger: "bg-danger/10 text-danger",
+  info: "bg-info/10 text-info",
 };
 
 const sizes = {

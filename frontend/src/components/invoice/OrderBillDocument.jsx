@@ -29,7 +29,6 @@ export default function OrderBillDocument({
   discount,
   taxableAmount,
   totalTax,
-  roundOff,
   grandTotal,
   advanceAmount,
   amountReceived,
@@ -138,10 +137,6 @@ export default function OrderBillDocument({
               <tr>
                 <td className="border border-black px-2 py-1 text-left">शिप प्र.शु. ०.५% (Fee @ 0.5%)</td>
                 <td className="border border-black px-2 py-1 text-right">{fmt(totalTax)}</td>
-              </tr>
-              <tr>
-                <td className="border border-black px-2 py-1 text-left">Rounding</td>
-                <td className="border border-black px-2 py-1 text-right">{fmt(roundOff)}</td>
               </tr>
               <tr>
                 <td className="border border-black px-2 py-1 text-left">अग्रिम रकम (Advance)</td>

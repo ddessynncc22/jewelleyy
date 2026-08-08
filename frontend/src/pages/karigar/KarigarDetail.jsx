@@ -4,7 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 
 import toast from 'react-hot-toast'
 
-import { ArrowLeft, Plus, User, ClipboardList } from 'lucide-react'
+import { ArrowLeft, Plus, User, ClipboardList, Printer } from 'lucide-react'
 
 import { getKarigar, deleteKarigar, issueMaterial, receiveFinished, getKarigarReport, updateMaterialStatus, recordKarigarPayment, recordGoldTaken, getKarigarPaymentHistory } from '../../services/karigarService'
 import { getItems } from '../../services/itemService'
@@ -56,6 +56,22 @@ const issueMaterialOptions = [
   { value: 'Other', label: 'Other' },
 ]
 
+const METAL_TYPE_OPTIONS = [
+  { value: 'gold', label: 'Gold' },
+  { value: 'silver', label: 'Silver' },
+  { value: 'diamond', label: 'Diamond' },
+  { value: 'gemstone', label: 'Gemstone' },
+]
+
+const METAL_COLORS = {
+  gold: 'bg-amber-50 text-amber-700 border-amber-200',
+  silver: 'bg-gray-100 text-gray-700 border-gray-200',
+  diamond: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+  gemstone: 'bg-purple-50 text-purple-700 border-purple-200',
+}
+
+const METAL_LABELS = { gold: 'Gold', silver: 'Silver', diamond: 'Diamond', gemstone: 'Gemstone' }
+
 const KarigarDetail = () => {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -100,6 +116,7 @@ const KarigarDetail = () => {
   const [issueForm, setIssueForm] = useState({
     itemName: '',
     date: '',
+    metalType: 'gold',
     grossWeight: '',
     stoneWeight: '',
     purity: '',
@@ -256,12 +273,13 @@ const KarigarDetail = () => {
     e.preventDefault()
     setSubmitting(true)
     try {
-      await issueMaterial(id, issueForm)
+      const res = await issueMaterial(id, issueForm)
       toast.success('Material issued successfully')
       setIssueModalOpen(false)
       setIssueForm({
         itemName: '',
         date: '',
+        metalType: 'gold',
         grossWeight: '',
         stoneWeight: '',
         purity: '',
@@ -269,6 +287,9 @@ const KarigarDetail = () => {
         labourCharge: '',
       })
       fetchKarigar()
+      const updated = res.data?.data || res.data
+      const newIndex = (updated?.materials || []).length - 1
+      if (newIndex >= 0) navigate(`/karigar/bill/${id}/${newIndex}?print=1`)
     } catch (err) {
       toast.error(err?.response?.data?.message || 'Failed to issue material')
     } finally {
@@ -280,7 +301,14 @@ const KarigarDetail = () => {
     e.preventDefault()
     setSubmitting(true)
     try {
-      await receiveFinished(id, receiveForm)
+      const res = await receiveFinished(id, receiveForm)
+      const payload = res.data?.data || res.data
+      if (payload?.highWastage) {
+        toast.error(
+          `High wastage: ${payload.wastage}g (${payload.wastagePercent}%). Issued ${payload.karigar?.materials?.[receiveForm.materialIndex]?.grossWeight ?? ''}g, received ${receiveForm.grossWeight}g`,
+          { duration: 6000 },
+        )
+      }
       toast.success('Finished item received successfully')
       setReceiveModalOpen(false)
        setReceiveForm({
@@ -302,6 +330,10 @@ const KarigarDetail = () => {
         description: '',
       })
       fetchKarigar()
+      const index = Number(receiveForm.materialIndex)
+      if (!Number.isNaN(index) && index >= 0) {
+        navigate(`/karigar/return-bill/${id}/${index}?print=1`)
+      }
     } catch (err) {
       toast.error(err?.response?.data?.message || 'Failed to receive finished item')
     } finally {
@@ -345,14 +377,46 @@ const KarigarDetail = () => {
     { label: 'Specialization', value: karigar.specialization || '-' },
     { label: 'Status', value: <StatusBadge status={karigar.isActive ? 'Active' : 'Inactive'} /> },
     { label: 'Pending Jobs', value: karigar.pendingJobs ?? 0 },
-    { label: 'Total Issued', value: karigar.totalIssued ?? 0 },
-    { label: 'Total Returned', value: karigar.totalReturned ?? 0 },
+    { label: 'Total Issued', value: `${karigar.totalIssued ?? 0}g` },
+    { label: 'Total Returned', value: `${karigar.totalReturned ?? 0}g` },
+    {
+      label: 'Outstanding (holding)',
+      value: (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="font-semibold text-gray-900">
+            {karigar.outstandingWeight ?? 0}g
+          </span>
+          {Object.entries(karigar.outstandingByMetal || {})
+            .filter(([, w]) => Number(w) > 0)
+            .map(([metal, w]) => (
+              <span
+                key={metal}
+                className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${METAL_COLORS[metal] || 'bg-gray-100 text-gray-700 border-gray-200'}`}
+              >
+                {METAL_LABELS[metal] || metal} {Number(w).toFixed(3)}g
+              </span>
+            ))}
+        </div>
+      ),
+    },
     { label: 'Created', value: formatDate(karigar.createdAt) },
   ]
 
   const materialColumns = [
     { key: 'date', label: 'Date', render: (val) => formatDate(val || karigar.createdAt) },
     { key: 'itemName', label: 'Item' },
+    {
+      key: 'metalType',
+      label: 'Metal',
+      render: (val, row) => {
+        const metal = row._metalLabel
+        return (
+          <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${METAL_COLORS[metal] || 'bg-gray-100 text-gray-700 border-gray-200'}`}>
+            {METAL_LABELS[metal] || metal || '-'}
+          </span>
+        )
+      },
+    },
     { key: 'grossWeight', label: 'Gross Weight', render: (val) => (val ? `${val}g` : '-') },
     { key: 'stoneWeight', label: 'Stone Weight', render: (val) => (val ? `${val}g` : '-') },
     { key: 'purity', label: 'Purity', render: (val) => (val ? val : '-') },
@@ -384,7 +448,17 @@ const KarigarDetail = () => {
       label: 'Returned',
       render: (val) => (val ? formatDate(val) : '-'),
     },
-    { key: 'wastage', label: 'Wastage', render: (val) => (val ? `${val}g` : '-') },
+    { key: 'wastage', label: 'Wastage', render: (val, row) =>
+        row._isReturned ? (
+          <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium border ${row._wastagePercent > 10 ? 'bg-red-50 text-red-700 border-red-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
+            {val ? `${val}g` : '0g'}
+            {row._wastagePercent > 10 && (
+              <span className="text-[10px] font-semibold uppercase tracking-wide">High {row._wastagePercent}%</span>
+            )}
+          </span>
+        ) : (
+          '-'
+        ) },
     { key: 'labourCharge', label: 'Labour Charge', render: (val) => (val ? formatCurrency(val) : '-') },
     { key: 'jartiPercent', label: 'Jarti %', render: (val) => (val ? `${val}%` : '-') },
     { key: 'jartiAmount', label: 'Jarti Amount', render: (val) => (val ? formatCurrency(val) : '-') },
@@ -430,12 +504,47 @@ const KarigarDetail = () => {
           '-'
         ),
     },
+    {
+      key: '_actions',
+      label: 'Actions',
+      sortable: false,
+      render: (val, row) => (
+        <div className="flex items-center gap-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              navigate(`/karigar/bill/${id}/${row._index}?print=1`)
+            }}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+            title="Print issue bill"
+          >
+            <Printer className="h-3.5 w-3.5" />
+            Print Bill
+          </button>
+          {row._isReturned && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                navigate(`/karigar/return-bill/${id}/${row._index}?print=1`)
+              }}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
+              title="Print return bill"
+            >
+              <Printer className="h-3.5 w-3.5" />
+              Return Bill
+            </button>
+          )}
+        </div>
+      ),
+    },
   ]
 
   const materialsData = (karigar.materials || []).map((m, i) => ({
     ...m,
     _index: i,
     _isReturned: m.status === 'Returned',
+    _metalLabel: METAL_LABELS[m.metalType] || m.metalType || 'gold',
+    _wastagePercent: Number(m.grossWeight) > 0 ? Number(((Number(m.wastage) / Number(m.grossWeight)) * 100).toFixed(2)) : 0,
     _balance: Number((Number(m.paymentDue) || Number(m.payment) || 0) - (Number(m.paymentReceived) || 0)),
   }))
 
@@ -450,7 +559,17 @@ const KarigarDetail = () => {
     {
       key: 'wastage',
       label: 'Wastage',
-      render: (val) => (val != null && val !== '' ? `${val}g` : '-'),
+      render: (val, row) => {
+        const pct = Number(row.grossWeight) > 0 ? Number(((Number(val) / Number(row.grossWeight)) * 100).toFixed(2)) : 0
+        return val != null && val !== '' ? (
+          <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium ${pct > 10 ? 'bg-red-50 text-red-700 border-red-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
+            {`${val}g`}
+            {pct > 10 && <span className="text-[10px] font-semibold uppercase tracking-wide">High</span>}
+          </span>
+        ) : (
+          '-'
+        )
+      },
     },
     { key: 'labourCharge', label: 'Labour Charge', render: (val) => (val ? formatCurrency(val) : '-') },
     { key: 'finishedItem', label: 'SKU', render: (val) => val?.SKU || '-' },
@@ -810,6 +929,15 @@ const totalGoldTaken = (karigar.materials || []).reduce((s, m) => s + (m.goldRec
               min="0"
               value={issueForm.stoneWeight}
               onChange={(e) => setIssueForm((p) => ({ ...p, stoneWeight: e.target.value }))}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <FormSelect
+              label="Metal"
+              name="metalType"
+              options={METAL_TYPE_OPTIONS}
+              value={issueForm.metalType}
+              onChange={(e) => setIssueForm((p) => ({ ...p, metalType: e.target.value }))}
             />
           </div>
           <div className="grid grid-cols-2 gap-4">

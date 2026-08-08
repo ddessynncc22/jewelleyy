@@ -121,6 +121,11 @@ const itemSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    ringSize: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     karigarId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Karigar',

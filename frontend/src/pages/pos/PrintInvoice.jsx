@@ -86,13 +86,7 @@ export default function PrintInvoice() {
   // value — old gold traded in is a payment, it does not reduce it.
   const taxableAmount = Number((subtotal - discount).toFixed(2));
   const rawTotal = Number((subtotal - discount + totalTax).toFixed(2));
-  const received = Number(sale.actualAmountReceived) || 0;
-  let grandTotal = Math.round(rawTotal);
-  let roundOff = Number((grandTotal - rawTotal).toFixed(2));
-  if (discount > 0 && received > 0) {
-    grandTotal = Math.round(received);
-    roundOff = Number((grandTotal - rawTotal).toFixed(2));
-  }
+  const grandTotal = Math.floor(rawTotal);
   const words = `${numberToWords(grandTotal)} only`;
 
   const customer = sale.customer || {};
@@ -213,7 +207,6 @@ export default function PrintInvoice() {
           taxableAmount={taxableAmount}
           totalTax={totalTax}
           taxLines={taxLines}
-          roundOff={roundOff}
           grandTotal={grandTotal}
           paymentType={sale.paymentType || '-'}
           paidAmount={sale.paidAmount || 0}
