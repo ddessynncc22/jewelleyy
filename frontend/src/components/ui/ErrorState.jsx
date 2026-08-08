@@ -13,7 +13,7 @@ const ErrorState = ({ message = "Something went wrong", onRetry }) => (
       <button
         type="button"
         onClick={onRetry}
-        className="pressable mt-5 inline-flex items-center gap-2 rounded-xl bg-danger px-4 py-2.5 text-sm font-medium text-white hover:bg-red-700 transition-colors shadow-sm"
+        className="mt-5 inline-flex items-center gap-2 rounded-xl bg-danger px-4 py-2.5 text-sm font-medium text-white hover:bg-red-700 transition-colors shadow-sm"
       >
         <RefreshCw className="h-4 w-4" />
         Retry

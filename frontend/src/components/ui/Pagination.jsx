@@ -36,7 +36,7 @@ return (
           </button>
           {getPages().map((p) => (
             <button key={p} type="button" onClick={() => onPageChange?.(p)} aria-current={p === page ? 'page' : undefined}
-              className={`pressable inline-flex items-center justify-center min-w-[36px] rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+              className={`inline-flex items-center justify-center min-w-[36px] rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                 p === page
                   ? 'bg-[var(--color-gold-600)] text-white shadow-sm'
                   : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-elevated)] hover:text-[var(--color-text)]'

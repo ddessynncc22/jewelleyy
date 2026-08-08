@@ -52,7 +52,7 @@ export default function TodaysRate() {
       <div className="min-h-screen flex items-center justify-center bg-[var(--color-bg)]">
         <div className="text-center space-y-4">
           <p className="text-[var(--color-text-secondary)]">{error}</p>
-          <button onClick={fetchRates} className="pressable px-4 py-2 rounded-xl bg-[var(--color-gold-600)] text-white text-sm hover:brightness-110 transition-all shadow-sm">
+          <button onClick={fetchRates} className="px-4 py-2 rounded-xl bg-[var(--color-gold-600)] text-white text-sm hover:brightness-110 transition-all shadow-sm">
             Retry
           </button>
         </div>
@@ -102,7 +102,7 @@ export default function TodaysRate() {
               <p className="mt-3 flex items-center justify-center gap-1 text-xs text-[var(--color-text-secondary)]">
                 <Clock className="h-3 w-3" />
                 Updated {new Date(gold.date).toLocaleDateString('en-NP', { year: 'numeric', month: 'long', day: 'numeric' })}
-                {charges.gold > 0 && <span className="font-medium text-[var(--color-gold-700)]">· incl. transport Rs {charges.gold}/tola</span>}
+                {charges.gold > 0 && <span className="font-medium text-[var(--color-gold-700)]">Â· incl. transport Rs {charges.gold}/tola</span>}
               </p>
             )}
           </div>
@@ -137,7 +137,7 @@ export default function TodaysRate() {
               <p className="mt-3 flex items-center justify-center gap-1 text-xs text-[var(--color-text-secondary)]">
                 <Clock className="h-3 w-3" />
                 Updated {new Date(silver.date).toLocaleDateString('en-NP', { year: 'numeric', month: 'long', day: 'numeric' })}
-                {charges.silver > 0 && <span className="font-medium text-ink-500">· incl. transport Rs {charges.silver}/tola</span>}
+                {charges.silver > 0 && <span className="font-medium text-ink-500">Â· incl. transport Rs {charges.silver}/tola</span>}
               </p>
             )}
           </div>
@@ -147,14 +147,14 @@ export default function TodaysRate() {
           <button
             onClick={fetchRates}
             disabled={loading}
-            className="pressable inline-flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-2 text-sm text-[var(--color-text)] hover:bg-[var(--color-elevated)] transition-colors disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-2 text-sm text-[var(--color-text)] hover:bg-[var(--color-elevated)] transition-colors disabled:opacity-50"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </button>
           <p className="mt-2 text-xs text-[var(--color-text-secondary)]">
             Source: <a href="https://www.hamropatro.com/gold" target="_blank" rel="noopener noreferrer" className="underline hover:text-[var(--color-gold-700)]">hamropatro.com/gold</a>
-            {' '}· Auto-updated daily at 11:30 AM
+            {' '}Â· Auto-updated daily at 11:30 AM
           </p>
         </div>
       </div>
