@@ -2,6 +2,15 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const Rate = require('../models/Rate');
 
+// FENEGOSIDA — the Federation of Nepal Gold & Silver Dealers' Association — is
+// the body that actually SETS the daily rate; hamropatro just republishes it.
+// This is their own site's JSON API, so it needs no HTML parsing and does not
+// break when either site is redesigned.
+//
+// It is also the only source that works in production: hamropatro (behind
+// Cloudflare) returns 403 to the VPS's datacenter IP, which is why scraping
+// silently stopped producing new rows.
+const FENEGOSIDA_URL = 'https://api.fenegosida.org/api/website/v1/Dashboard/today';
 const SOURCE_URL = 'https://www.hamropatro.com/gold';
 const NEPAL_TIMEZONE = 'Asia/Kathmandu';
 
@@ -75,7 +84,51 @@ function parseEnSegment(html) {
   return null;
 }
 
-async function scrapeRates() {
+// Rows come back as { rateType, todayBaseRatePerGram }. The field name lies —
+// for a "(१ तोला)" row the value is per tola — so the unit is taken from the
+// rateType label, never from the field name.
+//
+// Labels are Devanagari: सुन = gold, चाँदी = silver. Matching on those also
+// skips the "International Gold Rate" and "American Dollar Rate" rows, which are
+// English and are not what we store.
+function mapFenegosidaRates(rows) {
+  const rates = { goldPerTola: 0, goldPerGram: 0, silverPerTola: 0, silverPerGram: 0 };
+
+  for (const row of rows || []) {
+    const label = String(row.rateType || '');
+    const value = Number(row.todayBaseRatePerGram);
+    if (!value || !isFinite(value)) continue;
+
+    const isGold = label.includes('सुन');
+    const isSilver = label.includes('चाँदी');
+    if (!isGold && !isSilver) continue;
+
+    if (label.includes('तोला')) {
+      if (isGold) rates.goldPerTola = value;
+      else rates.silverPerTola = value;
+    } else if (label.includes('ग्राम')) {
+      // Currently published as "(१० ग्राम)" — a per-10g figure. Divide only when
+      // the label actually says १०, so a future "(१ ग्राम)" is not quartered.
+      const perGram = label.includes('१०') ? value / 10 : value;
+      if (isGold) rates.goldPerGram = perGram;
+      else rates.silverPerGram = perGram;
+    }
+  }
+
+  return rates;
+}
+
+async function fetchFenegosidaRates() {
+  console.log('[RateScraper] Fetching', FENEGOSIDA_URL);
+  const { data } = await axios.get(FENEGOSIDA_URL, {
+    headers: { Accept: 'application/json', 'User-Agent': 'jewellery-management/1.0' },
+    timeout: 15000,
+  });
+  if (!Array.isArray(data)) throw new Error('FENEGOSIDA returned a non-array payload');
+  return mapFenegosidaRates(data);
+}
+
+async function scrapeHamropatro() {
   console.log('[RateScraper] Fetching', SOURCE_URL);
   const { data: html } = await axios.get(SOURCE_URL, {
     headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
@@ -126,6 +179,28 @@ async function scrapeRates() {
   }
 
   return rates;
+}
+
+/**
+ * FENEGOSIDA's JSON API first, hamropatro's HTML as a fallback.
+ *
+ * Both publish the same numbers because hamropatro republishes FENEGOSIDA, but
+ * only FENEGOSIDA answers the production server — hamropatro 403s datacenter
+ * IPs. The fallback still earns its place for local development and for the day
+ * FENEGOSIDA's API moves.
+ */
+async function scrapeRates() {
+  let primaryError;
+  try {
+    const rates = await fetchFenegosidaRates();
+    if (rates.goldPerTola) return rates;
+    primaryError = new Error('FENEGOSIDA returned no gold/tola rate');
+  } catch (err) {
+    primaryError = err;
+  }
+
+  console.warn('[RateScraper] FENEGOSIDA failed (%s) — falling back to hamropatro', primaryError.message);
+  return scrapeHamropatro();
 }
 
 async function saveRates(rates) {

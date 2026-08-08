@@ -29,7 +29,17 @@ exports.getDashboardStats = async (req, res) => {
     const goldRate = { rate: toPerGramRate(latestGold), unit: 'gram' };
     const silverRate = { rate: toPerGramRate(latestSilver), unit: 'gram' };
     const looseWeightByItem = await getLooseStockMap(allItems);
+<<<<<<< HEAD
     const totalValue = allItems.reduce((sum, item) => sum + itemValue(item, goldRate, silverRate, looseWeightByItem).value, 0);
+=======
+    // Reuse itemValue() rather than repeating the formula: the two copies had
+    // already drifted, so the dashboard total and the Inventory Value page could
+    // disagree for the same stock.
+    const totalValue = allItems.reduce(
+      (sum, item) => sum + itemValue(item, goldRate, silverRate, looseWeightByItem).value,
+      0
+    );
+>>>>>>> f92fa2842390a5eca76e17c492936c10f017ede1
     return successResponse(res, {
       totalInventory: totalInventory[0]?.total || 0,
       totalValue,
@@ -64,15 +74,28 @@ async function getLooseStockMap(items) {
   return new Map(lotAgg.map((r) => [String(r._id), r]));
 }
 
+<<<<<<< HEAD
 function isDiamondItem(item) {
   const metal = (item.metalType || '').toLowerCase();
   const category = (item.category || '').toLowerCase();
   const stone = (item.stoneType || '').toLowerCase();
   return metal === 'diamond' || metal === 'gemstone' || category === 'diamond' || category === 'gemstone' || stone === 'diamond' || stone === 'gemstone';
+=======
+// Only gold and silver have a live per-gram market rate. metalType also allows
+// 'diamond' and 'gemstone', and the old `metalType === 'gold' ? gold : silver`
+// ternary priced those off the SILVER rate — a stone's weight times the silver
+// rate is a meaningless number. They fall back to their own recorded costPrice.
+function metalRateFor(item, goldRate, silverRate) {
+  if (item.metalType === 'gold') return goldRate.rate;
+  if (item.metalType === 'silver') return silverRate.rate;
+  return 0;
+>>>>>>> f92fa2842390a5eca76e17c492936c10f017ede1
 }
 
 function itemValue(item, goldRate, silverRate, looseMap) {
-  const rate = item.metalType === 'gold' ? goldRate.rate : silverRate.rate;
+  const rate = metalRateFor(item, goldRate, silverRate);
+  const quantity = item.quantity || 1;
+
   if (item.itemType === 'loose') {
     const info = looseMap.get(String(item._id));
     const weight = (info?.remainingWeight ?? item.grossWeight) || 0;
@@ -82,7 +105,9 @@ function itemValue(item, goldRate, silverRate, looseMap) {
       rate,
       weight,
       pieces,
-      value: weight * rate * ((item.purity || 0) / 1000),
+      value: rate
+        ? weight * rate * ((item.purity || 0) / 1000)
+        : (item.costPrice || 0) * pieces,
     };
   }
   const qty = item.quantity || 1;
@@ -91,9 +116,17 @@ function itemValue(item, goldRate, silverRate, looseMap) {
   return {
     ...item,
     rate,
+<<<<<<< HEAD
     weight: (item.netMetalWeight || 0) * qty,
     pieces: qty,
     value: metalValue + stoneValue,
+=======
+    weight: (item.netMetalWeight || 0) * quantity,
+    pieces: item.quantity || 0,
+    value: rate
+      ? (item.netMetalWeight || 0) * rate * ((item.purity || 0) / 1000) * quantity
+      : (item.costPrice || 0) * quantity,
+>>>>>>> f92fa2842390a5eca76e17c492936c10f017ede1
   };
 }
 
