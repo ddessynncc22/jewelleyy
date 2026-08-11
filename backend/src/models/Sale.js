@@ -76,6 +76,24 @@ const saleSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    paymentMethods: [
+      {
+        method: {
+          type: String,
+          enum: ['cash', 'qr', 'cheque'],
+          required: true,
+        },
+        amount: {
+          type: Number,
+          required: true,
+          min: 0,
+        },
+        reference: {
+          type: String,
+          default: '',
+        },
+      },
+    ],
     oldGoldDetails: {
       description: { type: String, default: '' },
       weight: { type: Number, default: 0 },

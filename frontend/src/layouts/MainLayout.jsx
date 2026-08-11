@@ -180,6 +180,45 @@ export default function MainLayout() {
 
           {user?.role !== 'superadmin' && user?.role !== 'qr_lookup' && <NotificationBell />}
 
+          {user?.role !== 'superadmin' && user?.role !== 'qr_lookup' && (
+            <div className="relative">
+              <button
+                onClick={() => setShortcutsOpen((o) => !o)}
+                className="flex items-center justify-center p-2 rounded-xl hover:bg-[var(--color-elevated)] text-[var(--color-text-secondary)] transition-colors"
+                title="Keyboard shortcuts"
+                aria-label="Toggle keyboard shortcuts"
+              >
+                <Keyboard size={18} />
+              </button>
+
+              {shortcutsOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShortcutsOpen(false)} />
+                  <div className="absolute right-0 top-full mt-2 z-50 w-72 bg-[var(--color-card)] rounded-2xl shadow-[var(--shadow-lg)] border border-[var(--color-border)] py-3 animate-fade-up">
+                    <h3 className="px-4 text-sm font-semibold tracking-tight text-[var(--color-text)]">Shortcut Keys</h3>
+                    <p className="px-4 text-xs text-[var(--color-text-secondary)] mt-1 mb-1">
+                      Press a key combo anywhere to jump to that screen
+                    </p>
+                    {SHORTCUTS.map((s) => (
+                      <div
+                        key={s.keys}
+                        className="flex items-start justify-between gap-3 px-4 py-2.5 border-b border-[var(--color-border)] last:border-0"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-[var(--color-text)]">{s.label}</p>
+                          <p className="text-xs text-[var(--color-text-secondary)] mt-0.5 leading-snug">{s.description}</p>
+                        </div>
+                        <kbd className="shrink-0 rounded-md border border-[var(--color-border)] bg-[var(--color-elevated)] px-1.5 py-0.5 text-[11px] font-semibold text-[var(--color-text-secondary)] whitespace-nowrap">
+                          {s.keys}
+                        </kbd>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           <div className="relative">
             <button
               onClick={() => setShowUser((p) => !p)}
@@ -235,47 +274,6 @@ export default function MainLayout() {
           </div>
         </main>
       </div>
-
-      {user?.role !== 'superadmin' && user?.role !== 'qr_lookup' && (
-        <aside
-          className={`shrink-0 border-l border-[var(--color-border)] bg-[var(--color-card)] transition-[width] duration-200 ${
-            shortcutsOpen ? 'w-64' : 'w-10'
-          }`}
-        >
-          <div className="flex flex-col h-full">
-            <button
-              onClick={() => setShortcutsOpen((o) => !o)}
-              className="mx-auto mt-2 p-1.5 rounded-lg hover:bg-[var(--color-elevated)] text-[var(--color-text-secondary)] transition-colors"
-              title={shortcutsOpen ? 'Close shortcuts' : 'Keyboard shortcuts'}
-              aria-label="Toggle keyboard shortcuts"
-            >
-              <Keyboard size={18} />
-            </button>
-            {shortcutsOpen && (
-              <div className="w-full flex-1 overflow-y-auto px-4 py-3">
-                <h3 className="text-sm font-semibold tracking-tight text-[var(--color-text)]">Shortcut Keys</h3>
-                <p className="text-xs text-[var(--color-text-secondary)] mt-1 mb-3">
-                  Press a key combo anywhere to jump to that screen
-                </p>
-                {SHORTCUTS.map((s) => (
-                  <div
-                    key={s.keys}
-                    className="flex items-start justify-between gap-3 py-2.5 border-b border-[var(--color-border)] last:border-0"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-[var(--color-text)]">{s.label}</p>
-                      <p className="text-xs text-[var(--color-text-secondary)] mt-0.5 leading-snug">{s.description}</p>
-                    </div>
-                    <kbd className="shrink-0 rounded-md border border-[var(--color-border)] bg-[var(--color-elevated)] px-1.5 py-0.5 text-[11px] font-semibold text-[var(--color-text-secondary)] whitespace-nowrap">
-                      {s.keys}
-                    </kbd>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </aside>
-      )}
 
       <Modal
         isOpen={showChangePassword}

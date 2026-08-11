@@ -3,6 +3,7 @@ const LooseLot = require('../models/LooseLot');
 const PawnLoan = require('../models/PawnLoan');
 const Karigar = require('../models/Karigar');
 const StockMovement = require('../models/StockMovement');
+const Sale = require('../models/Sale');
 const Rate = require('../models/Rate');
 const Settings = require('../models/Settings');
 const { successResponse, errorResponse } = require('../utils/response');
@@ -10,8 +11,35 @@ const { scopeAggregate } = require('../utils/tenant');
 const { toPerGramRate } = require('../utils/rates');
 const { getRefinedStockBalance } = require('../services/refinedStock');
 
+const NEPAL_TIMEZONE = 'Asia/Kathmandu';
+
+function getNepalTodayStr() {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: NEPAL_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const map = {};
+  for (const p of parts) if (p.type !== 'literal') map[p.type] = p.value;
+  return `${map.year}-${map.month}-${map.day}`;
+}
+
+// Interpret a YYYY-MM-DD string as a *Nepal* calendar date and return the
+// absolute instant. Falls back to today's Nepal date when absent/invalid.
+function rangeInstants(startStr, endStr) {
+  const todayStr = getNepalTodayStr();
+  const start = /^\d{4}-\d{2}-\d{2}$/.test(startStr || '') ? startStr : todayStr;
+  const end = /^\d{4}-\d{2}-\d{2}$/.test(endStr || '') ? endStr : todayStr;
+  return {
+    start: new Date(`${start}T00:00:00+05:45`),
+    end: new Date(`${end}T23:59:59+05:45`),
+  };
+}
+
 exports.getDashboardStats = async (req, res) => {
   try {
+    const { start: rangeStart, end: rangeEnd } = rangeInstants(req.query.startDate, req.query.endDate);
     const settings = await Settings.getSettings();
     const lowThreshold = settings?.lowStockThreshold || 5;
     const [totalInventory, latestGold, latestSilver, activePawnLoans, pendingKarigarJobs, lowStockItems, recentActivities, itemsByStatus, itemsByMetal] = await Promise.all([
@@ -29,17 +57,26 @@ exports.getDashboardStats = async (req, res) => {
     const goldRate = { rate: toPerGramRate(latestGold), unit: 'gram' };
     const silverRate = { rate: toPerGramRate(latestSilver), unit: 'gram' };
     const looseWeightByItem = await getLooseStockMap(allItems);
-<<<<<<< HEAD
     const totalValue = allItems.reduce((sum, item) => sum + itemValue(item, goldRate, silverRate, looseWeightByItem).value, 0);
-=======
-    // Reuse itemValue() rather than repeating the formula: the two copies had
-    // already drifted, so the dashboard total and the Inventory Value page could
-    // disagree for the same stock.
-    const totalValue = allItems.reduce(
-      (sum, item) => sum + itemValue(item, goldRate, silverRate, looseWeightByItem).value,
-      0
-    );
->>>>>>> f92fa2842390a5eca76e17c492936c10f017ede1
+    const salesByHourAgg = await Sale.aggregate(scopeAggregate([
+      {
+        $match: {
+          isDeleted: false,
+          saleDate: { $gte: rangeStart, $lte: rangeEnd },
+        },
+      },
+      {
+        $group: {
+          _id: { $hour: { date: '$saleDate', timezone: 'Asia/Kathmandu' } },
+          count: { $sum: 1 },
+        },
+      },
+    ]));
+    const hourCounts = new Map(salesByHourAgg.map((h) => [h._id, h.count]));
+    const salesByHour = Array.from({ length: 24 }, (_, i) => ({ hour: i, count: hourCounts.get(i) || 0 }));
+    const peakSalesHours = [...salesByHour]
+      .sort((a, b) => b.count - a.count || a.hour - b.hour)
+      .slice(0, 3);
     return successResponse(res, {
       totalInventory: totalInventory[0]?.total || 0,
       totalValue,
@@ -52,6 +89,8 @@ exports.getDashboardStats = async (req, res) => {
       recentActivities,
       itemsByStatus,
       itemsByMetal,
+      peakSalesHours,
+      salesByHour,
     });
   } catch (error) {
     return errorResponse(res, error.message, 500);
@@ -74,22 +113,20 @@ async function getLooseStockMap(items) {
   return new Map(lotAgg.map((r) => [String(r._id), r]));
 }
 
-<<<<<<< HEAD
 function isDiamondItem(item) {
   const metal = (item.metalType || '').toLowerCase();
   const category = (item.category || '').toLowerCase();
   const stone = (item.stoneType || '').toLowerCase();
   return metal === 'diamond' || metal === 'gemstone' || category === 'diamond' || category === 'gemstone' || stone === 'diamond' || stone === 'gemstone';
-=======
+}
+
 // Only gold and silver have a live per-gram market rate. metalType also allows
-// 'diamond' and 'gemstone', and the old `metalType === 'gold' ? gold : silver`
-// ternary priced those off the SILVER rate — a stone's weight times the silver
-// rate is a meaningless number. They fall back to their own recorded costPrice.
+// 'diamond' and 'gemstone', which have no market rate and fall back to their
+// own recorded costPrice.
 function metalRateFor(item, goldRate, silverRate) {
   if (item.metalType === 'gold') return goldRate.rate;
   if (item.metalType === 'silver') return silverRate.rate;
   return 0;
->>>>>>> f92fa2842390a5eca76e17c492936c10f017ede1
 }
 
 function itemValue(item, goldRate, silverRate, looseMap) {
@@ -116,17 +153,9 @@ function itemValue(item, goldRate, silverRate, looseMap) {
   return {
     ...item,
     rate,
-<<<<<<< HEAD
     weight: (item.netMetalWeight || 0) * qty,
     pieces: qty,
-    value: metalValue + stoneValue,
-=======
-    weight: (item.netMetalWeight || 0) * quantity,
-    pieces: item.quantity || 0,
-    value: rate
-      ? (item.netMetalWeight || 0) * rate * ((item.purity || 0) / 1000) * quantity
-      : (item.costPrice || 0) * quantity,
->>>>>>> f92fa2842390a5eca76e17c492936c10f017ede1
+    value: rate ? metalValue + stoneValue : (item.costPrice || 0) * qty,
   };
 }
 

@@ -32,6 +32,7 @@ export default function InvoiceDocument({
   grandTotal,
   paymentType,
   paidAmount,
+  paymentMethods,
 
   oldGoldAmount,
 
@@ -82,6 +83,7 @@ export default function InvoiceDocument({
         grandTotal={grandTotal}
         paymentType={paymentType}
         paidAmount={paidAmount}
+        paymentMethods={paymentMethods}
         oldGoldAmount={oldGoldAmount}
       />
 

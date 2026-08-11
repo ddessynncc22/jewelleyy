@@ -26,10 +26,9 @@ function metalInfo(item) {
 // to the stone weight (1ct = 0.2g) when the carat was never recorded.
 function diamondLine(item) {
   if (!hasDiamond(item)) return ''
-  const quantity = Math.max(1, Number(item.stoneQuantity) || 1)
   const totalCarat = getDiamondTotalCarat(item)
   if (totalCarat <= 0) return ''
-  return `${totalCarat.toFixed(2)}ct / ${quantity} pcs`
+  return `${totalCarat.toFixed(2)}ct`
 }
 
 async function buildQrDataUrl(item) {
@@ -89,7 +88,7 @@ function standardLabel(item, storeName, qrDataUrl) {
                   <div class="weight">Stone: ${stone}g</div>
                   <div class="weight">Net: ${net}g / ${formatWeightTolaLaal(net)}</div>
                   ${dia ? `<div class="diamond">Diamond: ${escapeHtml(dia)}</div>` : ''}
-                  <div class="price">${formatCurrency(item.sellingPrice)}</div>
+                  ${item.sellingPrice > 0 ? `<div class="price">${formatCurrency(item.sellingPrice)}</div>` : ''}
                 </div>
               </div>
             `

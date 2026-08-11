@@ -210,6 +210,7 @@ export default function PrintInvoice() {
           grandTotal={grandTotal}
           paymentType={sale.paymentType || '-'}
           paidAmount={sale.paidAmount || 0}
+          paymentMethods={Array.isArray(sale.paymentMethods) ? sale.paymentMethods : undefined}
           oldGoldWeight={oldGold.netWeight || oldGold.weight}
           oldGoldAmount={oldGold.deductibleAmount}
           oldGoldPurity={oldGold.purity}

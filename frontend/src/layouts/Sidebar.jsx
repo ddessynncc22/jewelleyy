@@ -44,6 +44,21 @@ const tenantSections = [
     ],
   },
   {
+    label: 'Sales',
+    items: [
+      {
+        to: '',
+        label: 'Sales',
+        icon: ShoppingCart,
+        children: [
+          { to: '/pos', label: 'New Sale', end: true },
+          { to: '/pos/sales', label: 'Sales History' },
+        ],
+      },
+      { to: '/customers', label: 'Customers', icon: Users },
+    ],
+  },
+  {
     label: 'Purchase',
     items: [
       { to: '/purchases', label: 'Purchases', icon: ShoppingCart, end: true },
@@ -74,21 +89,6 @@ const tenantSections = [
         ],
       },
       { to: '/custom-orders', label: 'Custom Orders', icon: ClipboardList },
-    ],
-  },
-  {
-    label: 'Sales',
-    items: [
-      {
-        to: '',
-        label: 'POS',
-        icon: ShoppingCart,
-        children: [
-          { to: '/pos', label: 'New Sale', end: true },
-          { to: '/pos/sales', label: 'Sales History' },
-        ],
-      },
-      { to: '/customers', label: 'Customers', icon: Users },
     ],
   },
   {

@@ -121,7 +121,7 @@ export default function OrderBillDocument({
                 {oldGoldDeductionPercent ? (
                   <tr>
                     <td className="border border-black px-2 py-1 text-left">
-                      बेपत्ता सुन (Old Gold Exchange)
+                      पुरानो सुन (Old Gold Exchange)
                       <br />
                       <span className="text-[8px] text-gray-500">
                         {Number(oldGoldWeight).toFixed(3)}g · {Math.round(Number(oldGoldKarat) || Number(oldGoldPurity) || 0)}K · {Number(oldGoldDeductionPercent)}% off → {Number(oldGoldNetWeight).toFixed(3)}g net @ {fmt(oldGoldRatePerGram)}/g

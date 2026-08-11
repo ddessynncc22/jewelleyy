@@ -12,6 +12,7 @@ import LoadingSkeleton from "../../components/ui/LoadingSkeleton";
 import ErrorState from "../../components/ui/ErrorState";
 import Card from "../../components/ui/Card";
 import Badge from "../../components/ui/Badge";
+import SearchInput from "../../components/ui/SearchInput";
 
 function ExpandButton({ expanded }) {
   return (
@@ -21,9 +22,9 @@ function ExpandButton({ expanded }) {
   );
 }
 
-function MetalSection({ metal, expanded, onToggle }) {
+function MetalSection({ metal, expanded, onToggle, forceOpen }) {
   const key = `metal-${metal.key}`;
-  const isOpen = expanded.has(key);
+  const isOpen = forceOpen || expanded.has(key);
   const Icon = metal.key === "gold" ? Gem : metal.key === "silver" ? Coins : Package;
 
   return (
@@ -41,7 +42,7 @@ function MetalSection({ metal, expanded, onToggle }) {
       {isOpen && (
         <div className="divide-y divide-[var(--color-border)]/50">
           {metal.categories.map((cat) => (
-            <CategorySection key={cat.key} category={cat} depth={1} expanded={expanded} onToggle={onToggle} />
+            <CategorySection key={cat.key} category={cat} depth={1} expanded={expanded} onToggle={onToggle} forceOpen={forceOpen} />
           ))}
         </div>
       )}
@@ -49,9 +50,9 @@ function MetalSection({ metal, expanded, onToggle }) {
   );
 }
 
-function CategorySection({ category, depth, expanded, onToggle }) {
+function CategorySection({ category, depth, expanded, onToggle, forceOpen }) {
   const key = `cat-${category.key}`;
-  const isOpen = expanded.has(key);
+  const isOpen = forceOpen || expanded.has(key);
   const indent = depth * 12;
 
   return (
@@ -74,7 +75,7 @@ function CategorySection({ category, depth, expanded, onToggle }) {
       {isOpen && category.subcategories && (
         <div className="divide-y divide-[var(--color-border)]/50">
           {category.subcategories.map((sub) => (
-            <SubcategorySection key={sub.key} subcategory={sub} depth={depth + 1} expanded={expanded} onToggle={onToggle} />
+            <SubcategorySection key={sub.key} subcategory={sub} depth={depth + 1} expanded={expanded} onToggle={onToggle} forceOpen={forceOpen} />
           ))}
         </div>
       )}
@@ -82,9 +83,9 @@ function CategorySection({ category, depth, expanded, onToggle }) {
   );
 }
 
-function SubcategorySection({ subcategory, depth, expanded, onToggle }) {
+function SubcategorySection({ subcategory, depth, expanded, onToggle, forceOpen }) {
   const key = `sub-${subcategory.key}`;
-  const isOpen = expanded.has(key);
+  const isOpen = forceOpen || expanded.has(key);
   const indent = depth * 12;
 
   return (
@@ -135,6 +136,7 @@ function SubcategorySection({ subcategory, depth, expanded, onToggle }) {
 
 export default function InventoryValue() {
   const [expanded, setExpanded] = useState(new Set(["metal-gold"]));
+  const [search, setSearch] = useState("");
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["inventory-value"],
@@ -171,6 +173,66 @@ export default function InventoryValue() {
       return next;
     });
   };
+
+  const query = search.trim().toLowerCase();
+  const isSearching = query.length > 0;
+
+  const itemMatches = (item) =>
+    [item.itemName, item.SKU, item.barcode, item.category, item.subcategory, item.metalType, item.stoneType]
+      .some((v) => v && String(v).toLowerCase().includes(query));
+
+  const finalizeSub = (sub) => {
+    const totalPieces = sub.items.reduce((s, i) => s + (i.pieces || i.quantity || 0), 0);
+    const totalWeight = sub.items.reduce((s, i) => s + (i.weight || 0), 0);
+    const totalValue = sub.items.reduce((s, i) => s + (i.value || 0), 0);
+    return { ...sub, totalQuantity: sub.items.length, totalPieces, totalWeight, totalValue };
+  };
+
+  const finalizeCat = (cat) => {
+    const subcategories = cat.subcategories.map(finalizeSub);
+    return {
+      ...cat,
+      subcategories,
+      totalQuantity: subcategories.reduce((s, x) => s + x.totalQuantity, 0),
+      totalPieces: subcategories.reduce((s, x) => s + x.totalPieces, 0),
+      totalWeight: subcategories.reduce((s, x) => s + x.totalWeight, 0),
+      totalValue: subcategories.reduce((s, x) => s + x.totalValue, 0),
+    };
+  };
+
+  const finalizeMetal = (metal) => {
+    const categories = metal.categories.map(finalizeCat);
+    return {
+      ...metal,
+      categories,
+      totalQuantity: categories.reduce((s, x) => s + x.totalQuantity, 0),
+      totalPieces: categories.reduce((s, x) => s + x.totalPieces, 0),
+      totalWeight: categories.reduce((s, x) => s + x.totalWeight, 0),
+      totalValue: categories.reduce((s, x) => s + x.totalValue, 0),
+    };
+  };
+
+  const visibleMetals = isSearching
+    ? metals
+        .map((metal) => ({
+          ...metal,
+          categories: metal.categories
+            .map((cat) => ({
+              ...cat,
+              subcategories: cat.subcategories
+                .map((sub) => ({ ...sub, items: sub.items.filter(itemMatches) }))
+                .filter((sub) => sub.items.length > 0),
+            }))
+            .filter((cat) => cat.subcategories.length > 0),
+        }))
+        .filter((metal) => metal.categories.length > 0)
+        .map(finalizeMetal)
+    : metals;
+
+  const matchCount = visibleMetals.reduce(
+    (s, m) => s + m.categories.reduce((s2, c) => s2 + c.subcategories.reduce((s3, sub) => s3 + sub.items.length, 0), 0),
+    0,
+  );
 
   const metalIcons = { gold: Gem, silver: Coins, diamond: Package };
   const metalColors = { gold: "yellow", silver: "gray", diamond: "green" };
@@ -219,15 +281,25 @@ export default function InventoryValue() {
       </div>
 
       <Card>
-        <div className="flex items-center gap-2 mb-4">
+        <div className="flex flex-wrap items-center gap-2 mb-4">
           <Table2 className="h-4 w-4 text-[var(--color-text-secondary)]" />
           <h2 className="text-sm font-semibold text-[var(--color-text)]">Inventory Breakdown</h2>
+          {isSearching && <Badge>{matchCount} match{matchCount === 1 ? "" : "es"}</Badge>}
+          <div className="ml-auto w-full sm:w-64">
+            <SearchInput value={search} onChange={setSearch} placeholder="Search items, SKU, category..." />
+          </div>
         </div>
-        <div className="space-y-3">
-          {metals.map((metal) => (
-            <MetalSection key={metal.key} metal={metal} expanded={expanded} onToggle={toggleExpand} />
-          ))}
-        </div>
+        {isSearching && matchCount === 0 ? (
+          <div className="py-8 text-center text-sm text-[var(--color-text-secondary)]">
+            No items match "{search}"
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {visibleMetals.map((metal) => (
+              <MetalSection key={metal.key} metal={metal} expanded={expanded} onToggle={toggleExpand} forceOpen={isSearching} />
+            ))}
+          </div>
+        )}
       </Card>
     </div>
   );

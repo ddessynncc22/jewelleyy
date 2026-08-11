@@ -3,7 +3,26 @@ import { useNavigate, useParams } from 'react-router-dom'
 
 import toast from 'react-hot-toast'
 
-import { Plus, Trash2, X, ArrowLeft } from 'lucide-react'
+import {
+  Plus,
+  Trash2,
+  X,
+  ArrowLeft,
+  Check,
+  FileText,
+  Scale,
+  Ruler,
+  Gem,
+  Diamond,
+  CircleDot,
+  ImagePlus,
+  Coins,
+  Layers,
+  Bell,
+  StickyNote,
+  Info,
+  Sparkles,
+} from 'lucide-react'
 
 import { createItem, updateItem, getItem, getItems } from '../../services/itemService'
 import { createLooseLot, updateLooseLot } from '../../services/looseLotService'
@@ -123,6 +142,20 @@ const CHARGE_TYPES = [
   { value: 'none', label: 'None' },
 ]
 
+const SECTION_SUBTITLES = {
+  general: 'Name, category & description',
+  weight: 'Grams, tola & stone weight',
+  dimensions: 'Length, diameter & ring size',
+  metal: 'Type, purity & karat',
+  stone: 'Stone details & certification',
+  status: 'Current inventory status',
+  images: 'Product photographs',
+  pricing: 'Cost & selling breakdown',
+  details: 'Category, metal & item reference',
+  alerts: 'Low stock thresholds (0 = off)',
+  notes: 'Optional remarks',
+}
+
 const TAGGED_INITIAL = {
   name: '',
   category: '',
@@ -214,14 +247,74 @@ const validate = (values) => {
   return errors
 }
 
-const Section = ({ title, actions, children }) => (
-  <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-elevated)] p-4">
-    <div className="mb-3 flex items-center justify-between gap-2">
-      <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
-      {actions}
-    </div>
-    {children}
+const Section = ({ id, icon: Icon, title, subtitle, actions, children }) => (
+  <section
+    id={id}
+    className="scroll-mt-20 overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] shadow-sm"
+  >
+    <header className="flex items-center justify-between gap-2 border-b border-[var(--color-border)]/70 bg-[var(--color-bg)]/60 px-4 py-3">
+      <div className="flex min-w-0 items-center gap-2.5">
+        {Icon && (
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--color-primary-light)] text-[var(--color-primary)]">
+            <Icon size={16} />
+          </span>
+        )}
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold leading-tight text-[var(--color-text)]">{title}</h3>
+          {subtitle && (
+            <p className="truncate text-xs leading-tight text-[var(--color-text-secondary)]">{subtitle}</p>
+          )}
+        </div>
+      </div>
+      {actions && <div className="flex shrink-0 items-center gap-1.5">{actions}</div>}
+    </header>
+    <div className="p-4">{children}</div>
   </section>
+)
+
+const ChipButton = ({ onClick, disabled, tone = 'gold', active, children }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    disabled={disabled}
+    className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+      active
+        ? 'border-[var(--color-primary)]/40 bg-[var(--color-primary-light)] text-[var(--color-primary)]'
+        : tone === 'danger'
+          ? 'border-[var(--color-border)] text-danger hover:border-danger/40 hover:bg-danger/5'
+          : 'border-[var(--color-border)] text-[var(--color-primary)] hover:border-[var(--color-primary)]/40 hover:bg-[var(--color-primary-light)]'
+    }`}
+  >
+    {children}
+  </button>
+)
+
+const InlineAddInput = ({ value, onChange, onSave, onCancel, placeholder }) => (
+  <div className="mt-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)]/50 p-2">
+    <input
+      autoFocus
+      type="text"
+      value={value}
+      onChange={onChange}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          onSave()
+        }
+        if (e.key === 'Escape') onCancel()
+      }}
+      placeholder={placeholder}
+      className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-2 text-sm text-[var(--color-text)] placeholder-[var(--color-text-secondary)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20"
+    />
+    <div className="mt-2 flex items-center justify-end gap-2">
+      <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+        Cancel
+      </Button>
+      <Button type="button" size="sm" onClick={onSave} disabled={!value.trim()}>
+        Save
+      </Button>
+    </div>
+  </div>
 )
 
 const InventoryForm = ({ mode = 'tagged', variant = 'modal', item, lot, onClose, onSuccess }) => {
@@ -569,6 +662,10 @@ const InventoryForm = ({ mode = 'tagged', variant = 'modal', item, lot, onClose,
     const validationErrors = validate(tagged)
     if (Object.keys(validationErrors).length > 0) {
       setTaggedErrors(validationErrors)
+      document.getElementById(Object.keys(validationErrors)[0])?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      })
       return
     }
 
@@ -852,42 +949,69 @@ const InventoryForm = ({ mode = 'tagged', variant = 'modal', item, lot, onClose,
   const formBody = (
     <form onSubmit={type === 'tagged' ? handleSubmitTagged : handleSubmitLoose} className="space-y-6">
         {!isEditing && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <button
-              type="button"
-              onClick={() => setType('tagged')}
-              className={`rounded-xl border px-4 py-3 text-left text-sm font-semibold transition-all ${
-                type === 'tagged'
-                  ? 'border-[var(--color-primary)] bg-[var(--color-primary-light)] text-[var(--color-primary)]'
-                  : 'border-[var(--color-border)] text-[var(--color-text)] hover:bg-[var(--color-elevated)]'
-              }`}
-            >
-              Tagged Item
-              <span className={`block text-xs font-normal mt-0.5 ${type === 'tagged' ? 'text-[var(--color-primary)]/70' : 'text-[var(--color-text-secondary)]'}`}>
-                Single piece with barcode tag, stone &amp; pricing details
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setType('loose')}
-              className={`rounded-xl border px-4 py-3 text-left text-sm font-semibold transition-all ${
-                type === 'loose'
-                  ? 'border-[var(--color-primary)] bg-[var(--color-primary-light)] text-[var(--color-primary)]'
-                  : 'border-[var(--color-border)] text-[var(--color-text)] hover:bg-[var(--color-elevated)]'
-              }`}
-            >
-              Loose Lot
-              <span className={`block text-xs font-normal mt-0.5 ${type === 'loose' ? 'text-[var(--color-primary)]/70' : 'text-[var(--color-text-secondary)]'}`}>
-                Bulk items (nose pins, tops, studs) tracked by weight &amp; pieces
-              </span>
-            </button>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {[
+              {
+                key: 'tagged',
+                icon: Gem,
+                title: 'Tagged Item',
+                desc: 'Single piece with barcode tag, stone & pricing details',
+              },
+              {
+                key: 'loose',
+                icon: Layers,
+                title: 'Loose Lot',
+                desc: 'Bulk items (nose pins, tops, studs) tracked by weight & pieces',
+              },
+            ].map((opt) => {
+              const active = type === opt.key
+              return (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => setType(opt.key)}
+                  className={`group relative flex items-center gap-3 rounded-xl border-2 px-4 py-3 text-left transition-all ${
+                    active
+                      ? 'border-[var(--color-primary)] bg-[var(--color-primary-light)] shadow-sm'
+                      : 'border-[var(--color-border)] bg-[var(--color-card)] hover:border-[var(--color-primary)]/40 hover:bg-[var(--color-bg)]'
+                  }`}
+                >
+                  <span
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors ${
+                      active
+                        ? 'bg-[var(--color-primary)] text-white'
+                        : 'bg-[var(--color-elevated)] text-[var(--color-text-secondary)] group-hover:bg-[var(--color-primary-light)] group-hover:text-[var(--color-primary)]'
+                    }`}
+                  >
+                    <opt.icon size={18} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold leading-tight text-[var(--color-text)]">
+                      {opt.title}
+                    </span>
+                    <span
+                      className={`block text-xs leading-tight ${
+                        active ? 'text-[var(--color-primary)]/80' : 'text-[var(--color-text-secondary)]'
+                      }`}
+                    >
+                      {opt.desc}
+                    </span>
+                  </span>
+                  {active && (
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)] text-white">
+                      <Check size={12} strokeWidth={3} />
+                    </span>
+                  )}
+                </button>
+              )
+            })}
           </div>
         )}
 
         {type === 'tagged' ? (
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            <div className="space-y-6">
-            <Section title="General">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-5">
+            <Section id="general" icon={FileText} title="General" subtitle={SECTION_SUBTITLES.general}>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormInput
                   label="Item Name"
@@ -905,26 +1029,17 @@ const InventoryForm = ({ mode = 'tagged', variant = 'modal', item, lot, onClose,
                       <span className="text-red-500 ml-0.5">*</span>
                     </span>
                     <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
+                      <ChipButton
                         onClick={() => {
                           setNewCategoryName('')
                           setShowCategoryInput((v) => !v)
                         }}
-                        title={showCategoryInput ? 'Close' : 'Add new category'}
-                        className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-border)] px-2 py-1 text-xs font-medium text-[var(--color-primary)] transition-colors hover:bg-[var(--color-elevated)]"
                       >
                         <Plus size={14} /> {showCategoryInput ? 'Close' : 'Add'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={confirmRemoveCategory}
-                        disabled={!tagged.category}
-                        title="Remove selected category"
-                        className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-border)] px-2 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
-                      >
+                      </ChipButton>
+                      <ChipButton tone="danger" onClick={confirmRemoveCategory} disabled={!tagged.category}>
                         <Trash2 size={14} /> Remove
-                      </button>
+                      </ChipButton>
                     </div>
                   </div>
                   <FormSelect
@@ -936,55 +1051,30 @@ const InventoryForm = ({ mode = 'tagged', variant = 'modal', item, lot, onClose,
                     error={taggedErrors.category}
                   />
                   {showCategoryInput && (
-                    <div className="mt-2 flex items-center gap-2">
-                      <input
-                        autoFocus
-                        type="text"
-                        value={newCategoryName}
-                        onChange={(e) => setNewCategoryName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault()
-                            addCategory()
-                          }
-                          if (e.key === 'Escape') setShowCategoryInput(false)
-                        }}
-                        placeholder="New category name"
-                        className="flex-1 rounded-xl border border-[var(--color-border)] px-3 py-1.5 text-xs bg-[var(--color-card)] text-[var(--color-text)] placeholder-[var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:border-[var(--color-primary)] focus:ring-[var(--color-primary)]/20"
-                      />
-                      <Button type="button" size="sm" onClick={addCategory} disabled={!newCategoryName.trim()}>
-                        Save
-                      </Button>
-                      <Button type="button" variant="ghost" size="sm" onClick={() => setShowCategoryInput(false)}>
-                        Cancel
-                      </Button>
-                    </div>
+                    <InlineAddInput
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      onSave={addCategory}
+                      onCancel={() => setShowCategoryInput(false)}
+                      placeholder="New category name"
+                    />
                   )}
                   {selectedCategory && !selectedCategory.parent && (
                     <div className="mt-2">
                       <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
                         <span className="text-sm font-medium text-[var(--color-text)]">Subcategory</span>
                         <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
+                          <ChipButton
                             onClick={() => {
                               setNewSubcategoryName('')
                               setShowSubcategoryInput((v) => !v)
                             }}
-                            title={showSubcategoryInput ? 'Close' : `Add subcategory under ${selectedCategory.name}`}
-                            className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-border)] px-2 py-1 text-xs font-medium text-[var(--color-primary)] transition-colors hover:bg-[var(--color-elevated)]"
                           >
                             <Plus size={14} /> {showSubcategoryInput ? 'Close' : 'Add'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={confirmRemoveSubcategory}
-                            disabled={!tagged.subcategory}
-                            title="Remove selected subcategory"
-                            className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-border)] px-2 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
-                          >
+                          </ChipButton>
+                          <ChipButton tone="danger" onClick={confirmRemoveSubcategory} disabled={!tagged.subcategory}>
                             <Trash2 size={14} /> Remove
-                          </button>
+                          </ChipButton>
                         </div>
                       </div>
                       <FormSelect
@@ -997,29 +1087,13 @@ const InventoryForm = ({ mode = 'tagged', variant = 'modal', item, lot, onClose,
                         error={taggedErrors.subcategory}
                       />
                       {showSubcategoryInput && (
-                        <div className="mt-2 flex items-center gap-2">
-                          <input
-                            autoFocus
-                            type="text"
-                            value={newSubcategoryName}
-                            onChange={(e) => setNewSubcategoryName(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault()
-                                addSubcategory()
-                              }
-                              if (e.key === 'Escape') setShowSubcategoryInput(false)
-                            }}
-                            placeholder={`Subcategory under ${selectedCategory.name}`}
-                            className="flex-1 rounded-xl border border-[var(--color-border)] px-3 py-1.5 text-xs bg-[var(--color-card)] text-[var(--color-text)] placeholder-[var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:border-[var(--color-primary)] focus:ring-[var(--color-primary)]/20"
-                          />
-                          <Button type="button" size="sm" onClick={addSubcategory} disabled={!newSubcategoryName.trim()}>
-                            Save
-                          </Button>
-                          <Button type="button" variant="ghost" size="sm" onClick={() => setShowSubcategoryInput(false)}>
-                            Cancel
-                          </Button>
-                        </div>
+                        <InlineAddInput
+                          value={newSubcategoryName}
+                          onChange={(e) => setNewSubcategoryName(e.target.value)}
+                          onSave={addSubcategory}
+                          onCancel={() => setShowSubcategoryInput(false)}
+                          placeholder={`Subcategory under ${selectedCategory.name}`}
+                        />
                       )}
                     </div>
                   )}
@@ -1031,7 +1105,7 @@ const InventoryForm = ({ mode = 'tagged', variant = 'modal', item, lot, onClose,
                   onChange={handleChange}
                   placeholder="Enter design code"
                 />
-                <div className="sm:col-span-2 lg:col-span-3">
+                <div className="sm:col-span-2">
                   <FormTextarea
                     label="Description"
                     name="description"
@@ -1044,7 +1118,7 @@ const InventoryForm = ({ mode = 'tagged', variant = 'modal', item, lot, onClose,
               </div>
             </Section>
 
-            <Section title="Weight">
+            <Section id="weight" icon={Scale} title="Weight" subtitle={SECTION_SUBTITLES.weight}>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormInput
                   label="Gross Weight (g)"
@@ -1096,16 +1170,14 @@ const InventoryForm = ({ mode = 'tagged', variant = 'modal', item, lot, onClose,
             </Section>
 
             <Section
+              id="dimensions"
+              icon={Ruler}
               title="Dimensions"
+              subtitle={SECTION_SUBTITLES.dimensions}
               actions={
-                <button
-                  type="button"
-                  onClick={() => setShowDimensions((v) => !v)}
-                  title={showDimensions ? 'Hide dimensions' : 'Add dimensions'}
-                  className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-border)] px-2 py-1 text-xs font-medium text-[var(--color-primary)] transition-colors hover:bg-[var(--color-elevated)]"
-                >
+                <ChipButton active={showDimensions} onClick={() => setShowDimensions((v) => !v)}>
                   {showDimensions ? <X size={14} /> : <Plus size={14} />} {showDimensions ? 'Close' : 'Add'}
-                </button>
+                </ChipButton>
               }
             >
               {showDimensions && (
@@ -1172,7 +1244,7 @@ const InventoryForm = ({ mode = 'tagged', variant = 'modal', item, lot, onClose,
               )}
             </Section>
 
-            <Section title="Metal">
+            <Section id="metal" icon={Gem} title="Metal" subtitle={SECTION_SUBTITLES.metal}>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormSelect
                   label="Metal Type"
@@ -1217,9 +1289,11 @@ const InventoryForm = ({ mode = 'tagged', variant = 'modal', item, lot, onClose,
                 />
               </div>
             </Section>
+            </div>
+            <div className="space-y-5">
 
-            <Section title="Stone">
-              <div className="space-y-4">
+            <Section id="stone" icon={Diamond} title="Stone" subtitle={SECTION_SUBTITLES.stone}>
+              <div className="space-y-5">
                 <FormSelect
                   label="Stone Type"
                   name="stoneType"
@@ -1306,14 +1380,15 @@ const InventoryForm = ({ mode = 'tagged', variant = 'modal', item, lot, onClose,
                   </div>
                 )}
                 {(!tagged.stoneType || tagged.stoneType === 'none') && (
-                  <p className="text-sm text-gray-400 italic">
+                  <div className="flex items-center gap-2 rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-bg)]/60 px-4 py-3 text-sm text-[var(--color-text-secondary)]">
+                    <Info size={14} className="shrink-0 text-[var(--color-primary)]" />
                     Stone fields hidden — select a stone type to show them.
-                  </p>
+                  </div>
                 )}
               </div>
             </Section>
 
-            <Section title="Status">
+            <Section id="status" icon={CircleDot} title="Status" subtitle={SECTION_SUBTITLES.status}>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormSelect
                   label="Status"
@@ -1324,24 +1399,42 @@ const InventoryForm = ({ mode = 'tagged', variant = 'modal', item, lot, onClose,
                 />
               </div>
             </Section>
-            </div>
-            <div className="space-y-6">
 
-            <Section title="Images">
+            <Section id="images" icon={ImagePlus} title="Images" subtitle={SECTION_SUBTITLES.images}>
               <div className="space-y-3">
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={handleImageInput}
-                  className="block w-full text-sm text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100"
-                />
+                <label
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    if (e.dataTransfer.files?.length) {
+                      setNewFiles((prev) => [...prev, ...Array.from(e.dataTransfer.files)])
+                    }
+                  }}
+                  className="group flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-[var(--color-border)] bg-[var(--color-bg)]/50 px-4 py-6 text-center transition-all hover:border-[var(--color-primary)]/50 hover:bg-[var(--color-primary-light)]/40"
+                >
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={handleImageInput}
+                    className="hidden"
+                  />
+                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-primary-light)] text-[var(--color-primary)] transition-transform group-hover:scale-105">
+                    <ImagePlus size={18} />
+                  </span>
+                  <span className="text-sm font-medium text-[var(--color-text)]">
+                    Drop item photos here or click to browse
+                  </span>
+                  <span className="text-xs text-[var(--color-text-secondary)]">
+                    PNG, JPG or WebP — multiple files allowed (max 5MB each)
+                  </span>
+                </label>
                 {images.length > 0 && (
                   <div className="flex flex-wrap gap-2">
                     {images.map((img, i) => (
                       <div
                         key={i}
-                        className="relative h-16 w-16 rounded-lg overflow-hidden border border-gray-200 group"
+                        className="group relative h-20 w-20 overflow-hidden rounded-xl border border-[var(--color-border)] shadow-sm"
                       >
                         <img
                           src={typeof img === 'string' ? img : URL.createObjectURL(img)}
@@ -1351,9 +1444,10 @@ const InventoryForm = ({ mode = 'tagged', variant = 'modal', item, lot, onClose,
                         <button
                           type="button"
                           onClick={() => removeExistingImage(i)}
-                          className="absolute top-0.5 right-0.5 h-5 w-5 rounded-full bg-black/60 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Remove image"
+                          className="absolute inset-0 flex items-center justify-center bg-black/50 text-white opacity-0 transition-opacity group-hover:opacity-100"
                         >
-                          x
+                          <X size={16} />
                         </button>
                       </div>
                     ))}
@@ -1364,7 +1458,7 @@ const InventoryForm = ({ mode = 'tagged', variant = 'modal', item, lot, onClose,
                     {newFiles.map((f, i) => (
                       <div
                         key={i}
-                        className="relative h-16 w-16 rounded-lg overflow-hidden border border-gray-200 group"
+                        className="group relative h-20 w-20 overflow-hidden rounded-xl border border-[var(--color-border)] shadow-sm"
                       >
                         <img
                           src={URL.createObjectURL(f)}
@@ -1374,9 +1468,10 @@ const InventoryForm = ({ mode = 'tagged', variant = 'modal', item, lot, onClose,
                         <button
                           type="button"
                           onClick={() => removeNewFile(i)}
-                          className="absolute top-0.5 right-0.5 h-5 w-5 rounded-full bg-black/60 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Remove image"
+                          className="absolute inset-0 flex items-center justify-center bg-black/50 text-white opacity-0 transition-opacity group-hover:opacity-100"
                         >
-                          x
+                          <X size={16} />
                         </button>
                       </div>
                     ))}
@@ -1385,15 +1480,17 @@ const InventoryForm = ({ mode = 'tagged', variant = 'modal', item, lot, onClose,
               </div>
             </Section>
 
-            <Section title="Pricing">
+            <Section id="pricing" icon={Coins} title="Pricing" subtitle={SECTION_SUBTITLES.pricing}>
               {taggedErrors.costPricing && (
                 <div className="rounded-lg bg-red-50 border border-red-200 p-3 mb-3">
                   <p className="text-sm text-red-700">{taggedErrors.costPricing}</p>
                 </div>
               )}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div>
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">Cost</h4>
+                  <h4 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-[var(--color-text)]">
+                    <span className="h-2 w-2 rounded-full bg-red-400" /> Cost
+                  </h4>
                   <div className="grid grid-cols-1 gap-4">
                     <FormInput
                       label="Making Charge (Rs.)"
@@ -1425,15 +1522,16 @@ const InventoryForm = ({ mode = 'tagged', variant = 'modal', item, lot, onClose,
                       onChange={handleChange}
                       placeholder="0.00"
                     />
-                    <div className="flex items-end">
-                      <p className="text-xs text-gray-500">
-                        Either making charge or wastage is required
-                      </p>
-                    </div>
+                    <p className="flex items-center gap-1.5 text-xs text-[var(--color-text-secondary)]">
+                      <Info size={13} className="shrink-0 text-[var(--color-primary)]" />
+                      Either making charge or wastage is required
+                    </p>
                   </div>
                 </div>
                 <div>
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">Selling</h4>
+                  <h4 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-[var(--color-text)]">
+                    <span className="h-2 w-2 rounded-full bg-emerald-400" /> Selling
+                  </h4>
                   <div className="grid grid-cols-1 gap-4">
                     <FormInput
                       label="Making Charge (Rs.)"
@@ -1465,9 +1563,10 @@ const InventoryForm = ({ mode = 'tagged', variant = 'modal', item, lot, onClose,
                       onChange={handleChange}
                       placeholder="0.00"
                     />
-                    <div className="flex items-end">
-                      <p className="text-xs text-gray-500">Either making charge or wastage is required</p>
-                    </div>
+                    <p className="flex items-center gap-1.5 text-xs text-[var(--color-text-secondary)]">
+                      <Info size={13} className="shrink-0 text-[var(--color-primary)]" />
+                      Either making charge or wastage is required
+                    </p>
                   </div>
                 </div>
               </div>
@@ -1475,7 +1574,9 @@ const InventoryForm = ({ mode = 'tagged', variant = 'modal', item, lot, onClose,
             </div>
           </div>
         ) : (
-          <>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="space-y-5">
+            <Section id="details" icon={Layers} title="Details" subtitle={SECTION_SUBTITLES.details}>
             {!isEditing && (
               <div>
                 <div className="mb-2">
@@ -1524,56 +1625,32 @@ const InventoryForm = ({ mode = 'tagged', variant = 'modal', item, lot, onClose,
             )}
 
             {!linkedItem && (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
                     <span className="text-sm font-medium text-[var(--color-text)]">Category</span>
                     <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
+                      <ChipButton
                         onClick={() => {
                           setNewCategoryName('')
                           setShowCategoryInput((v) => !v)
                         }}
-                        title={showCategoryInput ? 'Close' : 'Add new category'}
-                        className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-border)] px-2 py-1 text-xs font-medium text-[var(--color-primary)] transition-colors hover:bg-[var(--color-elevated)]"
                       >
                         <Plus size={14} /> {showCategoryInput ? 'Close' : 'Add'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={confirmRemoveCategory}
-                        disabled={!selectedLooseCategoryId}
-                        title="Remove selected category"
-                        className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-border)] px-2 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
-                      >
+                      </ChipButton>
+                      <ChipButton tone="danger" onClick={confirmRemoveCategory} disabled={!selectedLooseCategoryId}>
                         <Trash2 size={14} /> Remove
-                      </button>
+                      </ChipButton>
                     </div>
                   </div>
                   {showCategoryInput ? (
-                    <div className="flex items-center gap-2">
-                      <input
-                        autoFocus
-                        value={newCategoryName}
-                        onChange={(e) => setNewCategoryName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault()
-                            addCategory()
-                          }
-                          if (e.key === 'Escape') setShowCategoryInput(false)
-                        }}
-                        placeholder="New category name"
-                        className="w-full rounded-xl border border-[var(--color-border)] px-3.5 py-2.5 text-sm bg-[var(--color-card)] text-[var(--color-text)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20"
-                      />
-                      <Button type="button" size="sm" onClick={addCategory} disabled={!newCategoryName.trim()}>
-                        Save
-                      </Button>
-                      <Button type="button" variant="ghost" size="sm" onClick={() => setShowCategoryInput(false)}>
-                        Cancel
-                      </Button>
-                    </div>
+                    <InlineAddInput
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      onSave={addCategory}
+                      onCancel={() => setShowCategoryInput(false)}
+                      placeholder="New category name"
+                    />
                   ) : (
                     <FormSelect
                       name="category"
@@ -1592,51 +1669,27 @@ const InventoryForm = ({ mode = 'tagged', variant = 'modal', item, lot, onClose,
                       <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
                         <span className="text-sm font-medium text-[var(--color-text)]">Subcategory</span>
                         <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
+                          <ChipButton
                             onClick={() => {
                               setNewSubcategoryName('')
                               setShowSubcategoryInput((v) => !v)
                             }}
-                            title={showSubcategoryInput ? 'Close' : `Add subcategory under ${categories.find((c) => c._id === selectedLooseCategoryId)?.name}`}
-                            className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-border)] px-2 py-1 text-xs font-medium text-[var(--color-primary)] transition-colors hover:bg-[var(--color-elevated)]"
                           >
                             <Plus size={14} /> {showSubcategoryInput ? 'Close' : 'Add'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={confirmRemoveSubcategory}
-                            disabled={!loose.subcategory}
-                            title="Remove selected subcategory"
-                            className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-border)] px-2 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
-                          >
+                          </ChipButton>
+                          <ChipButton tone="danger" onClick={confirmRemoveSubcategory} disabled={!loose.subcategory}>
                             <Trash2 size={14} /> Remove
-                          </button>
+                          </ChipButton>
                         </div>
                       </div>
                       {showSubcategoryInput ? (
-                        <div className="flex items-center gap-2">
-                          <input
-                            autoFocus
-                            value={newSubcategoryName}
-                            onChange={(e) => setNewSubcategoryName(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault()
-                                addSubcategory()
-                              }
-                              if (e.key === 'Escape') setShowSubcategoryInput(false)
-                            }}
-                            placeholder={`Subcategory under ${categories.find((c) => c._id === selectedLooseCategoryId)?.name}`}
-                            className="w-full rounded-xl border border-[var(--color-border)] px-3.5 py-2.5 text-sm bg-[var(--color-card)] text-[var(--color-text)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20"
-                          />
-                          <Button type="button" size="sm" onClick={addSubcategory} disabled={!newSubcategoryName.trim()}>
-                            Save
-                          </Button>
-                          <Button type="button" variant="ghost" size="sm" onClick={() => setShowSubcategoryInput(false)}>
-                            Cancel
-                          </Button>
-                        </div>
+                        <InlineAddInput
+                          value={newSubcategoryName}
+                          onChange={(e) => setNewSubcategoryName(e.target.value)}
+                          onSave={addSubcategory}
+                          onCancel={() => setShowSubcategoryInput(false)}
+                          placeholder={`Subcategory under ${categories.find((c) => c._id === selectedLooseCategoryId)?.name}`}
+                        />
                       ) : (
                         <FormSelect
                           name="subcategory"
@@ -1677,8 +1730,10 @@ const InventoryForm = ({ mode = 'tagged', variant = 'modal', item, lot, onClose,
                 <FormInput label="Design Code" name="designCode" value={loose.designCode} onChange={(e) => looseSet('designCode', e.target.value)} placeholder="Optional" />
               </div>
             )}
+            </Section>
 
-            <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <Section id="weight" icon={Scale} title="Weight" subtitle={SECTION_SUBTITLES.weight}>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <FormInput
                 label="Total Gross Weight (g)"
                 name="totalGrossWeight"
@@ -1741,19 +1796,20 @@ const InventoryForm = ({ mode = 'tagged', variant = 'modal', item, lot, onClose,
                 placeholder="Unassigned"
               />
             </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-200">
-                <h3 className="text-sm font-semibold text-gray-900">Dimensions</h3>
-                <button
-                  type="button"
-                  onClick={() => setShowDimensions((v) => !v)}
-                  title={showDimensions ? 'Hide dimensions' : 'Add dimensions'}
-                  className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-border)] px-2 py-1 text-xs font-medium text-[var(--color-primary)] transition-colors hover:bg-[var(--color-elevated)]"
-                >
+            </Section>
+            </div>
+            <div className="space-y-5">
+            <Section
+              id="dimensions"
+              icon={Ruler}
+              title="Dimensions"
+              subtitle={SECTION_SUBTITLES.dimensions}
+              actions={
+                <ChipButton active={showDimensions} onClick={() => setShowDimensions((v) => !v)}>
                   {showDimensions ? <X size={14} /> : <Plus size={14} />} {showDimensions ? 'Close' : 'Add'}
-                </button>
-              </div>
+                </ChipButton>
+              }
+            >
               {showDimensions && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="flex items-center gap-2">
@@ -1806,10 +1862,9 @@ const InventoryForm = ({ mode = 'tagged', variant = 'modal', item, lot, onClose,
                   </div>
                 </div>
               )}
-            </div>
+            </Section>
 
-            <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-elevated)] p-4">
-              <p className="mb-3 text-sm font-medium text-[var(--color-text)]">Low stock alerts (0 = off)</p>
+            <Section id="alerts" icon={Bell} title="Alerts" subtitle={SECTION_SUBTITLES.alerts}>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <FormInput
                   label="Alert at (pieces)"
@@ -1830,10 +1885,9 @@ const InventoryForm = ({ mode = 'tagged', variant = 'modal', item, lot, onClose,
                   onChange={(e) => looseSet('lowStockWeightThreshold', e.target.value)}
                 />
               </div>
-            </div>
+            </Section>
 
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-[var(--color-text)]">Notes</label>
+            <Section id="notes" icon={StickyNote} title="Notes" subtitle={SECTION_SUBTITLES.notes}>
               <textarea
                 value={loose.notes}
                 onChange={(e) => looseSet('notes', e.target.value)}
@@ -1841,11 +1895,23 @@ const InventoryForm = ({ mode = 'tagged', variant = 'modal', item, lot, onClose,
                 className="w-full rounded-xl border border-[var(--color-border)] px-3.5 py-2.5 text-sm bg-[var(--color-card)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20"
                 placeholder="Optional"
               />
+            </Section>
             </div>
-          </>
+          </div>
         )}
 
-        <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
+        <div
+          className={`flex items-center justify-end gap-3 ${
+            isPage
+              ? 'sticky bottom-0 z-10 -mx-4 -mb-4 mt-5 rounded-b-2xl border-t border-[var(--color-border)] bg-[var(--color-card)]/95 px-4 py-3.5 backdrop-blur sm:-mx-5 sm:-mb-5 sm:px-5'
+              : 'border-t border-[var(--color-border)] pt-4'
+          }`}
+        >
+          {isPage && (
+            <p className="mr-auto hidden text-xs text-[var(--color-text-secondary)] sm:block">
+              Fields marked <span className="font-medium text-danger">*</span> are required
+            </p>
+          )}
           <Button variant="ghost" onClick={isPage ? () => navigate('/items') : onClose} disabled={loading}>
             Cancel
           </Button>
@@ -1887,14 +1953,89 @@ const InventoryForm = ({ mode = 'tagged', variant = 'modal', item, lot, onClose,
   if (isPage) {
     return (
       <>
-        <div className="space-y-6">
+        <div className="space-y-4">
           <PageHeader title={toggleTitle} subtitle={isEditing ? 'Update the item details below' : 'Fill in the item details below'}>
             <Button variant="outline" icon={<ArrowLeft size={16} />} onClick={() => navigate('/items')}>
               Back to Items
             </Button>
           </PageHeader>
-          <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-6">
-            {formBody}
+
+          <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_250px]">
+            <div className="min-w-0 rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-4 shadow-sm sm:p-5">
+              {formBody}
+            </div>
+
+            <aside className="hidden lg:block">
+              <div className="sticky top-20">
+                <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-4 shadow-sm">
+                  <p className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">
+                    <Sparkles size={13} className="text-[var(--color-gold-600)]" /> Live Summary
+                  </p>
+                  {type === 'tagged' ? (
+                    <dl className="space-y-2.5 text-sm">
+                      <div className="flex items-center justify-between gap-2">
+                        <dt className="text-[var(--color-text-secondary)]">Gross weight</dt>
+                        <dd className="num font-semibold text-[var(--color-text)]">
+                          {tagged.grossWeight || '—'} g
+                        </dd>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <dt className="text-[var(--color-text-secondary)]">Net metal weight</dt>
+                        <dd className="num font-semibold text-[var(--color-text)]">{netMetalValue} g</dd>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <dt className="text-[var(--color-text-secondary)]">Stone weight</dt>
+                        <dd className="num font-semibold text-[var(--color-text)]">{stoneWeightGram} g</dd>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <dt className="text-[var(--color-text-secondary)]">Stone amount</dt>
+                        <dd className="num font-semibold text-[var(--color-gold-700)]">
+                          Rs {stoneAmount.toLocaleString()}
+                        </dd>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 border-t border-[var(--color-border)] pt-2.5">
+                        <dt className="text-[var(--color-text-secondary)]">Metal</dt>
+                        <dd className="flex items-center gap-1.5">
+                          {tagged.metalType ? (
+                            <span className="rounded-full bg-[var(--color-elevated)] px-2 py-0.5 text-xs font-medium text-[var(--color-text)]">
+                              {tagged.metalType}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-[var(--color-text-secondary)]">—</span>
+                          )}
+                          {tagged.karat && (
+                            <span className="rounded-full bg-[var(--color-primary-light)] px-2 py-0.5 text-xs font-medium text-[var(--color-primary)]">
+                              {tagged.karat}
+                            </span>
+                          )}
+                        </dd>
+                      </div>
+                    </dl>
+                  ) : (
+                    <dl className="space-y-2.5 text-sm">
+                      <div className="flex items-center justify-between gap-2">
+                        <dt className="text-[var(--color-text-secondary)]">Total gross weight</dt>
+                        <dd className="num font-semibold text-[var(--color-text)]">
+                          {loose.totalGrossWeight || '—'} g
+                        </dd>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <dt className="text-[var(--color-text-secondary)]">Total pieces</dt>
+                        <dd className="num font-semibold text-[var(--color-text)]">
+                          {loose.totalPieces || '—'}
+                        </dd>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 border-t border-[var(--color-border)] pt-2.5">
+                        <dt className="text-[var(--color-text-secondary)]">Avg weight / piece</dt>
+                        <dd className="num font-semibold text-[var(--color-gold-700)]">
+                          {avgWeight != null ? `${avgWeight} g` : '—'}
+                        </dd>
+                      </div>
+                    </dl>
+                  )}
+                </div>
+              </div>
+            </aside>
           </div>
         </div>
         {categoryDialog}

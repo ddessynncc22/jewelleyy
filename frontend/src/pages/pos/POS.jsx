@@ -26,6 +26,16 @@ const PAYMENT_TYPES = [
   { value: 'oldGoldExchange', label: 'Old Gold Exchange' },
 ]
 
+const METHOD_OPTIONS = [
+  { value: 'cash', label: 'Cash' },
+  { value: 'card', label: 'Card' },
+  { value: 'qr', label: 'QR' },
+  { value: 'bank', label: 'Bank Transfer' },
+  { value: 'cheque', label: 'Cheque' },
+]
+
+const newPaymentMethod = () => ({ method: 'cash', amount: '', reference: '' })
+
 const OLD_GOLD_KARAT_OPTIONS = [
   { value: '24', label: '24K' },
   { value: '22', label: '22K' },
@@ -130,6 +140,7 @@ const POS = ({ mode = 'standard' }) => {
 const [paymentType, setPaymentType] = useState('cash')
 const [cashAmount, setCashAmount] = useState('')
 const [khaataAmount, setKhaataAmount] = useState('')
+const [paymentMethods, setPaymentMethods] = useState([newPaymentMethod()])
 const [actualAmountReceived, setActualAmountReceived] = useState('')
   const [selectedCustomer, setSelectedCustomer] = useState(null)
   const [customerSearch, setCustomerSearch] = useState('')
@@ -500,6 +511,20 @@ const [actualAmountReceived, setActualAmountReceived] = useState('')
 
   const changeDue = receivedAmount > 0 ? Number((receivedAmount - billTotal).toFixed(2)) : 0
 
+  const methodsTotal = paymentMethods.reduce((s, m) => s + (Number(m.amount) || 0), 0)
+  const cashMethodsTotal = paymentMethods
+    .filter((m) => m.method === 'cash')
+    .reduce((s, m) => s + (Number(m.amount) || 0), 0)
+  const validMethods = paymentMethods
+    .filter((m) => m.method && Number(m.amount) > 0)
+    .map((m) => ({ method: m.method, amount: Number(m.amount), reference: m.reference || '' }))
+
+  const updatePaymentMethod = (index, patch) =>
+    setPaymentMethods((prev) => prev.map((m, i) => (i === index ? { ...m, ...patch } : m)))
+  const addPaymentMethod = () => setPaymentMethods((prev) => [...prev, newPaymentMethod()])
+  const removePaymentMethod = (index) =>
+    setPaymentMethods((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== index)))
+
   const ensureCustomer = async () => {
     if (selectedCustomer) return selectedCustomer._id
     const name = customerName.trim()
@@ -525,9 +550,9 @@ const [actualAmountReceived, setActualAmountReceived] = useState('')
 
   const getPaymentBreakdown = () => {
     switch (paymentType) {
-      case 'cash': return { cash: Number(cashAmount) || billTotal, khaata: 0 }
+      case 'cash': return { cash: methodsTotal > 0 ? methodsTotal : billTotal, khaata: 0 }
       case 'khaata': return { cash: 0, khaata: Number(khaataAmount) || cartTotal }
-      case 'partial': return { cash: Number(cashAmount) || 0, khaata: Number(khaataAmount) || 0 }
+      case 'partial': return { cash: cashMethodsTotal, khaata: Number(khaataAmount) || 0 }
       case 'oldGoldExchange': return {
         cash: oldGoldCashPaid, khaata: 0,
         oldGold: {
@@ -552,8 +577,11 @@ const [actualAmountReceived, setActualAmountReceived] = useState('')
     if (customerRequired && !selectedCustomer && (!customerName.trim() || !customerPhone.trim())) {
       toast.error('Customer name and phone are required for khaata/partial payment'); return
     }
-    if (paymentType === 'partial' && !Number(cashAmount) && !Number(khaataAmount)) {
-      toast.error('Enter cash or khaata amount for partial payment'); return
+    if (paymentType === 'partial' && methodsTotal === 0 && !Number(khaataAmount)) {
+      toast.error('Enter a payment method or khaata amount for partial payment'); return
+    }
+    if (paymentType === 'cash' && methodsTotal > 0 && methodsTotal < billTotal - 0.01) {
+      toast.error(`Payment methods total (${formatCurrency(methodsTotal)}) is less than the bill (${formatCurrency(billTotal)})`); return
     }
     if (paymentType === 'oldGoldExchange' && !Number(oldGoldWeight)) {
       toast.error('Enter old gold weight'); return
@@ -610,8 +638,9 @@ const [actualAmountReceived, setActualAmountReceived] = useState('')
       actualAmountReceived: receivedAmount || null,
       discountAmount: computedDiscount,
       paidAmount: paymentType === 'cash' ? billTotal : (breakdown.oldGold ? (breakdown.oldGold.deduction || 0) + (breakdown.cash || 0) : (breakdown.cash || 0)),
-      cashAmount: breakdown.cash || 0,
+      cashAmount: paymentType === 'oldGoldExchange' ? (breakdown.cash || 0) : (cashMethodsTotal > 0 ? cashMethodsTotal : (paymentType === 'cash' ? billTotal : 0)),
       khaataAmount: breakdown.khaata || 0,
+      paymentMethods: validMethods,
       customerId,
       cashierName: cashierName.trim(),
       oldGoldDetails: breakdown.oldGold ? {
@@ -632,6 +661,7 @@ const [actualAmountReceived, setActualAmountReceived] = useState('')
       setPaymentType('cash')
       setCashAmount('')
       setKhaataAmount('')
+      setPaymentMethods([newPaymentMethod()])
       setActualAmountReceived('')
       setSelectedCustomer(null)
       setCustomerSearch('')
@@ -670,6 +700,7 @@ const [actualAmountReceived, setActualAmountReceived] = useState('')
       paymentType,
       cashAmount,
       khaataAmount,
+      paymentMethods: paymentMethods.map((m) => ({ ...m })),
       actualAmountReceived,
       customerName,
       customerPhone,
@@ -696,6 +727,7 @@ setCart(heldBill.cart || [])
     setPaymentType(heldBill.paymentType || 'cash')
     setCashAmount(heldBill.cashAmount || '')
     setKhaataAmount(heldBill.khaataAmount || '')
+    setPaymentMethods(Array.isArray(heldBill.paymentMethods) && heldBill.paymentMethods.length > 0 ? heldBill.paymentMethods : [newPaymentMethod()])
     setActualAmountReceived(heldBill.actualAmountReceived || '')
     setCustomerName(heldBill.customerName || '')
     setCustomerPhone(heldBill.customerPhone || '')
@@ -1218,14 +1250,33 @@ setCart(heldBill.cart || [])
               {PAYMENT_TYPES.map((pt) => (<option key={pt.value} value={pt.value}>{pt.label}</option>))}
             </select>
           </div>
-          {paymentType === 'cash' && (
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Cash Amount</label>
-              <input type="number" value={cashAmount} onChange={(e) => setCashAmount(e.target.value)} placeholder="Cash amount" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-              {Number(cashAmount) > billTotal && (
-                <p className="text-xs text-green-600 font-medium mt-1">
-                  Change due: {formatCurrency(Number(cashAmount) - billTotal)}
+          {(paymentType === 'cash' || paymentType === 'partial') && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium text-gray-600">Payment Methods</label>
+                <button type="button" onClick={addPaymentMethod} className="text-xs text-amber-700 hover:text-amber-900 font-medium">+ Add method</button>
+              </div>
+              {paymentMethods.map((pm, index) => (
+                <div key={pm.id} className="rounded-lg border border-gray-200 p-2 space-y-2">
+                  <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
+                    <select value={pm.method} onChange={(e) => updatePaymentMethod(index, { method: e.target.value })} className="rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white">
+                      {METHOD_OPTIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
+                    </select>
+                    <input type="number" value={pm.amount} onChange={(e) => updatePaymentMethod(index, { amount: e.target.value })} placeholder="Amount" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+                    <button type="button" onClick={() => removePaymentMethod(index)} disabled={paymentMethods.length <= 1} className="text-gray-400 hover:text-red-600 disabled:opacity-30 px-1 text-sm">✕</button>
+                  </div>
+                  {pm.method !== 'cash' && (
+                    <input type="text" value={pm.reference} onChange={(e) => updatePaymentMethod(index, { reference: e.target.value })} placeholder="Reference / cheque no. / QR / card" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+                  )}
+                </div>
+              ))}
+              {methodsTotal > 0 && (
+                <p className={`text-xs font-medium ${methodsTotal < billTotal - 0.01 ? 'text-red-600' : 'text-green-600'}`}>
+                  Methods total: {formatCurrency(methodsTotal)} of {formatCurrency(billTotal)}
                 </p>
+              )}
+              {paymentType === 'partial' && (
+                <input type="number" value={khaataAmount} onChange={(e) => setKhaataAmount(e.target.value)} placeholder="Khaata (credit) amount" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
               )}
             </div>
           )}
@@ -1233,12 +1284,6 @@ setCart(heldBill.cart || [])
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Credit Amount</label>
               <input type="number" value={khaataAmount} onChange={(e) => setKhaataAmount(e.target.value)} placeholder="Credit amount" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-            </div>
-          )}
-          {paymentType === 'partial' && (
-            <div className="space-y-2">
-              <input type="number" value={cashAmount} onChange={(e) => setCashAmount(e.target.value)} placeholder="Cash amount" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-              <input type="number" value={khaataAmount} onChange={(e) => setKhaataAmount(e.target.value)} placeholder="Khaata amount" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
             </div>
           )}
           {paymentType === 'oldGoldExchange' && (
@@ -1479,6 +1524,7 @@ setCart(heldBill.cart || [])
               grandTotal={billTotal}
               paymentType={previewPaymentLabel}
               paidAmount={previewPaidAmount}
+              paymentMethods={validMethods}
               oldGoldWeight={previewOldGold.netWeight || previewOldGold.weight}
               oldGoldAmount={previewOldGold.deduction}
               oldGoldPurity={previewOldGold.purity}

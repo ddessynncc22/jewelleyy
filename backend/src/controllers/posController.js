@@ -27,6 +27,25 @@ const round = (n, decimals = 4) => {
   return Math.round((Number(n) || 0) * f) / f;
 };
 
+// Keep only well-formed payment-method entries (method in cash|qr|cheque,
+// amount > 0). Falls back to a single cash row for the given cash amount so
+// legacy clients and older saved sales still have a receipt breakdown.
+function sanitizePaymentMethods(paymentMethods, cashAmount) {
+  const VALID = new Set(['cash', 'qr', 'cheque']);
+  if (Array.isArray(paymentMethods) && paymentMethods.length > 0) {
+    const cleaned = paymentMethods
+      .filter((m) => m && VALID.has(m.method) && Number(m.amount) > 0)
+      .map((m) => ({
+        method: m.method,
+        amount: Math.round(Number(m.amount) * 100) / 100,
+        reference: m.reference ? String(m.reference).trim().slice(0, 100) : '',
+      }));
+    if (cleaned.length > 0) return cleaned;
+  }
+  const cash = Number(cashAmount) || 0;
+  return cash > 0 ? [{ method: 'cash', amount: cash, reference: '' }] : [];
+}
+
 // When a POS sale carries an old-gold exchange (oldGoldDetails.weight > 0)
 // the gold the customer handed over is functionally a customer buy-back:
 // it enters the physical stock as unrefined metal and should be tracked as a
@@ -130,7 +149,7 @@ async function reverseOldGoldPurchase(sale, req) {
 
 exports.createSale = async (req, res) => {
   try {
-    const { items, paymentType, cashAmount, khaataAmount, oldGoldDetails, paymentBreakdown, totalAmount, taxAmount, diamondTaxAmount, paidAmount, actualAmountReceived, discountAmount, customerId, customer: customerField, saleDate, cashierName } = req.body;
+    const { items, paymentType, cashAmount, khaataAmount, oldGoldDetails, paymentBreakdown, paymentMethods, totalAmount, taxAmount, diamondTaxAmount, paidAmount, actualAmountReceived, discountAmount, customerId, customer: customerField, saleDate, cashierName } = req.body;
     if (!items || !Array.isArray(items) || items.length === 0 || !paymentType || !totalAmount) {
       return errorResponse(res, 'Items, payment type, and total amount are required', 400);
     }
@@ -192,12 +211,14 @@ exports.createSale = async (req, res) => {
     const adjustedTotal = Number((Number(totalAmount) + totalTaxAmount - discount).toFixed(2));
     const cash = Number(cashAmount || paymentBreakdown?.cash || 0);
     const khaata = Number(khaataAmount || paymentBreakdown?.khaata || 0);
+    const methods = sanitizePaymentMethods(paymentMethods, cash);
     const saleData = {
       saleNumber,
       items: saleItems,
       paymentType,
       cashAmount: cash,
       khaataAmount: khaata,
+      paymentMethods: methods,
       oldGoldDetails: ogd ? { description: '', weight: ogd.weight || 0, purity: ogd.purity || 0, deductionPercent: ogd.deductionPercent || 0, netWeight: ogd.netWeight || 0, value: ogd.value || 0, valuedAmount: ogd.valuedAmount || 0, deductibleAmount: ogd.deduction || ogd.deductibleAmount || 0 } : { description: '', weight: 0, purity: 0, deductionPercent: 0, netWeight: 0, value: 0, valuedAmount: 0, deductibleAmount: 0 },
       taxDetails: {
         totalTax: totalTaxAmount,
@@ -378,7 +399,7 @@ exports.createCombinedSale = async (req, res) => {
   try {
     const {
       items, lotLines, paymentType, cashAmount, khaataAmount, oldGoldDetails,
-      paymentBreakdown, taxAmount, diamondTaxAmount, paidAmount,
+      paymentBreakdown, paymentMethods, taxAmount, diamondTaxAmount, paidAmount,
       actualAmountReceived, discountAmount, customerId, customer: customerField,
       saleDate, cashierName,
     } = req.body;
@@ -489,6 +510,7 @@ exports.createCombinedSale = async (req, res) => {
     const adjustedTotal = Number((subtotal + totalTaxAmount - discount).toFixed(2));
     const cash = Number(cashAmount || paymentBreakdown?.cash || 0);
     const khaata = Number(khaataAmount || paymentBreakdown?.khaata || 0);
+    const methods = sanitizePaymentMethods(paymentMethods, cash);
     const ogd = oldGoldDetails || paymentBreakdown?.oldGold || null;
     const resolvedCustomer = customerId || customerField || null;
     const paid = paidAmount !== undefined ? Number(paidAmount) : (paymentType === 'cash' ? adjustedTotal : 0);
@@ -513,6 +535,7 @@ exports.createCombinedSale = async (req, res) => {
       paymentType,
       cashAmount: cash,
       khaataAmount: khaata,
+      paymentMethods: methods,
       oldGoldDetails: ogd
         ? { description: '', weight: ogd.weight || 0, purity: ogd.purity || 0, deductionPercent: ogd.deductionPercent || 0, netWeight: ogd.netWeight || 0, value: ogd.value || 0, valuedAmount: ogd.valuedAmount || 0, deductibleAmount: ogd.deduction || ogd.deductibleAmount || 0 }
         : { description: '', weight: 0, purity: 0, deductionPercent: 0, netWeight: 0, value: 0, valuedAmount: 0, deductibleAmount: 0 },

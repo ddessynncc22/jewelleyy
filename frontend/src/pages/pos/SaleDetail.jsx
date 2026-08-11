@@ -182,6 +182,19 @@ const SaleDetail = () => {
                 ))}
               </div>
             )}
+            {Array.isArray(sale.paymentMethods) && sale.paymentMethods.length > 0 && (
+              <div className="space-y-1">
+                {sale.paymentMethods.map((pm, i) => (
+                  <div key={i} className="flex justify-between text-xs">
+                    <span className="text-gray-600">
+                      {(pm.method || 'cash').toUpperCase()}
+                      {pm.reference ? ` · ${pm.reference}` : ''}
+                    </span>
+                    <span className="text-gray-900">{formatCurrency(pm.amount)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
             {sale.changeReturned > 0 && (
               <div className="flex justify-between">
                 <span className="text-gray-600">Change Returned</span>

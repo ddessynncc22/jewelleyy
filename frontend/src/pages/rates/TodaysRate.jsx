@@ -68,7 +68,7 @@ export default function TodaysRate() {
             <TrendingUp className="h-8 w-8 text-[var(--color-gold-600)]" />
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-[var(--color-text)]">Today&apos;s Gold &amp; Silver Rate</h1>
-          <p className="mt-1 text-[var(--color-text-secondary)]">Daily scraped from hamropatro.com at 11:30 AM NPT</p>
+          <p className="mt-1 text-[var(--color-text-secondary)]">Auto-updated daily at 11:30 AM NPT</p>
         </div>
 
         <div className="grid gap-6">
@@ -153,8 +153,7 @@ export default function TodaysRate() {
             Refresh
           </button>
           <p className="mt-2 text-xs text-[var(--color-text-secondary)]">
-            Source: <a href="https://www.hamropatro.com/gold" target="_blank" rel="noopener noreferrer" className="underline hover:text-[var(--color-gold-700)]">hamropatro.com/gold</a>
-            {' '}Â· Auto-updated daily at 11:30 AM
+            Auto-updated daily at 11:30 AM
           </p>
         </div>
       </div>

@@ -137,9 +137,6 @@ const formatStoneLine = (item) => {
     const cutLabel = CUT_LABELS[cut] || item.cut
     parts.push(stoneType === 'diamond' && cut !== 'round' ? `Fancy ${cutLabel}` : cutLabel)
   }
-  if (item.clarity && item.clarity.toLowerCase() !== 'none') parts.push(item.clarity)
-  const stoneWeight = Number(item.stoneWeightGram || 0)
-  if (stoneWeight > 0) parts.push(`${stoneWeight}g`)
   return parts.join(' · ')
 }
 
@@ -194,18 +191,30 @@ const FilterSelect = ({ label, value, onChange, options = [], placeholder }) => 
 
 const ItemCard = ({ item, selected, onToggleSelect, onOpen, onEdit, onDelete }) => {
   const imgSrc = getImageSrc(item.images?.[0])
+  const isLoose = item.itemType === 'loose'
+  const stoneLine = formatStoneLine(item)
+
+  const infoTile = (label, value, title) => (
+    <div className="rounded-xl bg-[var(--color-ink-50)] px-2 py-2 text-center">
+      <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--color-ink-400)]">{label}</p>
+      <p className="mt-0.5 truncate text-xs font-semibold text-[var(--color-text)] num" title={title}>
+        {value}
+      </p>
+    </div>
+  )
+
   return (
     <div
       onClick={onOpen}
-      className="group cursor-pointer overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg"
+      className="group cursor-pointer overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] shadow-[var(--shadow-sm)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--color-gold-300)] hover:shadow-[var(--shadow-md)]"
     >
-      <div className="relative aspect-square bg-[var(--color-elevated)]">
+      <div className="relative aspect-square overflow-hidden bg-[var(--color-elevated)]">
         {imgSrc ? (
           <img
             src={imgSrc}
             alt={item.itemName || 'Item'}
-            className="h-full w-full object-cover"
             loading="lazy"
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center">
@@ -222,17 +231,22 @@ const ItemCard = ({ item, selected, onToggleSelect, onOpen, onEdit, onDelete }) 
             e.stopPropagation()
             onToggleSelect()
           }}
-          className="absolute right-3 top-3 inline-flex h-6 w-6 items-center justify-center rounded-lg bg-[var(--color-card)]/90 shadow-sm transition-colors hover:bg-[var(--color-card)]"
+          className={`absolute right-3 top-3 inline-flex h-7 w-7 items-center justify-center rounded-lg shadow-sm transition-all ${
+            selected
+              ? 'bg-[var(--color-gold-600)] text-white'
+              : 'bg-[var(--color-card)]/90 text-[var(--color-text-secondary)] hover:bg-[var(--color-card)]'
+          }`}
         >
-          {selected ? (
-            <CheckSquare className="h-4 w-4 text-[var(--color-primary)]" />
-          ) : (
-            <Square className="h-4 w-4 text-[var(--color-text-secondary)]" />
-          )}
+          {selected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
         </button>
+        {!isLoose && item.sellingPrice > 0 && (
+          <div className="absolute bottom-3 left-3 rounded-lg bg-[var(--color-card)]/95 px-2.5 py-1 shadow-sm backdrop-blur-sm">
+            <p className="whitespace-nowrap text-sm font-bold text-[var(--color-text)] num">{formatCurrency(item.sellingPrice)}</p>
+          </div>
+        )}
       </div>
 
-      <div className="space-y-2.5 p-4">
+      <div className="space-y-3 p-4">
         <div>
           <div className="flex items-center gap-1.5">
             <h3
@@ -242,52 +256,38 @@ const ItemCard = ({ item, selected, onToggleSelect, onOpen, onEdit, onDelete }) 
               {item.itemName || 'Untitled item'}
             </h3>
             {hasDiamond(item) && <DiamondBadge />}
-            {item.itemType === 'loose' && <LooseBadge />}
+            {isLoose && <LooseBadge />}
           </div>
-          <p className="mt-0.5 font-mono text-xs text-[var(--color-text-secondary)]">
-            {item.SKU || '-'}
-          </p>
+          <div className="mt-0.5 flex items-center gap-1.5 font-mono text-xs text-[var(--color-ink-400)]">
+            <span className="truncate">{item.SKU || '-'}</span>
+            {item.designCode && <span className="shrink-0">· {item.designCode}</span>}
+          </div>
         </div>
 
-        {item.itemType === 'loose' ? (
-          <div className="border-t border-[var(--color-border)] pt-2.5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-[var(--color-text-secondary)]">Stock remaining</p>
-                <p className="text-sm font-semibold text-[var(--color-text)]">
-                  {item.looseRemainingPieces ?? 0} pcs · {formatWeight(item.looseRemainingWeight ?? 0)}
-                </p>
-                <p className="text-xs text-[var(--color-text-secondary)]">
-                  {item.looseLotCount ?? 0} lot{item.looseLotCount === 1 ? '' : 's'} ·{' '}
-                  {formatCurrency(item.loosePerGramRate)}/g
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="text-xs text-[var(--color-text-secondary)]">Loose stock value</p>
-                <p className="text-sm font-semibold text-[var(--color-primary)]">
-                  {formatCurrency(item.computedValue)}
-                </p>
-              </div>
+        {isLoose ? (
+          <>
+            <div className="grid grid-cols-3 gap-2">
+              {infoTile('Pieces', `${item.looseRemainingPieces ?? 0}`)}
+              {infoTile('Weight', formatWeight(item.looseRemainingWeight ?? 0))}
+              {infoTile('Rate', `${formatCurrency(item.loosePerGramRate)}/g`)}
             </div>
-          </div>
+            <p className="truncate whitespace-nowrap text-xs text-[var(--color-ink-400)]">
+              Stock value{' '}
+              <span className="font-semibold text-[var(--color-gold-700)] num">
+                {formatCurrency(item.computedValue)}
+              </span>
+              {' · '}{item.looseLotCount ?? 0} lot{item.looseLotCount === 1 ? '' : 's'}
+            </p>
+          </>
         ) : (
-          <div className="space-y-2.5">
-            <div className="border-t border-[var(--color-border)] pt-2.5">
-              <p className="text-xs text-[var(--color-text-secondary)]">Gross weight</p>
-              <p className="text-sm font-semibold text-[var(--color-text)]">
-                {formatWeight(item.grossWeight)}
-              </p>
-            </div>
-            {formatStoneLine(item) && (
-              <div className="border-t border-[var(--color-border)] pt-2.5">
-                <p className="text-xs text-[var(--color-text-secondary)]">Stone</p>
-                <p className="text-sm font-semibold text-[var(--color-text)]">{formatStoneLine(item)}</p>
-              </div>
-            )}
+          <div className="grid grid-cols-3 gap-2">
+            {infoTile('Gross', formatWeight(item.grossWeight))}
+            {infoTile(stoneLine ? 'Stone' : 'Net', stoneLine || formatWeight(item.netMetalWeight ?? 0))}
+            {infoTile('Net', formatWeight(item.netMetalWeight ?? 0))}
           </div>
         )}
 
-        <div className="flex items-center justify-between pt-1">
+        <div className="flex items-center justify-between border-t border-[var(--color-border)] pt-2.5">
           <div className="flex min-w-0 items-center gap-1.5">
             {item.metalType && (
               <span
@@ -660,6 +660,11 @@ const ItemList = () => {
               <p className="font-mono text-xs text-[var(--color-text-secondary)]">
                 {row.SKU || '-'}
               </p>
+              {row.designCode && (
+                <p className="font-mono text-xs text-[var(--color-text-secondary)]">
+                  {row.designCode}
+                </p>
+              )}
             </div>
           </div>
         )
