@@ -5,7 +5,18 @@ const { protect, authorize } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const { sendSuccess, sendError } = require('../utils/response');
 const { Sale, Item, StockMovement, CustomerLedger, ActivityLog } = require('../models');
-const { generateSaleNumber, getPagination } = require('../utils/helpers');
+const { generateSaleNumber, getPagination, escapeRegex } = require('../utils/helpers');
+
+// Whitelist for PUT /:id — prevents overwriting identifiers, auditors, ledger
+// state, or soft-delete flags through mass assignment.
+const SALE_UPDATABLE_FIELDS = ['paymentType', 'totalAmount', 'paidAmount', 'cashAmount', 'khaataAmount', 'customer', 'saleDate', 'note', 'notes', 'taxDetails', 'discountAmount'];
+const saleUpdateData = (body) => {
+  const out = {};
+  for (const f of SALE_UPDATABLE_FIELDS) {
+    if (body[f] !== undefined) out[f] = body[f];
+  }
+  return out;
+};
 
 router.get('/', protect, async (req, res, next) => {
   try {
@@ -13,7 +24,7 @@ router.get('/', protect, async (req, res, next) => {
     const filter = {};
 
     if (req.query.search) {
-      const searchRegex = new RegExp(req.query.search, 'i');
+      const searchRegex = new RegExp(escapeRegex(req.query.search), 'i');
       filter.$or = [{ saleNumber: searchRegex }];
     }
     if (req.query.paymentType) filter.paymentType = req.query.paymentType;
@@ -157,7 +168,7 @@ router.post(
 
 router.put('/:id', protect, authorize('admin', 'manager'), async (req, res, next) => {
   try {
-    const sale = await Sale.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+    const sale = await Sale.findByIdAndUpdate(req.params.id, saleUpdateData(req.body), { new: true, runValidators: true });
     if (!sale) {
       return sendError(res, 'Sale not found', 404);
     }

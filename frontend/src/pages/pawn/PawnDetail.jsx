@@ -204,8 +204,10 @@ const PawnDetail = () => {
     const paid = loan.totalPaid || 0
     const bal = balanceFromTranches
     const now = new Date().toLocaleDateString('en-IN')
+    const esc = (v) =>
+      String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
     receiptWindow.document.write(`
-      <html><head><title>Payment Receipt - ${loan.loanNumber}</title>
+      <html><head><title>Payment Receipt - ${esc(loan.loanNumber)}</title>
       <style>
         body { font-family: monospace; font-size: 12px; padding: 20px; }
         h2 { text-align: center; margin-bottom: 5px; }
@@ -214,14 +216,14 @@ const PawnDetail = () => {
         .total { font-weight: bold; border-top: 1px solid #000; padding-top: 4px; margin-top: 4px; }
         .center { text-align: center; }
       </style></head><body>
-        <h2>${storeName}</h2>
-        ${storeAddress ? `<p class="center">${storeAddress}</p>` : ''}
-        ${storePhone ? `<p class="center">${storePhone}</p>` : ''}
+        <h2>${esc(storeName)}</h2>
+        ${storeAddress ? `<p class="center">${esc(storeAddress)}</p>` : ''}
+        ${storePhone ? `<p class="center">${esc(storePhone)}</p>` : ''}
         <p class="center">Payment Receipt</p>
         <hr/>
-        <p>Receipt Date: ${now}</p>
-        <p>Loan #: ${loan.loanNumber}</p>
-        <p>Customer: ${loan.customer?.name || '-'}</p>
+        <p>Receipt Date: ${esc(now)}</p>
+        <p>Loan #: ${esc(loan.loanNumber)}</p>
+        <p>Customer: ${esc(loan.customer?.name || '-')}</p>
         <hr/>
         <div class="row"><span>Total Principal</span><span>${formatCurrency(loan.loanAmount)}</span></div>
         <div class="row"><span>Monthly Interest</span><span>${loan.interestRate}%</span></div>

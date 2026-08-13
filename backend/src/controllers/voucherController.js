@@ -4,6 +4,8 @@ const Voucher = require('../models/Voucher');
 const VoucherEntry = require('../models/VoucherEntry');
 const MetalToCashDetail = require('../models/MetalToCashDetail');
 const ActivityLog = require('../models/ActivityLog');
+const Sale = require('../models/Sale');
+const Purchase = require('../models/Purchase');
 const { successResponse, errorResponse, paginatedResponse } = require('../utils/response');
 const { scopeAggregate } = require('../utils/tenant');
 const { getNextVoucherNumber } = require('../services/sequence');
@@ -578,13 +580,72 @@ exports.getDayBook = async (req, res) => {
       });
     });
 
+    // Sales and purchases for the same day, ledger style.
+    const [sales, purchases] = await Promise.all([
+      Sale.find({ saleDate: { $gte: start, $lte: end } })
+        .populate('customer', 'name customerCode')
+        .populate('soldBy', 'name')
+        .sort({ saleDate: 1, createdAt: 1 })
+        .lean(),
+      Purchase.find({ date: { $gte: start, $lte: end } })
+        .populate('customer', 'name customerCode')
+        .sort({ date: 1, createdAt: 1 })
+        .lean(),
+    ]);
+
+    const SALE_PAYMENT_LABELS = {
+      cash: 'Cash',
+      khaata: 'Khaata',
+      partial: 'Partial',
+      oldGoldExchange: 'Old Gold',
+    };
+
+    const salesRows = sales.map((s) => ({
+      _id: s._id,
+      number: s.saleNumber,
+      date: s.saleDate,
+      customerName: s.customer ? s.customer.name : s.cashierName || 'Walk-in',
+      paymentType: SALE_PAYMENT_LABELS[s.paymentType] || s.paymentType,
+      itemCount: (s.items || []).length,
+      totalAmount: round2(s.totalAmount),
+      tax: round2(s.taxDetails ? s.taxDetails.totalTax : 0),
+      paidAmount: round2(s.paidAmount),
+      balance: round2(s.balance),
+      soldBy: s.soldBy ? s.soldBy.name : '',
+    }));
+
+    const purchaseRows = purchases.map((p) => ({
+      _id: p._id,
+      number: p.purchaseNumber,
+      date: p.date,
+      partyName:
+        p.type === 'supplier'
+          ? p.supplierName || ''
+          : p.customer
+            ? p.customer.name
+            : p.customerName || '',
+      partyType: p.type,
+      itemCount: (p.items || []).length,
+      totalValue: round2(p.totals ? p.totals.totalValue : 0),
+      goldValue: round2(p.totals ? p.totals.goldValue : 0),
+      silverValue: round2(p.totals ? p.totals.silverValue : 0),
+      paidAmount: round2(p.paidAmount),
+      balanceDue: round2(p.balanceDue),
+    }));
+
     return successResponse(res, {
       date,
       rows,
+      sales: salesRows,
+      purchases: purchaseRows,
       summary: {
         totalDebit: round2(rows.reduce((s, row) => s + row.debit, 0)),
         totalCredit: round2(rows.reduce((s, row) => s + row.credit, 0)),
         voucherCount: vouchers.length,
+        saleCount: sales.length,
+        saleTotal: round2(sales.reduce((s, x) => s + x.totalAmount, 0)),
+        purchaseCount: purchases.length,
+        purchaseTotal: round2(purchases.reduce((s, x) => s + x.totals.totalValue, 0)),
       },
     }, 'Day book retrieved');
   } catch (error) {

@@ -3,6 +3,8 @@
 backend/.env
 frontend/.env
 *.env.local
+certs/
+*.pem
 
 node_modules/
 dist/
@@ -10,5 +12,3 @@ dist/
 backend/uploads/
 *.tmp.js
 *.log
-.\CLAUDE.md
-CLAUDE.md

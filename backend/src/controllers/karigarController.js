@@ -457,7 +457,6 @@ exports.getKarigarReport = async (req, res) => {
       const due = Number(m.paymentDue) || Number(m.payment) || 0;
       return sum + Math.max(0, due - (Number(m.paymentReceived) || 0));
     }, 0);
-    const totalGoldTaken = materials.reduce((sum, m) => sum + (m.goldReceived || []).reduce((gsum, g) => gsum + (g.value || 0), 0), 0);
     const totalPayments = materials.reduce((sum, m) => sum + (m.paymentHistory || []).reduce((psum, p) => psum + (p.type === 'gold' ? p.goldValue : p.amount), 0), 0);
     const issuedCount = materials.length;
     const returnedCount = materials.filter((m) => m.status === 'Returned').length;
@@ -465,7 +464,7 @@ exports.getKarigarReport = async (req, res) => {
     const balances = computeBalances(karigar);
     return successResponse(res, {
       karigar: { _id: karigar._id, name: karigar.name, phone: karigar.phone, specialization: karigar.specialization },
-      summary: { issuedCount, returnedCount, pendingCount, totalIssuedWeight, totalReturnedWeight, totalWastage, totalLabour, totalJarti, totalPayment, pendingPayment, totalGoldTaken, totalPayments, wastagePercentage: totalIssuedWeight > 0 ? ((totalWastage / totalIssuedWeight) * 100).toFixed(2) : 0, outstandingWeight: balances.outstandingWeight, outstandingByMetal: balances.outstandingByMetal },
+      summary: { issuedCount, returnedCount, pendingCount, totalIssuedWeight, totalReturnedWeight, totalWastage, totalLabour, totalJarti, totalPayment, pendingPayment, totalPayments, wastagePercentage: totalIssuedWeight > 0 ? ((totalWastage / totalIssuedWeight) * 100).toFixed(2) : 0, outstandingWeight: balances.outstandingWeight, outstandingByMetal: balances.outstandingByMetal },
       materials,
     });
   } catch (error) {
@@ -562,47 +561,6 @@ exports.recordKarigarPayment = async (req, res) => {
   }
 };
 
-exports.recordGoldTaken = async (req, res) => {
-  try {
-    const { materialIndex, weight, karat, purity, value, note } = req.body;
-    if (materialIndex === undefined) {
-      return errorResponse(res, 'Material index is required', 400);
-    }
-    if (weight === undefined || weight === null || weight === '' || Number(weight) < 0) {
-      return errorResponse(res, 'Gold weight is required', 400);
-    }
-    const karigar = await Karigar.findById(req.params.id);
-    if (!karigar) {
-      return errorResponse(res, 'Karigar not found', 404);
-    }
-    const material = karigar.materials[materialIndex];
-    if (!material) {
-      return errorResponse(res, 'Material record not found at given index', 404);
-    }
-    const goldEntry = {
-      date: req.body.date ? new Date(req.body.date) : Date.now(),
-      weight: Number(weight),
-      karat: Number(karat || 24),
-      purity: Number(purity || 999),
-      value: Number(value || 0),
-      note: note || '',
-    };
-    material.goldReceived.push(goldEntry);
-    await karigar.save();
-    await ActivityLog.create({
-      action: 'recordGoldTaken',
-      module: 'karigar',
-      description: `Gold taken from ${karigar.name}: ${goldEntry.weight}g (${goldEntry.karat}K, Rs. ${goldEntry.value})`,
-      performedBy: req.user._id,
-      referenceId: karigar._id,
-      referenceModel: 'Karigar',
-    });
-    return successResponse(res, { karigar, material, goldEntry }, 'Gold taken record added successfully', 201);
-  } catch (error) {
-    return errorResponse(res, error.message, 500);
-  }
-};
-
 exports.getKarigarPaymentHistory = async (req, res) => {
   try {
     const karigar = await Karigar.findById(req.params.id).select('name materials');
@@ -624,22 +582,6 @@ exports.getKarigarPaymentHistory = async (req, res) => {
             goldPurity: p.goldPurity || 999,
             goldValue: p.goldValue || 0,
             note: p.note || '',
-          });
-        });
-      }
-      if (m.goldReceived && m.goldReceived.length > 0) {
-        m.goldReceived.forEach((g) => {
-          history.push({
-            materialIndex: index,
-            materialName: m.itemName,
-            date: g.date,
-            amount: 0,
-            type: 'gold_taken',
-            goldWeight: g.weight || 0,
-            goldKarat: g.karat || 24,
-            goldPurity: g.purity || 999,
-            goldValue: g.value || 0,
-            note: g.note || '',
           });
         });
       }

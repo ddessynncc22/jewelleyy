@@ -19,7 +19,5 @@ export const updateMaterialStatus = (id, materialIndex, status) =>
   api.patch(`/karigars/${id}/materials/${materialIndex}`, { status });
 export const recordKarigarPayment = (id, materialIndex, data) =>
   api.post(`/karigars/${id}/materials/${materialIndex}/payment`, data);
-export const recordGoldTaken = (id, materialIndex, data) =>
-  api.post(`/karigars/${id}/materials/${materialIndex}/gold-taken`, data);
 export const getKarigarPaymentHistory = (id) =>
   api.get(`/karigars/${id}/payments`);

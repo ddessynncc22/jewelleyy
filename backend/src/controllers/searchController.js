@@ -3,6 +3,7 @@ const Customer = require('../models/Customer');
 const PawnLoan = require('../models/PawnLoan');
 const Karigar = require('../models/Karigar');
 const { successResponse, errorResponse } = require('../utils/response');
+const { escapeRegex } = require('../utils/helpers');
 
 exports.globalSearch = async (req, res) => {
   try {
@@ -10,7 +11,7 @@ exports.globalSearch = async (req, res) => {
     if (!q || q.trim().length === 0) {
       return errorResponse(res, 'Search query is required', 400);
     }
-    const searchRegex = new RegExp(q.trim(), 'i');
+    const searchRegex = new RegExp(escapeRegex(q.trim()), 'i');
     const [items, customers, pawnLoans, karigars] = await Promise.all([
       Item.find({
         $or: [

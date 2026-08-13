@@ -6,8 +6,9 @@ import toast from 'react-hot-toast'
 
 import { ArrowLeft, Plus, User, ClipboardList, Printer } from 'lucide-react'
 
-import { getKarigar, deleteKarigar, issueMaterial, receiveFinished, getKarigarReport, updateMaterialStatus, recordKarigarPayment, recordGoldTaken, getKarigarPaymentHistory } from '../../services/karigarService'
+import { getKarigar, deleteKarigar, issueMaterial, receiveFinished, getKarigarReport, updateMaterialStatus, recordKarigarPayment, getKarigarPaymentHistory } from '../../services/karigarService'
 import { getItems } from '../../services/itemService'
+import { getLooseLots } from '../../services/looseLotService'
 
 import Card from '../../components/ui/Card'
 
@@ -79,6 +80,7 @@ const KarigarDetail = () => {
   const [karigar, setKarigar] = useState(null)
   const [report, setReport] = useState(null)
   const [items, setItems] = useState([])
+  const [looseLots, setLooseLots] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadingItems, setLoadingItems] = useState(false)
   const [error, setError] = useState(null)
@@ -89,7 +91,6 @@ const KarigarDetail = () => {
   const [issueModalOpen, setIssueModalOpen] = useState(false)
   const [receiveModalOpen, setReceiveModalOpen] = useState(false)
   const [paymentModalOpen, setPaymentModalOpen] = useState(false)
-  const [goldModalOpen, setGoldModalOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [paymentHistory, setPaymentHistory] = useState([])
@@ -103,14 +104,6 @@ const KarigarDetail = () => {
     ratePerGram: '',
     note: '',
     payFull: false,
-  })
-  const [goldForm, setGoldForm] = useState({
-    materialIndex: '',
-    weight: '',
-    karat: '24',
-    purity: '999',
-    value: '',
-    note: '',
   })
 
   const [issueForm, setIssueForm] = useState({
@@ -193,11 +186,17 @@ const KarigarDetail = () => {
     if (!id) return
     setLoadingItems(true)
     try {
-      const res = await getItems({ karigarId: id })
-      const data = res.data?.data || res.data || []
-      setItems(Array.isArray(data) ? data : [])
+      const [itemsRes, lotsRes] = await Promise.all([
+        getItems({ karigarId: id, itemType: 'tagged', limit: 100 }),
+        getLooseLots({ karigarId: id, limit: 100 }),
+      ])
+      const itemData = itemsRes.data?.data || itemsRes.data || []
+      const lotData = lotsRes.data?.data || lotsRes.data || []
+      setItems((Array.isArray(itemData) ? itemData : []).map((i) => ({ ...i, _productType: 'item' })))
+      setLooseLots((Array.isArray(lotData) ? lotData : []).map((l) => ({ ...l, _productType: 'loose' })))
     } catch {
       setItems([])
+      setLooseLots([])
     } finally {
       setLoadingItems(false)
     }
@@ -239,31 +238,6 @@ const KarigarDetail = () => {
       fetchPaymentHistory()
     } catch (err) {
       toast.error(err?.response?.data?.message || 'Failed to record payment')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  const handleRecordGold = async (e) => {
-    e.preventDefault()
-    setSubmitting(true)
-    try {
-      const payload = {
-        materialIndex: Number(goldForm.materialIndex),
-        weight: Number(goldForm.weight),
-        karat: Number(goldForm.karat),
-        purity: Number(goldForm.purity),
-        value: Number(goldForm.value) || 0,
-        note: goldForm.note,
-      }
-      await recordGoldTaken(id, Number(goldForm.materialIndex), payload)
-      toast.success('Gold taken record added successfully')
-      setGoldModalOpen(false)
-      setGoldForm({ materialIndex: '', weight: '', karat: '24', purity: '999', value: '', note: '' })
-      fetchKarigar()
-      fetchPaymentHistory()
-    } catch (err) {
-      toast.error(err?.response?.data?.message || 'Failed to record gold taken')
     } finally {
       setSubmitting(false)
     }
@@ -596,19 +570,61 @@ const KarigarDetail = () => {
   ]
 
   const productColumns = [
-    { key: 'SKU', label: 'SKU' },
-    { key: 'itemName', label: 'Item Name' },
-    { key: 'category', label: 'Category' },
+    {
+      key: '_productType',
+      label: 'Type',
+      sortable: false,
+      render: (val) =>
+        val === 'loose' ? (
+          <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 border border-amber-200">Loose</span>
+        ) : (
+          <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 border border-blue-200">Item</span>
+        ),
+    },
+    {
+      key: 'SKU',
+      label: 'SKU / Barcode',
+      render: (val, row) => (row._productType === 'loose' ? row.lotBarcode || '-' : val || '-'),
+    },
+    { key: 'itemName', label: 'Item Name', render: (val) => val || '-' },
+    { key: 'category', label: 'Category', render: (val) => val || '-' },
     { key: 'metalType', label: 'Metal', render: (val) => val || '-' },
     { key: 'purity', label: 'Purity', render: (val) => (val ? `${val}` : '-') },
-    { key: 'grossWeight', label: 'Weight', render: (val) => (val ? `${val}g` : '-') },
-    { key: 'sellingPrice', label: 'Selling Price', render: (val) => formatCurrency(val || 0) },
-    { key: 'sellingMakingCharge', label: 'Making Charge', render: (val) => formatCurrency(val || 0) },
-    { key: 'sellingWastagePercent', label: 'Wastage %', render: (val) => (val ? `${val}%` : '-') },
-    { key: 'status', label: 'Status', render: (val) => <StatusBadge status={val} size="sm" /> },
+    {
+      key: 'grossWeight',
+      label: 'Weight',
+      render: (val, row) => (row._productType === 'loose' ? (row.remainingWeight != null ? `${row.remainingWeight}g` : '-') : val ? `${val}g` : '-'),
+    },
+    {
+      key: 'pieces',
+      label: 'Pieces',
+      sortable: false,
+      render: (val, row) => (row._productType === 'loose' ? `${row.remainingPieces ?? 0}/${row.totalPieces ?? 0}` : '-'),
+    },
+    {
+      key: 'ratePerGram',
+      label: 'Rate /g',
+      render: (val, row) => (row._productType === 'loose' ? (val ? formatCurrency(val) : '-') : '-'),
+    },
+    {
+      key: 'sellingPrice',
+      label: 'Selling Price',
+      render: (val, row) => (row._productType === 'loose' ? '-' : formatCurrency(val || 0)),
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (val, row) =>
+        row._productType === 'loose'
+          ? val === 'active'
+            ? <StatusBadge status="Active" size="sm" />
+            : <StatusBadge status="Closed" size="sm" />
+          : <StatusBadge status={val} size="sm" />,
+    },
   ]
 
-const totalGoldTaken = (karigar.materials || []).reduce((s, m) => s + (m.goldReceived || []).reduce((gs, g) => gs + (g.value || 0), 0), 0)
+const products = [...(items || []), ...(looseLots || [])]
+
   const reportCards = report
      ? [
          { label: 'Materials Issued', value: report.summary?.issuedCount ?? 0 },
@@ -622,16 +638,12 @@ const totalGoldTaken = (karigar.materials || []).reduce((s, m) => s + (m.goldRec
            label: 'Total Payment',
            value: formatCurrency(report.summary?.totalPayment ?? 0),
          },
+{
+            label: 'Pending Payment',
+            value: formatCurrency(report.summary?.pendingPayment ?? 0),
+          },
          {
-           label: 'Pending Payment',
-           value: formatCurrency(report.summary?.pendingPayment ?? 0),
-         },
-         {
-           label: 'Total Gold Taken',
-           value: formatCurrency(report.summary?.totalGoldTaken ?? 0),
-         },
-         {
-           label: 'Total Payments Recorded',
+            label: 'Total Payments Recorded',
            value: formatCurrency(report.summary?.totalPayments ?? 0),
          },
          {
@@ -741,13 +753,21 @@ const totalGoldTaken = (karigar.materials || []).reduce((s, m) => s + (m.goldRec
         <div className="space-y-4">
           {loadingItems ? (
             <LoadingSkeleton count={3} type="card" />
-          ) : items.length === 0 ? (
+          ) : products.length === 0 ? (
             <EmptyState
               title="No products"
-              description="No items are linked to this karigar"
+              description="No items or loose lots are linked to this karigar"
             />
           ) : (
-            <DataTable columns={productColumns} data={items} />
+            <DataTable
+              columns={productColumns}
+              data={products}
+              onRowClick={(row) =>
+                row._productType === 'loose'
+                  ? navigate(`/loose-lots/${row._id}`)
+                  : navigate(`/items/${row._id}`)
+              }
+            />
           )}
         </div>
        )}
@@ -779,10 +799,6 @@ const totalGoldTaken = (karigar.materials || []).reduce((s, m) => s + (m.goldRec
                           <p className="text-xs text-gray-500">Total Payment</p>
                           <p className="text-lg font-bold text-gray-900">{formatCurrency(totalDue)}</p>
                         </div>
-                        <div className="rounded-lg bg-purple-50 p-3">
-                          <p className="text-xs text-gray-500">Total Gold Taken</p>
-                          <p className="text-lg font-bold text-purple-700">{formatCurrency(totalGoldTaken)}</p>
-                        </div>
                       </>
                     )
                   })()}
@@ -790,7 +806,7 @@ const totalGoldTaken = (karigar.materials || []).reduce((s, m) => s + (m.goldRec
            </Card>
            <Card title="Payment Timeline">
              {paymentHistory.filter((h) => !(h.type === 'cash' && Number(h.amount) <= 0) && !(h.type !== 'cash' && Number(h.goldWeight) <= 0)).length === 0 ? (
-               <EmptyState title="No payment records" description="Record a payment or gold taken to see the timeline" />
+               <EmptyState title="No payment records" description="Record a payment to see the timeline" />
              ) : (
                <div className="space-y-3">
                  {paymentHistory
@@ -799,7 +815,7 @@ const totalGoldTaken = (karigar.materials || []).reduce((s, m) => s + (m.goldRec
                    <div key={i} className="flex items-center justify-between rounded-lg border border-gray-200 p-3">
                      <div>
                        <p className="text-sm font-medium text-gray-900">
-                         {h.type === 'gold_taken' ? 'Gold Taken' : h.type === 'gold' ? 'Gold Payment' : 'Cash Payment'}
+                         {h.type === 'gold' ? 'Gold Payment' : 'Cash Payment'}
                        </p>
                        <p className="text-xs text-gray-500">
                          {h.materialName} · {h.date ? new Date(h.date).toLocaleDateString() : ''}
@@ -807,12 +823,7 @@ const totalGoldTaken = (karigar.materials || []).reduce((s, m) => s + (m.goldRec
                        </p>
                      </div>
                       <div className="text-right">
-                        {h.type === 'gold_taken' ? (
-                          <>
-                            <span className="text-sm font-medium text-purple-700">{h.goldWeight}g {h.goldKarat}K</span>
-                            {Number(h.goldValue) > 0 && <span className="block text-xs text-gray-500">{formatCurrency(h.goldValue)}</span>}
-                          </>
-                        ) : h.type === 'gold' ? (
+                        {h.type === 'gold' ? (
                           <>
                             <span className="text-sm font-medium text-gray-900">{formatCurrency(h.goldValue || 0)}</span>
                             <span className="block text-xs text-gray-500">{h.goldWeight}g {h.goldKarat}K</span>
@@ -829,9 +840,6 @@ const totalGoldTaken = (karigar.materials || []).reduce((s, m) => s + (m.goldRec
            <div className="flex gap-3">
              <Button onClick={() => { setPaymentForm((p) => ({ ...p, materialIndex: '' })); setPaymentModalOpen(true) }}>
                Record Payment
-             </Button>
-             <Button variant="outline" onClick={() => { setGoldForm((f) => ({ ...f, materialIndex: '' })); setGoldModalOpen(true) }}>
-               Record Gold Taken
              </Button>
            </div>
          </div>
@@ -1334,73 +1342,7 @@ const totalGoldTaken = (karigar.materials || []).reduce((s, m) => s + (m.goldRec
            </div>
            </>
            )}
-         </form>
-       </Modal>
-
-       <Modal
-         isOpen={goldModalOpen}
-         onClose={() => setGoldModalOpen(false)}
-         title="Record Gold Taken from Karigar"
-       >
-         <form onSubmit={handleRecordGold} className="space-y-4">
-           <FormSelect
-             label="Material"
-              name="materialIndex"
-               options={(karigar.materials || []).map((m, i) => ({ value: i, label: `${m.itemName} (${m.grossWeight}g)` }))}
-              value={goldForm.materialIndex}
-             onChange={(e) => setGoldForm((f) => ({ ...f, materialIndex: e.target.value }))}
-             required
-           />
-           <FormInput
-             label="Gold Weight (g)"
-             name="weight"
-             type="number"
-             step="0.001"
-             value={goldForm.weight}
-             onChange={(e) => setGoldForm((f) => ({ ...f, weight: e.target.value }))}
-             placeholder="e.g. 1.5"
-             required
-           />
-           <FormSelect
-             label="Gold Karat"
-             name="karat"
-             options={[{ value: '24', label: '24K' }, { value: '22', label: '22K' }, { value: '21', label: '21K' }, { value: '18', label: '18K' }, { value: '14', label: '14K' }]}
-             value={goldForm.karat}
-             onChange={(e) => setGoldForm((f) => ({ ...f, karat: e.target.value }))}
-           />
-           <FormSelect
-             label="Gold Purity"
-             name="purity"
-             options={[{ value: '999', label: '999' }, { value: '995', label: '995' }, { value: '916', label: '916' }, { value: '875', label: '875' }, { value: '750', label: '750' }]}
-             value={goldForm.purity}
-             onChange={(e) => setGoldForm((f) => ({ ...f, purity: e.target.value }))}
-           />
-           <FormInput
-             label="Value (Rs.)"
-             name="value"
-             type="number"
-             step="1"
-             value={goldForm.value}
-             onChange={(e) => setGoldForm((f) => ({ ...f, value: e.target.value }))}
-             placeholder="e.g. 50000"
-             required
-           />
-           <FormInput
-             label="Note"
-             name="note"
-             value={goldForm.note}
-             onChange={(e) => setGoldForm((f) => ({ ...f, note: e.target.value }))}
-             placeholder="Optional note"
-           />
-           <div className="flex items-center justify-end gap-3 pt-2">
-             <Button variant="ghost" onClick={() => setGoldModalOpen(false)} disabled={submitting}>
-               Cancel
-             </Button>
-             <Button type="submit" loading={submitting}>
-               Save Gold Record
-             </Button>
-           </div>
-         </form>
+</form>
        </Modal>
 
        <ConfirmDialog

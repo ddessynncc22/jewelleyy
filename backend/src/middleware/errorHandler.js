@@ -56,6 +56,12 @@ const errorHandler = async (err, req, res, next) => {
 
   if (statusCode >= 500) {
     await logSystemError(req, statusCode, message);
+    // Full detail goes to the server log only; clients get a generic message.
+    if (config.nodeEnv === 'production') {
+      console.error(`[internal-error] ${req.method} ${req.originalUrl} -> ${message}`);
+      message = 'Internal server error. Please try again or contact support.';
+      errors = null;
+    }
   }
 
   res.status(statusCode).json({

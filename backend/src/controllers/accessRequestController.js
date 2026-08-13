@@ -3,6 +3,10 @@ const Tenant = require('../models/Tenant');
 const AccessRequest = require('../models/AccessRequest');
 const { successResponse, errorResponse } = require('../utils/response');
 
+// Superadmin-only route, but the role string must still be validated: a
+// registration approval must never mint a superadmin account.
+const VALID_APPROVAL_ROLES = ['admin', 'manager', 'staff'];
+
 exports.register = async (req, res) => {
   try {
     const { name, email, phone, message, requestedRole } = req.body;
@@ -105,6 +109,7 @@ exports.approveRequest = async (req, res) => {
     if (request.type === 'registration') {
       const tenant = tenantId ? await Tenant.findOne({ tenantNumber: Number(tenantId) }) : null;
       if (!tenant) return errorResponse(res, 'Please select a valid tenant/shop for the user', 400);
+      const safeRole = VALID_APPROVAL_ROLES.includes(role) ? role : 'staff';
       const existing = await User.findOne({ email: request.email });
       if (existing) return errorResponse(res, 'A user with this email already exists', 400);
       await User.create({
@@ -112,7 +117,7 @@ exports.approveRequest = async (req, res) => {
         email: request.email,
         password: String(password),
         phone: request.phone || '',
-        role: role || 'staff',
+        role: safeRole,
         tenantId: tenant.tenantNumber,
       });
     } else if (request.type === 'password_reset') {

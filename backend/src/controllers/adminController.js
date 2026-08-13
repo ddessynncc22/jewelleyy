@@ -4,6 +4,8 @@ const Rate = require('../models/Rate');
 const Notification = require('../models/Notification');
 const { successResponse, errorResponse, paginatedResponse } = require('../utils/response');
 
+const VALID_TENANT_ROLES = ['admin', 'manager', 'staff', 'qr_lookup'];
+
 exports.getDashboardStats = async (req, res) => {
   try {
     const [totalTenants, activeTenants, inactiveTenants] = await Promise.all([
@@ -47,9 +49,10 @@ exports.createTenantUser = async (req, res) => {
     if (!tenant) return errorResponse(res, 'Tenant not found', 404);
     const { name, email, password, role, phone } = req.body;
     if (!name || !email || !password) return errorResponse(res, 'Name, email, and password are required', 400);
+    const safeRole = VALID_TENANT_ROLES.includes(role) ? role : 'staff';
     const existing = await User.findOne({ email });
     if (existing) return errorResponse(res, 'Email already in use', 400);
-    const user = await User.create({ name, email, password, role: role || 'staff', phone: phone || '', tenantId: tenant.tenantNumber });
+    const user = await User.create({ name, email, password, role: safeRole, phone: phone || '', tenantId: tenant.tenantNumber });
     const { password: _, ...userData } = user.toObject();
     return successResponse(res, userData, 'User created', 201);
   } catch (error) {
@@ -64,7 +67,10 @@ exports.updateTenantUser = async (req, res) => {
     if (!user) return errorResponse(res, 'User not found', 404);
     const { name, role, phone, isActive, password } = req.body;
     if (name !== undefined) user.name = name;
-    if (role !== undefined) user.role = role;
+    if (role !== undefined) {
+      if (!VALID_TENANT_ROLES.includes(role)) return errorResponse(res, 'Invalid role', 400);
+      user.role = role;
+    }
     if (phone !== undefined) user.phone = phone;
     if (isActive !== undefined) user.isActive = isActive;
     if (password) user.password = password;
@@ -128,6 +134,12 @@ exports.markNotificationRead = async (req, res) => {
   try {
     const notification = await Notification.findById(req.params.id);
     if (!notification) return errorResponse(res, 'Notification not found', 404);
+    // Notifications are not tenant-scoped at the model level, so enforce
+    // ownership by hand: a broadcast is visible to everyone, anything else
+    // must belong to the caller's tenant. This stops cross-tenant reads.
+    if (!notification.isBroadcast && notification.tenantId !== (req.user.tenantId ?? null)) {
+      return errorResponse(res, 'Notification not found', 404);
+    }
     if (!notification.readBy.includes(req.user._id)) {
       notification.readBy.push(req.user._id);
       await notification.save();

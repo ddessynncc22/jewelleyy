@@ -101,35 +101,6 @@ const karigarSchema = new mongoose.Schema(
           enum: ['pending', 'partial', 'paid'],
           default: 'pending',
         },
-        goldReceived: [
-          {
-            date: {
-              type: Date,
-              default: Date.now,
-            },
-            weight: {
-              type: Number,
-              required: true,
-              min: 0,
-            },
-            karat: {
-              type: Number,
-              default: 24,
-            },
-            purity: {
-              type: Number,
-              default: 999,
-            },
-            value: {
-              type: Number,
-              default: 0,
-            },
-            note: {
-              type: String,
-              default: '',
-            },
-          },
-        ],
         paymentHistory: [
           {
             date: {

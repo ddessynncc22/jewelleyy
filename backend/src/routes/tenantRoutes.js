@@ -8,6 +8,6 @@ router.get('/all', protect, authorize('superadmin'), listTenants);
 router.get('/:id', protect, authorize('superadmin'), getTenantById);
 router.put('/:id', protect, authorize('superadmin'), updateTenant);
 router.get('/', protect, getTenant);
-router.put('/', protect, updateTenant);
+router.put('/', protect, authorize('admin'), updateTenant);
 
 module.exports = router;

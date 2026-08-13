@@ -215,6 +215,7 @@ exports.listLots = async (req, res) => {
     const { page = 1, limit = 20, status, search, metalType, purity, category, subcategory, lowStock } = req.query;
     const query = {};
     if (req.query.item) query.item = req.query.item;
+    if (req.query.karigarId) query.karigarId = req.query.karigarId;
     if (status) query.status = status;
     if (metalType) query.metalType = metalType;
     if (purity) query.purity = Number(purity);

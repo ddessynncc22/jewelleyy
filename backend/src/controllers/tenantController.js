@@ -179,7 +179,11 @@ exports.getTenant = async (req, res) => {
 
 exports.updateTenant = async (req, res) => {
   try {
-    const allowed = ['name', 'contactEmail', 'contactPhone', 'address', 'vatNumber', 'logoUrl', 'storeName', 'currency', 'defaultPurity', 'defaultKarat', 'lowStockThreshold', 'businessStartDate', 'planType'];
+    const superadminFields = ['name', 'contactEmail', 'contactPhone', 'address', 'vatNumber', 'logoUrl', 'storeName', 'currency', 'defaultPurity', 'defaultKarat', 'lowStockThreshold', 'businessStartDate', 'planType'];
+    // planType (and any future billing field) is a superadmin decision: a shop
+    // account updating its own tenant must not be able to move itself between
+    // plans, even though it may edit its storefront details.
+    const allowed = req.params.id ? superadminFields : superadminFields.filter((f) => f !== 'planType');
     const updates = {};
     allowed.forEach((field) => {
       if (req.body[field] !== undefined) updates[field] = req.body[field];

@@ -128,16 +128,17 @@ export default function QRLookup() {
       return
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-      streamRef.current = stream
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        try {
-          await videoRef.current.play()
-        } catch {
-          // autoplay refused — the loop below still keeps trying to detect
+      let stream
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      } catch (err) {
+        if (err?.name === 'OverconstrainedError' || err?.name === 'NotFoundError') {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true })
+        } else {
+          throw err
         }
       }
+      streamRef.current = stream
       setScanning(true)
     } catch (err) {
       const name = err?.name
@@ -204,6 +205,18 @@ export default function QRLookup() {
     }
     img.src = url
   }
+
+  useEffect(() => {
+    if (!scanning) return
+    const video = videoRef.current
+    const stream = streamRef.current
+    if (video && stream && !video.srcObject) {
+      video.srcObject = stream
+      video.play().catch(() => {
+        // autoplay refused — the detection loop below still tries to read frames
+      })
+    }
+  }, [scanning])
 
   useEffect(() => {
     if (!scanning) return

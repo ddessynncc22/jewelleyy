@@ -59,9 +59,10 @@ const corsOptions = {
         return callback(null, true);
       }
     }
-    // No base domain and no explicit list configured: preserve the previous
-    // permissive behaviour rather than breaking single-domain deployments.
-    if (!config.baseDomain && !explicitOrigins) return callback(null, true);
+    // No base domain and no explicit list configured: only in development is
+    // the permissive behaviour kept. Production fails closed — a cross-origin
+    // caller must be in CORS_ORIGIN, or requests are rejected.
+    if (config.nodeEnv !== 'production' && !config.baseDomain && !explicitOrigins) return callback(null, true);
     return callback(null, false);
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -98,6 +99,37 @@ const limiter = rateLimit({
   skip: (req) => req.path === '/public/tls-check' && isInternalAddress(req.socket.remoteAddress),
 });
 app.use('/api', limiter);
+
+// Stricter throttle on authentication endpoints, which are the ones an
+// attacker can brute-force. 10 attempts per 15 minutes per IP for credential
+// entry, 5 per 15 minutes for the account-creation / password-reset requests.
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: {
+    success: false,
+    message: 'Too many login attempts. Please try again after 15 minutes',
+    data: null,
+    errors: null,
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use(['/api/auth/login', '/api/auth/change-password'], authLimiter);
+
+const requestLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: {
+    success: false,
+    message: 'Too many requests. Please try again after 15 minutes',
+    data: null,
+    errors: null,
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use(['/api/auth/register', '/api/auth/forgot-password'], requestLimiter);
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));

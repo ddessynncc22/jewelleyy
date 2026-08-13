@@ -6,6 +6,22 @@ const validate = require('../middleware/validate');
 const { sendSuccess, sendError } = require('../utils/response');
 const { User, ActivityLog } = require('../models');
 const { getPagination } = require('../utils/helpers');
+const { escapeRegex } = require('../utils/helpers');
+
+// Explicit allowlist — req.body is never spread into User.create/update, so a
+// caller can neither plant a tenantId (cross-tenant write) nor elevate a role
+// to superadmin via mass assignment.
+const CREATABLE_FIELDS = ['name', 'email', 'password', 'role', 'phone', 'isActive'];
+const UPDATABLE_FIELDS = ['name', 'email', 'role', 'phone', 'isActive'];
+const VALID_ROLES = ['admin', 'manager', 'staff', 'qr_lookup'];
+
+function pickUserFields(body, fields) {
+  const out = {};
+  for (const f of fields) {
+    if (body[f] !== undefined) out[f] = body[f];
+  }
+  return out;
+}
 
 router.get('/', protect, authorize('admin'), async (req, res, next) => {
   try {
@@ -13,7 +29,7 @@ router.get('/', protect, authorize('admin'), async (req, res, next) => {
     const filter = {};
 
     if (req.query.search) {
-      const searchRegex = new RegExp(req.query.search, 'i');
+      const searchRegex = new RegExp(escapeRegex(req.query.search), 'i');
       filter.$or = [{ name: searchRegex }, { email: searchRegex }];
     }
     if (req.query.role) filter.role = req.query.role;
@@ -60,7 +76,7 @@ router.post(
         return sendError(res, 'User with this email already exists', 400);
       }
 
-      const user = await User.create(req.body);
+      const user = await User.create(pickUserFields(req.body, CREATABLE_FIELDS));
 
       await ActivityLog.create({
         action: 'CREATE',
@@ -94,7 +110,12 @@ router.put('/:id', protect, authorize('admin'), async (req, res, next) => {
       return sendError(res, 'Password cannot be updated here. Use the change-password endpoint.', 400);
     }
 
-    const user = await User.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true }).select('-password');
+    const updateData = pickUserFields(req.body, UPDATABLE_FIELDS);
+    if (updateData.role !== undefined && !VALID_ROLES.includes(updateData.role)) {
+      return sendError(res, 'Invalid role', 400);
+    }
+
+    const user = await User.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true }).select('-password');
     if (!user) {
       return sendError(res, 'User not found', 404);
     }

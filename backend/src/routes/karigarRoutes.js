@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getKarigars, getKarigar, createKarigar, updateKarigar, deleteKarigar, issueMaterial, receiveFinished, getPendingJobs, getKarigarReport, getKarigarSummary, getKarigarReturn, updateMaterialStatus, recordKarigarPayment, recordGoldTaken, getKarigarPaymentHistory } = require('../controllers/karigarController');
+const { getKarigars, getKarigar, createKarigar, updateKarigar, deleteKarigar, issueMaterial, receiveFinished, getPendingJobs, getKarigarReport, getKarigarSummary, getKarigarReturn, updateMaterialStatus, recordKarigarPayment, getKarigarPaymentHistory } = require('../controllers/karigarController');
 const { protect, authorize } = require('../middleware/auth');
 
 router.get('/', protect, getKarigars);
@@ -14,7 +14,6 @@ router.post('/', protect, authorize('admin', 'manager'), createKarigar);
 router.post('/:id/issue', protect, authorize('admin', 'manager'), issueMaterial);
 router.post('/:id/receive', protect, authorize('admin', 'manager'), receiveFinished);
 router.post('/:id/materials/:materialIndex/payment', protect, authorize('admin', 'manager'), recordKarigarPayment);
-router.post('/:id/materials/:materialIndex/gold-taken', protect, authorize('admin', 'manager'), recordGoldTaken);
 router.patch('/:id/materials/:materialIndex', protect, authorize('admin', 'manager'), updateMaterialStatus);
 router.put('/:id', protect, authorize('admin', 'manager'), updateKarigar);
 router.delete('/:id', protect, authorize('admin'), deleteKarigar);
