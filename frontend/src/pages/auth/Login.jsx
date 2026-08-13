@@ -6,7 +6,15 @@ import { useNavigate, Link } from "react-router-dom";
 
 import toast from "react-hot-toast";
 
-import { LogIn, Mail, Lock, Eye, EyeOff, AlertTriangle } from "lucide-react";
+import {
+  LogIn,
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  AlertTriangle,
+  ArrowRight,
+} from "lucide-react";
 
 import { useAuth } from "../../hooks/useAuth";
 
@@ -15,7 +23,13 @@ import { login as loginApi } from "../../services/authService";
 import Button from "../../components/ui/Button";
 
 const fieldClass =
-  "w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] py-2.5 pl-10 pr-4 text-sm text-[var(--color-text)] placeholder-[var(--color-ink-400)] hover:border-[var(--color-ink-300)] focus:border-[var(--color-gold-500)] focus:outline-none focus:ring-2 focus:ring-[var(--color-gold-500)]/20 transition-all";
+  "peer h-11 w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] py-2.5 pl-10 pr-10 text-sm text-[var(--color-text)] placeholder-[var(--color-ink-400)] transition-all hover:border-[var(--color-ink-300)] focus:border-[var(--color-gold-500)] focus:outline-none focus:ring-4 focus:ring-[var(--color-gold-500)]/15";
+
+const labelClass =
+  "mb-1.5 block text-[13px] font-medium text-[var(--color-text)]";
+
+const inputIconClass =
+  "pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-ink-400)] transition-colors peer-focus:text-[var(--color-gold-600)]";
 
 export default function Login() {
   const { login } = useAuth();
@@ -55,12 +69,17 @@ export default function Login() {
   };
   return (
     <div className="animate-fade-in">
-      <div className="mb-8 text-center">
-        <h2 className="text-2xl font-bold tracking-tight text-[var(--color-text)]">
+      {/* Header */}
+      <div className="mb-8">
+        <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--color-gold-600)]">
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--color-gold-500)]" />
+          Secure access
+        </p>
+        <h2 className="text-[1.75rem] font-bold leading-tight tracking-tight text-[var(--color-text)]">
           Welcome back
         </h2>
         <p className="mt-1.5 text-sm text-[var(--color-text-secondary)]">
-          Sign in to access your shop dashboard
+          Sign in to your shop dashboard to continue.
         </p>
       </div>
 
@@ -83,12 +102,13 @@ export default function Login() {
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-[var(--color-text)]">
-            Email
+          <label className={labelClass} htmlFor="login-email">
+            Email address
           </label>
           <div className="relative">
-            <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-ink-400)]" />
+            <Mail className={inputIconClass} />
             <input
+              id="login-email"
               type="email"
               autoComplete="email"
               {...register("email", { required: "Email is required" })}
@@ -97,30 +117,41 @@ export default function Login() {
             />
           </div>
           {errors.email && (
-            <p className="mt-1 text-xs text-danger">{errors.email.message}</p>
+            <p className="mt-1.5 text-xs font-medium text-danger">
+              {errors.email.message}
+            </p>
           )}
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-[var(--color-text)]">
-            Password
-          </label>
+          <div className="mb-1.5 flex items-center justify-between">
+            <label className="block text-[13px] font-medium text-[var(--color-text)]" htmlFor="login-password">
+              Password
+            </label>
+            <Link
+              to="/forgot-password"
+              className="text-xs font-medium text-[var(--color-gold-700)] transition-colors hover:text-[var(--color-gold-800)]"
+            >
+              Forgot password?
+            </Link>
+          </div>
           <div className="relative">
-            <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-ink-400)]" />
+            <Lock className={inputIconClass} />
             <input
+              id="login-password"
               type={showPassword ? "text" : "password"}
               autoComplete="current-password"
               {...register("password", {
                 required: "Password is required",
                 minLength: { value: 6, message: "Min 6 characters" },
               })}
-              className={`${fieldClass} pr-10`}
+              className={fieldClass}
               placeholder="Enter your password"
             />
             <button
               type="button"
               onClick={() => setShowPassword((s) => !s)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-[var(--color-ink-400)] transition-colors hover:text-[var(--color-ink-600)]"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-[var(--color-ink-400)] transition-colors hover:bg-[var(--color-elevated)] hover:text-[var(--color-ink-600)]"
               title={showPassword ? "Hide password" : "Show password"}
             >
               {showPassword ? (
@@ -131,36 +162,39 @@ export default function Login() {
             </button>
           </div>
           {errors.password && (
-            <p className="mt-1 text-xs text-danger">{errors.password.message}</p>
+            <p className="mt-1.5 text-xs font-medium text-danger">
+              {errors.password.message}
+            </p>
           )}
         </div>
 
         <div className="flex items-center justify-between">
-          <label className="flex cursor-pointer select-none items-center gap-2 text-sm text-[var(--color-text-secondary)]">
+          <label className="group flex cursor-pointer select-none items-center gap-2.5 text-sm text-[var(--color-text-secondary)]">
             <input
               type="checkbox"
-              className="h-4 w-4 rounded border-[var(--color-ink-300)] text-[var(--color-gold-600)] focus:ring-[var(--color-gold-500)]"
+              className="h-4 w-4 rounded border-[var(--color-ink-300)] accent-[var(--color-gold-600)] focus:ring-[var(--color-gold-500)]"
             />
-            Remember me
+            <span className="transition-colors group-hover:text-[var(--color-text)]">
+              Remember me
+            </span>
           </label>
-          <Link
-            to="/forgot-password"
-            className="text-sm font-medium text-[var(--color-gold-700)] transition-colors hover:text-[var(--color-gold-800)]"
-          >
-            Forgot password?
-          </Link>
         </div>
 
-        <Button type="submit" loading={loading} className="w-full py-2.5" icon={LogIn}>
-          Sign In
+        <Button
+          type="submit"
+          loading={loading}
+          className="h-11 w-full bg-gradient-to-r from-[var(--color-gold-600)] to-[var(--color-gold-500)] text-[15px] font-semibold shadow-[var(--shadow-md)] transition-all duration-200 hover:-translate-y-px hover:shadow-[var(--shadow-lg)]"
+          icon={loading ? null : <ArrowRight className="h-4 w-4" />}
+        >
+          {loading ? "Signing in…" : "Sign in"}
         </Button>
       </form>
 
-      <div className="mt-6 flex items-center justify-center gap-1.5 text-sm text-[var(--color-text-secondary)]">
-        <span>No account?</span>
+      <div className="mt-7 border-t border-[var(--color-border)] pt-6 text-center text-sm text-[var(--color-text-secondary)]">
+        <span>New to Jewelcore? </span>
         <Link
           to="/register"
-          className="font-medium text-[var(--color-gold-700)] transition-colors hover:text-[var(--color-gold-800)]"
+          className="font-semibold text-[var(--color-gold-700)] transition-colors hover:text-[var(--color-gold-800)]"
         >
           Request an account
         </Link>
