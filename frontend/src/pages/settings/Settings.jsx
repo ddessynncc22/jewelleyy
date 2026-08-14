@@ -32,6 +32,16 @@ export default function Settings() {
     lowStockThreshold: "5",
     goldTransportCharge: "0",
     silverTransportCharge: "0",
+    itemLabelWidth: "90",
+    itemLabelHeight: "50",
+    loopLabelWidth: "90",
+    loopLabelHeight: "15",
+    looseLabelWidth: "90",
+    looseLabelHeight: "50",
+    dumbbellLabelWidth: "90",
+    dumbbellLabelHeight: "50",
+    dumbbellLabelBodyWidth: "60",
+    dumbbellLabelNeckHeight: "8",
     logoUrl: "",
   });
   const [logoFile, setLogoFile] = useState(null);
@@ -50,6 +60,16 @@ export default function Settings() {
           lowStockThreshold: String(s.lowStockThreshold || "5"),
           goldTransportCharge: String(s.goldTransportCharge || "0"),
           silverTransportCharge: String(s.silverTransportCharge || "0"),
+          itemLabelWidth: String(s.itemLabelWidth || "90"),
+          itemLabelHeight: String(s.itemLabelHeight || "50"),
+          loopLabelWidth: String(s.loopLabelWidth || "90"),
+          loopLabelHeight: String(s.loopLabelHeight || "15"),
+          looseLabelWidth: String(s.looseLabelWidth || "90"),
+          looseLabelHeight: String(s.looseLabelHeight || "50"),
+          dumbbellLabelWidth: String(s.dumbbellLabelWidth || "90"),
+          dumbbellLabelHeight: String(s.dumbbellLabelHeight || "50"),
+          dumbbellLabelBodyWidth: String(s.dumbbellLabelBodyWidth || "60"),
+          dumbbellLabelNeckHeight: String(s.dumbbellLabelNeckHeight || "8"),
           logoUrl: s.logoUrl || "",
         });
       })
@@ -94,6 +114,16 @@ export default function Settings() {
         lowStockThreshold: Number(form.lowStockThreshold),
         goldTransportCharge: Number(form.goldTransportCharge),
         silverTransportCharge: Number(form.silverTransportCharge),
+        itemLabelWidth: Number(form.itemLabelWidth),
+        itemLabelHeight: Number(form.itemLabelHeight),
+        loopLabelWidth: Number(form.loopLabelWidth),
+        loopLabelHeight: Number(form.loopLabelHeight),
+        looseLabelWidth: Number(form.looseLabelWidth),
+        looseLabelHeight: Number(form.looseLabelHeight),
+        dumbbellLabelWidth: Number(form.dumbbellLabelWidth),
+        dumbbellLabelHeight: Number(form.dumbbellLabelHeight),
+        dumbbellLabelBodyWidth: Number(form.dumbbellLabelBodyWidth),
+        dumbbellLabelNeckHeight: Number(form.dumbbellLabelNeckHeight),
         logoUrl: form.logoUrl,
       };
       const saved = logoFile
@@ -271,6 +301,135 @@ export default function Settings() {
               value={form.lowStockThreshold}
               onChange={set("lowStockThreshold")}
             />{" "}
+          </div>{" "}
+        </Card>{" "}
+        <Card title="Label Settings">
+          {" "}
+          <p className="text-sm text-gray-500 mb-4">
+            Set the physical size of the label stock your shop prints on (in
+            mm). Item tags, loop tags and loose lot cards are printed at these
+            exact dimensions, so each shop can use its own label rolls.
+          </p>
+          <div className="space-y-5">
+            {" "}
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                Item Tag
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                <FormInput
+                  label="Width (mm)"
+                  name="itemLabelWidth"
+                  type="number"
+                  min="10"
+                  max="300"
+                  value={form.itemLabelWidth}
+                  onChange={set("itemLabelWidth")}
+                />{" "}
+                <FormInput
+                  label="Height (mm)"
+                  name="itemLabelHeight"
+                  type="number"
+                  min="10"
+                  max="300"
+                  value={form.itemLabelHeight}
+                  onChange={set("itemLabelHeight")}
+                />{" "}
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                Loop Tag
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                <FormInput
+                  label="Width (mm)"
+                  name="loopLabelWidth"
+                  type="number"
+                  min="10"
+                  max="300"
+                  value={form.loopLabelWidth}
+                  onChange={set("loopLabelWidth")}
+                />{" "}
+                <FormInput
+                  label="Height (mm)"
+                  name="loopLabelHeight"
+                  type="number"
+                  min="5"
+                  max="100"
+                  value={form.loopLabelHeight}
+                  onChange={set("loopLabelHeight")}
+                />{" "}
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                Loose Lot Card
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                <FormInput
+                  label="Width (mm)"
+                  name="looseLabelWidth"
+                  type="number"
+                  min="10"
+                  max="300"
+                  value={form.looseLabelWidth}
+                  onChange={set("looseLabelWidth")}
+                />{" "}
+                <FormInput
+                  label="Height (mm)"
+                  name="looseLabelHeight"
+                  type="number"
+                  min="10"
+                  max="300"
+                  value={form.looseLabelHeight}
+                  onChange={set("looseLabelHeight")}
+                />{" "}
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                Dumbbell Tag
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                <FormInput
+                  label="Width (mm)"
+                  name="dumbbellLabelWidth"
+                  type="number"
+                  min="10"
+                  max="300"
+                  value={form.dumbbellLabelWidth}
+                  onChange={set("dumbbellLabelWidth")}
+                />{" "}
+                <FormInput
+                  label="Height (mm)"
+                  name="dumbbellLabelHeight"
+                  type="number"
+                  min="10"
+                  max="300"
+                  value={form.dumbbellLabelHeight}
+                  onChange={set("dumbbellLabelHeight")}
+                />{" "}
+                <FormInput
+                  label="End Pad Width (mm)"
+                  name="dumbbellLabelBodyWidth"
+                  type="number"
+                  min="10"
+                  max="300"
+                  value={form.dumbbellLabelBodyWidth}
+                  onChange={set("dumbbellLabelBodyWidth")}
+                />{" "}
+                <FormInput
+                  label="Neck Height (mm)"
+                  name="dumbbellLabelNeckHeight"
+                  type="number"
+                  min="2"
+                  max="30"
+                  value={form.dumbbellLabelNeckHeight}
+                  onChange={set("dumbbellLabelNeckHeight")}
+                />{" "}
+              </div>
+            </div>
           </div>{" "}
         </Card>{" "}
         <div className="flex justify-end">

@@ -932,6 +932,7 @@ const ItemList = () => {
             >
               <option value="standard">Standard</option>
               <option value="loop">Loop Tag</option>
+              <option value="dumbbell">Dumbbell Tag</option>
             </select>
             <IconButton title="Print labels" onClick={() => handleBulkPrint(labelSize)} className="hover:bg-[var(--color-card)] hover:text-[var(--color-primary)]">
               <Printer className="h-4 w-4" />

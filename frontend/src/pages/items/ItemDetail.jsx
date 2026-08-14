@@ -226,6 +226,8 @@ const ItemDetail = () => {
                 className={`text-[10px] leading-tight px-1 py-0.5 rounded ${labelSize === 'standard' ? 'bg-blue-100 text-blue-700 font-medium' : 'text-gray-500 hover:bg-gray-100'}`}>Std</button>
               <button type="button" onClick={() => setLabelSize('loop')}
                 className={`text-[10px] leading-tight px-1 py-0.5 rounded ${labelSize === 'loop' ? 'bg-blue-100 text-blue-700 font-medium' : 'text-gray-500 hover:bg-gray-100'}`}>Loop</button>
+              <button type="button" onClick={() => setLabelSize('dumbbell')}
+                className={`text-[10px] leading-tight px-1 py-0.5 rounded ${labelSize === 'dumbbell' ? 'bg-blue-100 text-blue-700 font-medium' : 'text-gray-500 hover:bg-gray-100'}`}>Dumb</button>
             </div>
           </div>
           <Button variant="outline" icon={Copy} onClick={handleClone} loading={cloning} size="sm">

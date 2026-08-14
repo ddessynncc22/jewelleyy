@@ -12,6 +12,11 @@ const defaults = {
   lowStockThreshold: 5, panNumber: '', logoUrl: '',
   goldTransportCharge: 0, silverTransportCharge: 0,
   looseWeightTolerancePercent: 15,
+  itemLabelWidth: 90, itemLabelHeight: 50,
+  loopLabelWidth: 90, loopLabelHeight: 15,
+  looseLabelWidth: 90, looseLabelHeight: 50,
+  dumbbellLabelWidth: 90, dumbbellLabelHeight: 50,
+  dumbbellLabelBodyWidth: 60, dumbbellLabelNeckHeight: 8,
 };
 
 // Whitelist — a caller can never smuggle in tenantId (cross-tenant write) or
