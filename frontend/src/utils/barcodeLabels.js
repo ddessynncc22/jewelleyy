@@ -50,14 +50,18 @@ function loopLabel(item, storeName, qrDataUrl) {
   const stone = item.stoneWeight || 0
   const net = item.netMetalWeight || 0
   const dia = diamondLine(item)
+  const purityRaw = `${item.karat ? `${item.karat}K/` : ''}${item.purity ?? ''}`
+  const purity = purityRaw ? escapeHtml(purityRaw) : ''
   return `
               <div class="label">
                 <div class="left">
                   ${storeName ? `<div class="store-name">${escapeHtml(storeName)}</div>` : ''}
-                  ${qrDataUrl ? `<img class="qr" src="${qrDataUrl}" alt="QR" />` : `<div class="barcode">${escapeHtml(item.barcode || item.SKU)}</div>`}
+                  <div class="qr-row">
+                    ${qrDataUrl ? `<img class="qr" src="${qrDataUrl}" alt="QR" />` : `<div class="barcode">${escapeHtml(item.barcode || item.SKU)}</div>`}
+                    ${purity ? `<div class="info">${purity}</div>` : ''}
+                  </div>
                 </div>
                 <div class="right">
-                  <div class="info">${metalInfo(item)}</div>
                   <div class="weight">Gross: ${gross}g</div>
                   <div class="weight">Stone: ${stone}g</div>
                   <div class="weight">Net: ${net}g</div>
@@ -94,23 +98,15 @@ function standardLabel(item, storeName, qrDataUrl) {
             `
 }
 
-// Per-tenant physical label dimensions (mm). Fall back to the defaults used
-// before label settings existed, so tenants that never configured sizes keep
-// printing exactly as before.
+// Physical label dimensions (mm) per tag shape.
 function labelDims(size) {
-  const s = getCachedSettings() || {}
   if (size === 'loop') {
-    return { w: s.loopLabelWidth || 90, h: s.loopLabelHeight || 15 }
+    return { w: 90, h: 15 }
   }
   if (size === 'dumbbell') {
-    return {
-      w: s.dumbbellLabelWidth || 90,
-      h: s.dumbbellLabelHeight || 50,
-      body: s.dumbbellLabelBodyWidth || 60,
-      neck: s.dumbbellLabelNeckHeight || 8,
-    }
+    return { w: 90, h: 50, body: 60, neck: 8 }
   }
-  return { w: s.itemLabelWidth || 90, h: s.itemLabelHeight || 50 }
+  return { w: 90, h: 50 }
 }
 
 // Scale factor that keeps content proportioned to the configured label size.
@@ -154,17 +150,17 @@ function loopCss(w, h) {
   return `
             @page { size: ${w}mm ${h}mm; margin: 0; }
             * { box-sizing: border-box; margin: 0; padding: 0; }
-            body { font-family: Arial; width: ${w}mm; height: ${h}mm; }
+            body { font-family: "Verdana", "Segoe UI", "Helvetica Neue", Arial, sans-serif; width: ${w}mm; height: ${h}mm; }
             .labels { display: flex; flex-direction: column; }
-            .label { width: ${w}mm; height: ${h}mm; display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: ${scaled(2, s)}mm; page-break-after: always; border: none; padding: ${scaled(0.5, s)}mm ${scaled(2.5, s)}mm; overflow: hidden; }
-            .left { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; min-width: 0; text-align: center; }
-            .right { display: flex; flex-direction: column; align-items: flex-end; justify-content: center; text-align: right; flex-shrink: 0; }
-            .store-name { color: #000; font-weight: bold; text-transform: uppercase; letter-spacing: ${scaled(0.3, s)}px; font-size: ${scaled(8, s)}px; line-height: 1.1; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-            .qr { width: ${scaled(11, s)}mm; height: ${scaled(11, s)}mm; margin: ${scaled(0.3, s)}mm 0; }
-            .sku { letter-spacing: ${scaled(0.4, s)}px; font-size: ${scaled(7.5, s)}px; line-height: 1.2; font-weight: bold; }
-            .info { color: #000; font-weight: bold; font-size: ${scaled(10, s)}px; line-height: 1.2; }
-            .weight { color: #333; font-weight: bold; font-size: ${scaled(10, s)}px; line-height: 1.2; }
-            .diamond { color: #b45309; font-weight: bold; font-size: ${scaled(9, s)}px; line-height: 1.2; }
+            .label { width: ${w}mm; height: ${h}mm; display: flex; flex-direction: row; justify-content: space-between; align-items: flex-start; gap: ${scaled(2, s)}mm; page-break-after: always; padding: ${scaled(4, s)}px ${scaled(10, s)}px; overflow: hidden; }
+            .left { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; flex: 1; min-width: 0; text-align: left; }
+            .qr-row { display: flex; flex-direction: row; align-items: center; gap: ${scaled(8, s)}px; }
+            .right { display: flex; flex-direction: column; align-items:flex-start; justify-content: center; text-align: right; flex-shrink: 0; margin-right: ${scaled(3, s)}px; }
+            .store-name { color: #000; font-weight: 800; text-transform: uppercase; letter-spacing: ${scaled(0.5, s)}px; font-size: ${scaled(7, s)}px; line-height: 1.2; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .qr { width: ${scaled(9, s)}mm; height: ${scaled(9, s)}mm; }
+            .info { color: #000; font-weight: 800; letter-spacing: ${scaled(0.5, s)}px; font-size: ${scaled(10, s)}px; line-height: 1.2; }
+            .weight { color: #000; font-weight: 800; letter-spacing: ${scaled(1, s)}px; font-size: ${scaled(10, s)}px; line-height: 1; }
+            .diamond { color: #000; font-weight: 800; letter-spacing: ${scaled(1, s)}px; font-size: ${scaled(9, s)}px; line-height: 1; }
             .barcode { color: #888; letter-spacing: ${scaled(0.5, s)}px; font-size: ${scaled(8, s)}px; line-height: 1.1; }`
 }
 
@@ -173,12 +169,12 @@ function standardCss(w, h) {
   return `
             @page { size: ${w}mm ${h}mm; margin: 0; }
             * { box-sizing: border-box; margin: 0; padding: 0; }
-            body { font-family: Arial; width: ${w}mm; height: ${h}mm; }
+            body { font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif; width: ${w}mm; height: ${h}mm; }
             .labels { display: flex; flex-direction: column; }
-            .label { width: ${w}mm; height: ${h}mm; border: ${scaled(2, s)}px dashed #ccc; padding: ${scaled(4, s)}mm ${scaled(5, s)}mm; border-radius: ${scaled(2, s)}mm; page-break-after: always; display: flex; flex-direction: row; gap: ${scaled(4, s)}mm; align-items: flex-start; overflow: hidden; }
-            .left { display: flex; flex-direction: column; align-items: center; text-align: center; gap: ${scaled(1, s)}mm; flex: 1; min-width: 0; }
+            .label { width: ${w}mm; height: ${h}mm; border: ${scaled(2, s)}px dashed #ccc; padding: ${scaled(4, s)}mm ${scaled(2.5, s)}mm; border-radius: ${scaled(2, s)}mm; page-break-after: always; display: flex; flex-direction: row; gap: ${scaled(4, s)}mm; align-items: flex-start; overflow: hidden; }
+            .left { display: flex; flex-direction: column; align-items: flex-start; text-align: left; gap: ${scaled(1, s)}mm; flex: 1; min-width: 0; }
             .right { display: flex; flex-direction: column; align-items: flex-end; text-align: right; gap: ${scaled(0.5, s)}mm; flex-shrink: 0; }
-            .store-name { font-size: ${scaled(9, s)}px; color: #555; text-transform: uppercase; letter-spacing: ${scaled(1, s)}px; font-weight: bold; }
+            .store-name { font-size: ${scaled(7.5, s)}px; color: #555; text-transform: uppercase; letter-spacing: ${scaled(1, s)}px; font-weight: bold; }
             .qr { width: ${scaled(96, s)}px; height: ${scaled(96, s)}px; }
             .sku { font-size: ${scaled(14, s)}px; font-weight: bold; letter-spacing: ${scaled(1.5, s)}px; }
             .item-name { font-size: ${scaled(11, s)}px; color: #666; line-height: 1.2; max-width: ${scaled(30, s)}mm; }
@@ -197,13 +193,13 @@ function dumbbellCss({ w, h, body, neck }) {
   return `
             @page { size: ${w}mm ${h}mm; margin: 0; }
             * { box-sizing: border-box; margin: 0; padding: 0; }
-            body { font-family: Arial; width: ${w}mm; height: ${h}mm; }
+            body { font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif; width: ${w}mm; height: ${h}mm; }
             .labels { display: flex; flex-direction: column; }
             .label { width: ${w}mm; height: ${h}mm; display: flex; flex-direction: column; justify-content: space-between; page-break-after: always; overflow: hidden; }
             .pad { width: ${body}mm; align-self: center; display: flex; flex-direction: column; align-items: center; overflow: hidden; }
             .pad-top { height: ${padH}mm; justify-content: space-evenly; }
             .pad-bottom { height: ${padH}mm; justify-content: space-evenly; }
-            .store-name { color: #000; font-weight: bold; text-transform: uppercase; font-size: ${scaled(8, s)}px; line-height: 1.1; letter-spacing: ${scaled(0.5, s)}px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .store-name { color: #000; font-weight: bold; text-transform: uppercase; font-size: ${scaled(6.5, s)}px; line-height: 1.1; letter-spacing: ${scaled(0.5, s)}px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
             .qr { width: ${qrMm}mm; height: ${qrMm}mm; }
             .sku { color: #333; font-size: ${scaled(7.5, s)}px; line-height: 1.2; font-weight: bold; letter-spacing: ${scaled(0.4, s)}px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
             .info { color: #000; font-weight: bold; font-size: ${scaled(9.5, s)}px; line-height: 1.2; text-align: center; }
@@ -213,8 +209,9 @@ function dumbbellCss({ w, h, body, neck }) {
             .barcode { color: #888; letter-spacing: ${scaled(0.5, s)}px; font-size: ${scaled(8, s)}px; line-height: 1.1; }`
 }
 
-export async function buildBarcodeLabelHtml({ items, size, title = 'Barcode Labels' }) {
-  const storeName = getCachedSettings()?.storeName || ''
+export async function buildBarcodeLabelHtml({ items, size, title = 'Barcode Labels', autoPrint = true }) {
+  const settings = getCachedSettings() || {}
+  const storeName = settings.storeName || ''
   const dims = labelDims(size)
   const labels = []
   for (const item of items) {
@@ -224,7 +221,11 @@ export async function buildBarcodeLabelHtml({ items, size, title = 'Barcode Labe
     else labels.push(standardLabel(item, storeName, qrDataUrl))
   }
 
-  const css = size === 'loop' ? loopCss(dims.w, dims.h) : size === 'dumbbell' ? dumbbellCss(dims) : standardCss(dims.w, dims.h)
+  const css = size === 'loop'
+    ? loopCss(dims.w, dims.h)
+    : size === 'dumbbell'
+      ? dumbbellCss(dims)
+      : standardCss(dims.w, dims.h)
   return `
       <html>
         <head>
@@ -237,7 +238,7 @@ export async function buildBarcodeLabelHtml({ items, size, title = 'Barcode Labe
           <div class="labels">
             ${labels.join('')}
           </div>
-          <script>window.print()</script>
+          ${autoPrint ? '<script>window.print()</script>' : ''}
         </body>
       </html>
     `

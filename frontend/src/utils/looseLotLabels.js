@@ -36,8 +36,8 @@ function lotCardLabel(lot, storeName) {
   `
 }
 
-// Scale fonts/padding with the configured card size (reference 90x50mm) so
-// smaller label stock still fits without clipping.
+// Scale fonts/padding with the card size (90x50mm) so the layout fits
+// without clipping.
 const clampScale = (s) => Math.max(0.5, Math.min(1.5, s))
 const scaled = (v, s) => Math.round(v * s * 100) / 100
 
@@ -46,7 +46,7 @@ function cardCss(w, h) {
   return `
   @page { size: ${w}mm ${h}mm; margin: 0; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Arial; width: ${w}mm; height: ${h}mm; }
+  body { font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif; width: ${w}mm; height: ${h}mm; }
   .labels { display: flex; flex-direction: column; }
   .label { width: ${w}mm; height: ${h}mm; border: ${scaled(1, s)}px solid #ccc; border-radius: ${scaled(4, s)}px; padding: ${scaled(3, s)}mm ${scaled(4, s)}mm; page-break-after: always; display: flex; flex-direction: column; }
   .store-name { font-size: ${scaled(9, s)}px; color: #999; text-transform: uppercase; letter-spacing: ${scaled(1, s)}px; margin-bottom: ${scaled(2, s)}px; }
@@ -60,8 +60,8 @@ function cardCss(w, h) {
 export function buildLooseLotLabelHtml({ lots, title = 'Loose Lot Labels' }) {
   const settings = getCachedSettings() || {}
   const storeName = settings.storeName || ''
-  const w = settings.looseLabelWidth || 90
-  const h = settings.looseLabelHeight || 50
+  const w = 90
+  const h = 50
   const labels = lots.map((lot) => lotCardLabel(lot, storeName)).join('')
   return `
     <html>

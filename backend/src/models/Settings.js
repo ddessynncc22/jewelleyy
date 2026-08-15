@@ -16,16 +16,6 @@ const settingsSchema = new mongoose.Schema({
   goldTransportCharge: { type: Number, default: 0, min: 0 },
   silverTransportCharge: { type: Number, default: 0, min: 0 },
   logoUrl: { type: String, default: '' },
-  itemLabelWidth: { type: Number, default: 90, min: 10, max: 300 },
-  itemLabelHeight: { type: Number, default: 50, min: 10, max: 300 },
-  loopLabelWidth: { type: Number, default: 90, min: 10, max: 300 },
-  loopLabelHeight: { type: Number, default: 15, min: 5, max: 100 },
-  looseLabelWidth: { type: Number, default: 90, min: 10, max: 300 },
-  looseLabelHeight: { type: Number, default: 50, min: 10, max: 300 },
-  dumbbellLabelWidth: { type: Number, default: 90, min: 10, max: 300 },
-  dumbbellLabelHeight: { type: Number, default: 50, min: 10, max: 300 },
-  dumbbellLabelBodyWidth: { type: Number, default: 60, min: 10, max: 300 },
-  dumbbellLabelNeckHeight: { type: Number, default: 8, min: 2, max: 30 },
 }, { timestamps: true });
 
 settingsSchema.post('save', async function () {

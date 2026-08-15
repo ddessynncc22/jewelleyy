@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 
 import { useParams, useNavigate } from 'react-router-dom'
 
-import { ArrowLeft, Edit, Trash2, Package, History, Copy, Printer, Link, FileText, DollarSign, MessageSquare, QrCode } from 'lucide-react'
+import { ArrowLeft, Edit, Trash2, Package, History, Copy, Printer, Link, FileText, DollarSign, MessageSquare, QrCode, ChevronDown } from 'lucide-react'
 
 import toast from 'react-hot-toast'
 
@@ -66,7 +66,16 @@ const ItemDetail = () => {
   const [deleting, setDeleting] = useState(false)
   const [previewIndex, setPreviewIndex] = useState(null)
   const [cloning, setCloning] = useState(false)
-  const [labelSize, setLabelSize] = useState('standard')
+  const [printOpen, setPrintOpen] = useState(false)
+  const printMenuRef = useRef(null)
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (printMenuRef.current && !printMenuRef.current.contains(e.target)) setPrintOpen(false)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const fetchItem = useCallback(async () => {
     setLoading(true)
@@ -217,18 +226,41 @@ const ItemDetail = () => {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1">
-            <Button variant="outline" icon={Printer} onClick={() => handlePrintBarcode(labelSize)} size="sm">
+          <div ref={printMenuRef} className="relative">
+            <Button
+              variant="outline"
+              icon={Printer}
+              size="sm"
+              onClick={() => setPrintOpen((prev) => !prev)}
+            >
               Print Label
+              <ChevronDown className={`h-4 w-4 transition-transform ${printOpen ? 'rotate-180' : ''}`} />
             </Button>
-            <div className="flex flex-col gap-0.5">
-              <button type="button" onClick={() => setLabelSize('standard')}
-                className={`text-[10px] leading-tight px-1 py-0.5 rounded ${labelSize === 'standard' ? 'bg-blue-100 text-blue-700 font-medium' : 'text-gray-500 hover:bg-gray-100'}`}>Std</button>
-              <button type="button" onClick={() => setLabelSize('loop')}
-                className={`text-[10px] leading-tight px-1 py-0.5 rounded ${labelSize === 'loop' ? 'bg-blue-100 text-blue-700 font-medium' : 'text-gray-500 hover:bg-gray-100'}`}>Loop</button>
-              <button type="button" onClick={() => setLabelSize('dumbbell')}
-                className={`text-[10px] leading-tight px-1 py-0.5 rounded ${labelSize === 'dumbbell' ? 'bg-blue-100 text-blue-700 font-medium' : 'text-gray-500 hover:bg-gray-100'}`}>Dumb</button>
-            </div>
+            {printOpen && (
+              <div className="absolute right-0 top-full mt-1.5 w-44 bg-white rounded-lg border border-gray-200 shadow-lg z-50 py-1 animate-fade-up">
+                <button
+                  type="button"
+                  onClick={() => { handlePrintBarcode('standard'); setPrintOpen(false) }}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  Standard Tag
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { handlePrintBarcode('loop'); setPrintOpen(false) }}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  Loop Tag
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { handlePrintBarcode('dumbbell'); setPrintOpen(false) }}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  Dumbbell Tag
+                </button>
+              </div>
+            )}
           </div>
           <Button variant="outline" icon={Copy} onClick={handleClone} loading={cloning} size="sm">
             Clone
