@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
 
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 
 import toast from 'react-hot-toast'
 
-import { ArrowLeft, Plus, User, ClipboardList, Printer } from 'lucide-react'
+import { ArrowLeft, Plus, User, ClipboardList, Printer, Wallet, Coins } from 'lucide-react'
 
-import { getKarigar, deleteKarigar, issueMaterial, receiveFinished, getKarigarReport, updateMaterialStatus, recordKarigarPayment, getKarigarPaymentHistory } from '../../services/karigarService'
+import { getKarigar, issueMaterial, receiveFinished, getKarigarReport, updateMaterialStatus, recordKarigarPayment, getKarigarPaymentHistory } from '../../services/karigarService'
 import { getItems } from '../../services/itemService'
 import { getLooseLots } from '../../services/looseLotService'
 
@@ -33,8 +33,6 @@ import FormInput from '../../components/ui/FormInput'
 import FormSelect from '../../components/ui/FormSelect'
 
 import FormTextarea from '../../components/ui/FormTextarea'
-
-import ConfirmDialog from '../../components/ui/ConfirmDialog'
 
 import { formatCurrency, formatDate } from '../../utils/helpers'
 
@@ -76,6 +74,10 @@ const METAL_LABELS = { gold: 'Gold', silver: 'Silver', diamond: 'Diamond', gemst
 const KarigarDetail = () => {
   const { id } = useParams()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  const requestedTab = searchParams.get('tab')
+  const initialTab = tabs.some((t) => t.value === requestedTab) ? requestedTab : 'info'
 
   const [karigar, setKarigar] = useState(null)
   const [report, setReport] = useState(null)
@@ -84,18 +86,19 @@ const KarigarDetail = () => {
   const [loading, setLoading] = useState(true)
   const [loadingItems, setLoadingItems] = useState(false)
   const [error, setError] = useState(null)
-  const [activeTab, setActiveTab] = useState('info')
+  const [activeTab, setActiveTab] = useState(initialTab)
   const [reportFrom, setReportFrom] = useState('')
   const [reportTo, setReportTo] = useState('')
   const [updatingStatus, setUpdatingStatus] = useState(false)
   const [issueModalOpen, setIssueModalOpen] = useState(false)
   const [receiveModalOpen, setReceiveModalOpen] = useState(false)
   const [paymentModalOpen, setPaymentModalOpen] = useState(false)
-  const [deleteOpen, setDeleteOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [paymentHistory, setPaymentHistory] = useState([])
+  const [paymentSummary, setPaymentSummary] = useState(null)
+  const [paymentTargets, setPaymentTargets] = useState({ materials: [], items: [], lots: [] })
   const [paymentForm, setPaymentForm] = useState({
-    materialIndex: '',
+    target: '',
     amount: '',
     type: 'cash',
     goldWeight: '',
@@ -172,15 +175,84 @@ const KarigarDetail = () => {
   const fetchPaymentHistory = useCallback(async () => {
     try {
       const { data } = await getKarigarPaymentHistory(id)
-      setPaymentHistory(data?.data || data || [])
+      const res = data?.data || data || {}
+      setPaymentHistory(Array.isArray(res) ? res : res.history || [])
+      setPaymentSummary(res?.summary || null)
     } catch {
       setPaymentHistory([])
+      setPaymentSummary(null)
     }
   }, [id])
 
   useEffect(() => {
     if (activeTab === 'payments') fetchPaymentHistory()
   }, [activeTab, fetchPaymentHistory])
+
+  // Join a product row back to its karigar material record (via the
+  // finishedItem created on receive), so the Products tab can show the
+  // karigar's labour/making charge, wastage and payment status per item.
+  const materialOf = useCallback((row) => {
+    if (row._productType === 'loose') return null
+    const mats = karigar?.materials || []
+    return mats.find((m) => m.finishedItem && String(m.finishedItem._id) === String(row._id)) || null
+  }, [karigar])
+
+  // Payment status for any product row: material record first (issue->receive
+  // flow), otherwise the item/lot's own payment fields (karigar assigned at
+  // creation, paid directly against the product).
+  const paymentOf = (row) => {
+    if (row._productType !== 'loose') {
+      const m = materialOf(row)
+      if (m) {
+        return {
+          due: Number(m.paymentDue) || Number(m.payment) || 0,
+          paid: Number(m.paymentReceived) || 0,
+          status: m.paymentStatus || 'pending',
+        }
+      }
+    }
+    return {
+      due: Number(row.paymentDue) || 0,
+      paid: Number(row.paymentReceived) || 0,
+      status: row.paymentStatus || 'pending',
+    }
+  }
+
+  const fetchPaymentTargets = useCallback(async () => {
+    if (!id) return
+    try {
+      const mats = (karigar?.materials || []).map((m, i) => ({
+        key: `material:${i}`,
+        name: `${m.itemName} (${m.grossWeight}g)`,
+        due: Number(m.paymentDue) || Number(m.payment) || 0,
+        paid: Number(m.paymentReceived) || 0,
+        status: m.paymentStatus || 'pending',
+      }))
+      const [itemsRes, lotsRes] = await Promise.all([
+        getItems({ karigarId: id, itemType: 'tagged', limit: 100 }),
+        getLooseLots({ karigarId: id, limit: 100 }),
+      ])
+      const itemRows = (itemsRes.data?.data || itemsRes.data || [])
+        .filter((i) => !materialOf({ ...i, _productType: 'item' }))
+        .map((i) => ({
+          key: `item:${i._id}`,
+          name: `${i.SKU || i.itemName} (${i.grossWeight}g)`,
+          due: Number(i.paymentDue) || 0,
+          paid: Number(i.paymentReceived) || 0,
+          status: i.paymentStatus || 'pending',
+        }))
+      const lotRows = (lotsRes.data?.data || lotsRes.data || []).map((l) => ({
+        key: `lot:${l._id}`,
+        name: `${l.itemName || l.lotBarcode} (${l.remainingWeight}g)`,
+        due: Number(l.paymentDue) || 0,
+        paid: Number(l.paymentReceived) || 0,
+        status: l.paymentStatus || 'pending',
+      }))
+      setPaymentTargets({ materials: mats, items: itemRows, lots: lotRows })
+    } catch {
+      setPaymentTargets({ materials: [], items: [], lots: [] })
+    }
+  }, [id, karigar, materialOf])
 
   const fetchItems = useCallback(async () => {
     if (!id) return
@@ -206,22 +278,18 @@ const KarigarDetail = () => {
     if (activeTab === 'products') fetchItems()
   }, [activeTab, fetchItems])
 
-  const handleDelete = async () => {
-    await deleteKarigar(id)
-    toast.success('Karigar deleted successfully')
-    navigate('/karigar')
-  }
-
   const handleRecordPayment = async (e) => {
     e.preventDefault()
     setSubmitting(true)
     try {
-      const m = (karigar.materials || [])[Number(paymentForm.materialIndex)]
-      const pending = paymentForm.payFull && m
-        ? Math.max(0, (Number(m.paymentDue) || Number(m.payment) || 0) - (Number(m.paymentReceived) || 0))
+      const allTargets = [...paymentTargets.materials, ...paymentTargets.items, ...paymentTargets.lots]
+      const sel = allTargets.find((t) => t.key === paymentForm.target)
+      if (!sel) throw new Error('Select a product to pay for')
+      const pending = paymentForm.payFull
+        ? Math.max(0, Number(sel.due) - Number(sel.paid))
         : Number(paymentForm.amount)
+      const [kind, ref] = String(paymentForm.target).split(':')
       const payload = {
-        materialIndex: Number(paymentForm.materialIndex),
         amount: paymentForm.type === 'cash' ? pending : 0,
         type: paymentForm.type,
         goldWeight: paymentForm.type === 'gold' ? Number(paymentForm.goldWeight) : undefined,
@@ -230,14 +298,18 @@ const KarigarDetail = () => {
         ratePerGram: Number(paymentForm.ratePerGram) || 0,
         note: paymentForm.note,
       }
-      await recordKarigarPayment(id, Number(paymentForm.materialIndex), payload)
+      if (kind === 'material') payload.materialIndex = Number(ref)
+      else if (kind === 'item') payload.itemId = ref
+      else payload.lotId = ref
+      await recordKarigarPayment(id, payload)
       toast.success('Payment recorded successfully')
       setPaymentModalOpen(false)
-      setPaymentForm({ materialIndex: '', amount: '', type: 'cash', goldWeight: '', goldKarat: '24', goldPurity: '999', ratePerGram: '', note: '', payFull: false })
+      setPaymentForm({ target: '', amount: '', type: 'cash', goldWeight: '', goldKarat: '24', goldPurity: '999', ratePerGram: '', note: '', payFull: false })
       fetchKarigar()
       fetchPaymentHistory()
+      fetchPaymentTargets()
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Failed to record payment')
+      toast.error(err?.response?.data?.message || err?.message || 'Failed to record payment')
     } finally {
       setSubmitting(false)
     }
@@ -607,9 +679,61 @@ const KarigarDetail = () => {
       render: (val, row) => (row._productType === 'loose' ? (val ? formatCurrency(val) : '-') : '-'),
     },
     {
-      key: 'sellingPrice',
-      label: 'Selling Price',
-      render: (val, row) => (row._productType === 'loose' ? '-' : formatCurrency(val || 0)),
+      key: 'makingCharge',
+      label: 'Making Charge',
+      render: (val, row) => {
+        if (row._productType === 'loose') return row.makingChargeValue ? `${row.makingChargeValue}` : '-'
+        const m = materialOf(row)
+        const mc = m?.labourCharge || row.costMakingCharge
+        return mc ? formatCurrency(mc) : '-'
+      },
+    },
+    {
+      key: 'wastage',
+      label: 'Wastage',
+      render: (val, row) => {
+        if (row._productType === 'loose') return '-'
+        const m = materialOf(row)
+        if (m && m.wastage != null) {
+          const issued = Number(m.grossWeight) || 0
+          const pct = issued > 0 ? ((Number(m.wastage) / issued) * 100).toFixed(1) : 0
+          return `${Number(m.wastage).toFixed(3)}g (${pct}%)`
+        }
+        const w = row.costWastagePercent
+        if (w != null && Number(w) > 0) {
+          const base = Number(row.grossWeight) || Number(row.netMetalWeight) || 0
+          const grams = base > 0 ? (base * Number(w) / 100).toFixed(3) : null
+          return grams ? `${w}% (${grams}g)` : `${w}%`
+        }
+        return '-'
+      },
+    },
+    {
+      key: 'paymentStatus',
+      label: 'Payment',
+      render: (val, row) => {
+        const p = paymentOf(row)
+        if (!p || (p.due <= 0 && p.paid <= 0)) return <span className="text-xs text-gray-400">—</span>
+        const status = p.status || (p.due > 0 ? (p.paid >= p.due ? 'paid' : p.paid > 0 ? 'partial' : 'pending') : 'pending')
+        const badge =
+          status === 'paid' ? (
+            <span className="inline-flex items-center rounded-full bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700 border border-green-200">Paid</span>
+          ) : status === 'partial' ? (
+            <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 border border-amber-200">Partial</span>
+          ) : (
+            <span className="inline-flex items-center rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 border border-red-200">Pending</span>
+          )
+        return (
+          <div>
+            {badge}
+            {p.due > 0 && (
+              <p className="mt-0.5 text-xs text-gray-500">
+                {formatCurrency(p.paid)} / {formatCurrency(p.due)}
+              </p>
+            )}
+          </div>
+        )
+      },
     },
     {
       key: 'status',
@@ -679,14 +803,16 @@ const products = [...(items || []), ...(looseLots || [])]
             {karigar.specialization || 'Karigar'} · {karigar.phone || 'No phone'}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => setDeleteOpen(true)}>
-            Delete
-          </Button>
-        </div>
       </div>
 
-      <Tabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
+      <Tabs
+        tabs={tabs}
+        activeTab={activeTab}
+        onChange={(v) => {
+          setActiveTab(v)
+          setSearchParams({ tab: v }, { replace: true })
+        }}
+      />
 
       {activeTab === 'info' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -778,8 +904,8 @@ const products = [...(items || []), ...(looseLots || [])]
 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   {(() => {
                     const materials = karigar.materials || [];
-                    const totalDue = materials.reduce((s, m) => s + (Number(m.paymentDue) || Number(m.payment) || 0), 0);
-                    const totalPaid = materials.reduce((s, m) => s + (Number(m.paymentReceived) || 0), 0);
+                    const totalDue = paymentSummary ? Number(paymentSummary.totalDue) : materials.reduce((s, m) => s + (Number(m.paymentDue) || Number(m.payment) || 0), 0);
+                    const totalPaid = paymentSummary ? Number(paymentSummary.totalPaid) : materials.reduce((s, m) => s + (Number(m.paymentReceived) || 0), 0);
                     const balance = Number(totalDue.toFixed(2)) - Number(totalPaid.toFixed(2));
                     const overpaid = balance < 0;
                     const pendingDue = Math.max(0, balance);
@@ -838,9 +964,9 @@ const products = [...(items || []), ...(looseLots || [])]
              )}
            </Card>
            <div className="flex gap-3">
-             <Button onClick={() => { setPaymentForm((p) => ({ ...p, materialIndex: '' })); setPaymentModalOpen(true) }}>
-               Record Payment
-             </Button>
+<Button onClick={() => { setPaymentForm((p) => ({ ...p, target: '' })); fetchPaymentTargets(); setPaymentModalOpen(true) }}>
+                Record Payment
+              </Button>
            </div>
          </div>
        )}
@@ -881,14 +1007,105 @@ const products = [...(items || []), ...(looseLots || [])]
           {!report ? (
             <LoadingSkeleton count={3} type="card" />
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {reportCards.map((c) => (
-                <Card key={c.label}>
-                  <p className="text-sm text-gray-500">{c.label}</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1 card-value">{c.value}</p>
-                </Card>
-              ))}
-            </div>
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {reportCards.map((c) => (
+                  <Card key={c.label}>
+                    <p className="text-sm text-gray-500">{c.label}</p>
+                    <p className="text-2xl font-bold text-gray-900 mt-1 card-value">{c.value}</p>
+                  </Card>
+                ))}
+              </div>
+
+              {(report.paymentMethods?.length || report.paymentTimeline?.length) && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <Card title="Payment Methods">
+                    {report.paymentMethods?.length === 0 || !report.paymentMethods ? (
+                      <EmptyState title="No payments" description="No payments recorded in this period" />
+                    ) : (
+                      <div className="space-y-3">
+                        {report.paymentMethods.map((m) => (
+                          <div
+                            key={m.type}
+                            className="flex items-center justify-between rounded-lg border border-gray-200 p-3"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${m.type === 'gold' ? 'bg-amber-50 text-amber-600' : 'bg-green-50 text-green-600'}`}>
+                                {m.type === 'gold' ? <Coins size={18} /> : <Wallet size={18} />}
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-gray-900">{m.label} Payments</p>
+                                <p className="text-xs text-gray-500">
+                                  {m.count} payment{m.count > 1 ? 's' : ''}
+                                  {m.type === 'gold' && Number(m.goldWeight) > 0 ? ` · ${m.goldWeight}g gold` : ''}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm font-bold text-gray-900">{formatCurrency(m.total)}</p>
+                              {m.type === 'gold' && (
+                                <p className="text-xs text-gray-500">
+                                  {Number(m.goldWeight) > 0 ? `${m.goldWeight}g @ market rate` : ''}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </Card>
+
+                  <Card title="Payment Timeline">
+                    {!report.paymentTimeline?.length ? (
+                      <EmptyState title="No payments" description="No payments recorded in this period" />
+                    ) : (
+                      <div className="relative space-y-4 pl-6">
+                        {report.paymentTimeline.map((p, i) => (
+                          <div key={i} className="relative">
+                            <span
+                              className={`absolute -left-6 top-1.5 h-3 w-3 rounded-full ring-4 ${
+                                p.type === 'gold'
+                                  ? 'bg-amber-500 ring-amber-100'
+                                  : 'bg-green-500 ring-green-100'
+                              }`}
+                            />
+                            <div className="rounded-lg border border-gray-200 p-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <div>
+                                  <p className="text-sm font-medium text-gray-900">
+                                    {p.type === 'gold' ? 'Gold Payment' : 'Cash Payment'}
+                                  </p>
+                                  <p className="text-xs text-gray-500">
+                                    {formatDate(p.date)} · {p.source}
+                                    {p.note ? ` · ${p.note}` : ''}
+                                  </p>
+                                </div>
+                                <div className="text-right shrink-0">
+                                  {p.type === 'gold' ? (
+                                    <>
+                                      <span className="text-sm font-semibold text-gray-900">
+                                        {formatCurrency(p.goldValue || 0)}
+                                      </span>
+                                      <span className="block text-xs text-gray-500">
+                                        {p.goldWeight}g {p.goldKarat}K
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <span className="text-sm font-semibold text-gray-900">
+                                      {formatCurrency(p.amount)}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </Card>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
@@ -1199,65 +1416,70 @@ const products = [...(items || []), ...(looseLots || [])]
          title="Record Payment"
        >
           <form onSubmit={handleRecordPayment} className="space-y-4">
-            {(karigar.materials || []).filter((m) => ((Number(m.paymentDue) || Number(m.payment) || 0) - (Number(m.paymentReceived) || 0)) > 0).length === 0 ? (
-              <div className="rounded-lg bg-green-50 border border-green-200 p-3 text-sm text-green-700">
-                No pending payments — all materials are fully paid.
-              </div>
-            ) : (
-            <>
-            <FormSelect
-              label="Material"
-              name="materialIndex"
-              options={(karigar.materials || [])
-                .map((m, i) => ({
-                  value: i,
-                  label: `${m.itemName} (${m.grossWeight}g, ${m.paymentStatus})`,
-                  _remaining: (Number(m.paymentDue) || Number(m.payment) || 0) - (Number(m.paymentReceived) || 0),
-                }))
-                .filter((opt) => opt._remaining > 0)}
-              value={paymentForm.materialIndex}
-              onChange={(e) => setPaymentForm((p) => ({ ...p, materialIndex: e.target.value }))}
-              required
-            />
-            {paymentForm.materialIndex !== '' && paymentForm.materialIndex !== undefined && paymentForm.materialIndex !== null && (karigar.materials || [])[Number(paymentForm.materialIndex)] ? (() => {
-              const m = (karigar.materials || [])[Number(paymentForm.materialIndex)];
-              const totalDue = Number(m.paymentDue) || Number(m.payment) || 0;
-              const received = Number(m.paymentReceived) || 0;
-              const pending = Math.max(0, totalDue - received);
-              return (
-                <div className="rounded-lg bg-gray-50 p-3 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Total Amount</span>
-                    <span className="font-medium text-gray-900">{formatCurrency(totalDue)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Amount Received</span>
-                    <span className="font-medium text-gray-700">{formatCurrency(received)}</span>
-                  </div>
-                  <div className="flex justify-between border-t border-gray-200 pt-1">
-                    <span className="font-medium text-gray-600">Pending (Balance Due)</span>
-                    <span className="font-bold text-red-600">{formatCurrency(pending)}</span>
-                  </div>
-                </div>
-              );
-            })() : null}
-            <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-700">
-              <input
-                type="checkbox"
-                checked={paymentForm.payFull}
-                onChange={(e) => {
-                  const m = (karigar.materials || [])[Number(paymentForm.materialIndex)]
-                  const pending = m ? Math.max(0, (Number(m.paymentDue) || Number(m.payment) || 0) - (Number(m.paymentReceived) || 0)) : 0
-                  setPaymentForm((p) => ({
-                    ...p,
-                    payFull: e.target.checked,
-                    amount: e.target.checked ? String(pending) : p.amount,
-                  }))
-                }}
-                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-              />
-              Pay Full Amount
-            </label>
+             {(() => {
+               const allTargets = [...paymentTargets.materials, ...paymentTargets.items, ...paymentTargets.lots]
+               const pendingTargets = allTargets.filter((t) => Number(t.due) > Number(t.paid))
+               const targetOptions = [
+                 ...paymentTargets.materials.filter((t) => Number(t.due) > Number(t.paid)).map((t) => ({ value: t.key, label: `Material — ${t.name}` })),
+                 ...paymentTargets.items.filter((t) => Number(t.due) > Number(t.paid)).map((t) => ({ value: t.key, label: `Item — ${t.name}` })),
+                 ...paymentTargets.lots.filter((t) => Number(t.due) > Number(t.paid)).map((t) => ({ value: t.key, label: `Loose Lot — ${t.name}` })),
+               ]
+               const selectedTarget = pendingTargets.find((t) => t.key === paymentForm.target)
+               const pendingAmount = selectedTarget ? Math.max(0, Number(selectedTarget.due) - Number(selectedTarget.paid)) : 0
+               return (
+                 <>
+                   {pendingTargets.length === 0 ? (
+                     <div className="rounded-lg bg-green-50 border border-green-200 p-3 text-sm text-green-700">
+                       No pending payments — everything assigned to this karigar is fully paid.
+                     </div>
+                   ) : (
+                     <>
+                       <FormSelect
+                         label="Pay For"
+                         name="target"
+                         options={targetOptions}
+                         value={paymentForm.target}
+                         onChange={(e) => setPaymentForm((p) => ({ ...p, target: e.target.value }))}
+                         required
+                       />
+                       {selectedTarget ? (
+                         <div className="rounded-lg bg-gray-50 p-3 text-xs">
+                           <div className="flex justify-between">
+                             <span className="text-gray-500">Total Amount</span>
+                             <span className="font-medium text-gray-900">{formatCurrency(selectedTarget.due)}</span>
+                           </div>
+                           <div className="flex justify-between">
+                             <span className="text-gray-500">Amount Received</span>
+                             <span className="font-medium text-gray-700">{formatCurrency(selectedTarget.paid)}</span>
+                           </div>
+                           <div className="flex justify-between border-t border-gray-200 pt-1">
+                             <span className="font-medium text-gray-600">Pending (Balance Due)</span>
+                             <span className="font-bold text-red-600">{formatCurrency(pendingAmount)}</span>
+                           </div>
+                         </div>
+                       ) : null}
+                     </>
+                   )}
+                 </>
+               )
+             })()}
+             <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-700">
+               <input
+                 type="checkbox"
+                 checked={paymentForm.payFull}
+                 onChange={(e) => {
+                   const sel = [...paymentTargets.materials, ...paymentTargets.items, ...paymentTargets.lots].find((t) => t.key === paymentForm.target)
+                   const pending = sel ? Math.max(0, Number(sel.due) - Number(sel.paid)) : 0
+                   setPaymentForm((p) => ({
+                     ...p,
+                     payFull: e.target.checked,
+                     amount: e.target.checked ? String(pending) : p.amount,
+                   }))
+                 }}
+                 className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+               />
+               Pay Full Amount
+             </label>
            <FormSelect
              label="Payment Type"
              name="type"
@@ -1336,24 +1558,12 @@ const products = [...(items || []), ...(looseLots || [])]
              <Button variant="ghost" onClick={() => setPaymentModalOpen(false)} disabled={submitting}>
                Cancel
              </Button>
-             <Button type="submit" loading={submitting}>
-               Save Payment
-             </Button>
-           </div>
-           </>
-           )}
+<Button type="submit" loading={submitting}>
+                Save Payment
+              </Button>
+            </div>
 </form>
        </Modal>
-
-       <ConfirmDialog
-         isOpen={deleteOpen}
-         onClose={() => setDeleteOpen(false)}
-         onConfirm={handleDelete}
-         title="Delete Karigar"
-         message="Are you sure you want to delete this karigar? This action cannot be undone."
-         confirmText="Delete"
-         variant="danger"
-       />
      </div>
    )
  }

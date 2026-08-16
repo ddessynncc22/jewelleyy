@@ -244,6 +244,9 @@ const validate = (values) => {
       errors.stoneQuantity = 'Quantity must be at least 1'
     }
   }
+  if (values.karigarId && !Number(values.costMakingCharge) && !Number(values.costWastagePercent)) {
+    errors.costPricing = 'Either cost making charge or cost wastage is required when a karigar is assigned'
+  }
   return errors
 }
 
@@ -508,6 +511,14 @@ const InventoryForm = ({ mode = 'tagged', variant = 'modal', item, lot, onClose,
       setTaggedErrors((prev) => {
         const next = { ...prev }
         delete next[name]
+        return next
+      })
+    }
+    if (name === 'costMakingCharge' || name === 'costWastagePercent' || name === 'karigarId') {
+      setTaggedErrors((prev) => {
+        if (!prev.costPricing) return prev
+        const next = { ...prev }
+        delete next.costPricing
         return next
       })
     }
@@ -1512,6 +1523,16 @@ const InventoryForm = ({ mode = 'tagged', variant = 'modal', item, lot, onClose,
                       onChange={handleChange}
                       placeholder="0"
                     />
+                    {(() => {
+                      const pct = Number(tagged.costWastagePercent)
+                      const base = Number(tagged.grossWeight) || Number(netMetalValue) || 0
+                      if (!pct || !base) return null
+                      return (
+                        <p className="text-xs text-[var(--color-text-secondary)]">
+                          Wastage weight: {(base * pct / 100).toFixed(3)} g ({pct}% of {base} g) — paid to the karigar
+                        </p>
+                      )
+                    })()}
                     <FormInput
                       label="Stone/Mala Price (Rs.)"
                       name="costStonePrice"
@@ -1624,7 +1645,7 @@ const InventoryForm = ({ mode = 'tagged', variant = 'modal', item, lot, onClose,
               </div>
             )}
 
-            {!linkedItem && (
+            {(!linkedItem || isEditing) && (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">

@@ -40,7 +40,18 @@ const tenantSections = [
     label: 'Inventory',
     items: [
       { to: '/items', label: 'Items', icon: Gem },
+      {
+        to: '',
+        label: 'Loose Lots',
+        icon: Layers,
+        children: [
+          { to: '/loose-lots', label: 'Lots', end: true },
+          { to: '/loose-lots/reports/stock', label: 'Stock & Value' },
+          { to: '/loose-lots/reports/day-end', label: 'Day-End Report' },
+        ],
+      },
       { to: '/stock', label: 'Stock Movement', icon: ArrowLeftRight },
+      { to: '/gold-in-stock', label: 'Gold in Stock', icon: Scale },
     ],
   },
   {
@@ -61,18 +72,16 @@ const tenantSections = [
   {
     label: 'Purchase',
     items: [
-      { to: '/purchases', label: 'Purchases', icon: ShoppingCart, end: true },
-      { to: '/purchases/new', label: 'New Purchase', icon: ShoppingCart },
+      {
+        to: '',
+        label: 'Purchases',
+        icon: ShoppingCart,
+        children: [
+          { to: '/purchases', label: 'Purchases', end: true },
+          { to: '/purchases/new', label: 'New Purchase' },
+        ],
+      },
       { to: '/refines', label: 'Refine Gold', icon: FlaskConical },
-      { to: '/gold-in-stock', label: 'Gold in Stock', icon: Scale },
-    ],
-  },
-  {
-    label: 'Loose Items',
-    items: [
-      { to: '/loose-lots', label: 'Lots', icon: Layers, end: true },
-      { to: '/loose-lots/reports/stock', label: 'Stock & Value', icon: BarChart3 },
-      { to: '/loose-lots/reports/day-end', label: 'Day-End Report', icon: History },
     ],
   },
   {
@@ -107,15 +116,10 @@ const tenantSections = [
     label: 'System',
     items: [
       { to: '/rates', label: 'Rates', icon: TrendingUp },
-      { to: '/audit', label: 'Audit', icon: ShieldCheck },
-      { to: '/settings', label: 'Settings', icon: Settings },
-    ],
-  },
-  {
-    label: 'QR Lookup',
-    items: [
       { to: '/lookup', label: 'QR Scanner', icon: QrCode },
       { to: '/qr-accounts', label: 'QR Accounts', icon: Users, roles: ['admin'] },
+      { to: '/audit', label: 'Audit Log', icon: ShieldCheck },
+      { to: '/settings', label: 'Settings', icon: Settings },
     ],
   },
 ]

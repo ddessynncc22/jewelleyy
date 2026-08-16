@@ -131,6 +131,23 @@ const itemSchema = new mongoose.Schema(
       ref: 'Karigar',
       default: null,
     },
+    // Karigar labour payment tracking for items assigned a karigar directly at
+    // creation (no material/issue record — those are paid via karigar.materials[]).
+    paymentDue: { type: Number, default: 0, min: 0 },
+    paymentReceived: { type: Number, default: 0, min: 0 },
+    paymentStatus: { type: String, enum: ['pending', 'partial', 'paid'], default: 'pending' },
+    paymentHistory: [
+      {
+        date: { type: Date, default: Date.now },
+        amount: { type: Number, default: 0, min: 0 },
+        type: { type: String, enum: ['cash', 'gold', 'mixed'], default: 'cash' },
+        goldWeight: { type: Number, default: 0 },
+        goldKarat: { type: Number, default: 24 },
+        goldPurity: { type: Number, default: 999 },
+        goldValue: { type: Number, default: 0 },
+        note: { type: String, default: '' },
+      },
+    ],
     stoneType: {
       type: String,
       default: '',

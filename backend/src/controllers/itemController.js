@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Item = require('../models/Item');
 const LooseLot = require('../models/LooseLot');
 const { scopeAggregate } = require('../utils/tenant');
@@ -27,7 +28,12 @@ exports.getItems = async (req, res) => {
     if (metalType) query.metalType = metalType;
     if (purity) query.purity = Number(purity);
     if (karat) query.karat = Number(karat);
-    if (karigarId) query.karigarId = karigarId;
+    if (karigarId) {
+      // Aggregation $match does not cast query values, so the raw string never
+      // equals the stored ObjectId there (unlike find/countDocuments, which
+      // cast). Cast once up front so both paths match.
+      query.karigarId = mongoose.isValidObjectId(karigarId) ? new mongoose.Types.ObjectId(karigarId) : karigarId;
+    }
     if (req.query.diamond === 'true' || req.query.diamond === '1') {
       query.$and = [{ $or: [{ metalType: 'diamond' }, { stoneType: 'diamond' }] }];
     }
@@ -114,6 +120,21 @@ exports.getItem = async (req, res) => {
   }
 };
 
+// Karigar wastage due: costWastagePercent of the gross weight, valued at the
+// live per-gram rate adjusted for purity. The karigar is paid this gold value
+// in addition to the cost making charge.
+async function karigarWastageValue({ metalType, purity, grossWeight, netMetalWeight, costWastagePercent }) {
+  const pct = Number(costWastagePercent) || 0;
+  if (!pct) return 0;
+  const weight = Number(grossWeight) || Number(netMetalWeight) || 0;
+  if (!weight) return 0;
+  const latest = await Rate.findOne({ metalType }).sort({ date: -1 });
+  const rate = toPerGramRate(latest);
+  if (!rate) return 0;
+  const wastageWeight = Number(((weight * pct) / 100).toFixed(4));
+  return Number((wastageWeight * rate * ((Number(purity) || 0) / 1000)).toFixed(2));
+}
+
 const createItemWithRetry = async (data, retries = 3) => {
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
@@ -139,8 +160,13 @@ exports.createItem = async (req, res) => {
       images = req.files.map((f) => `${req.uploadBaseUrl}/${f.filename}`);
     }
     if (!req.tenantId) return errorResponse(res, 'Tenant context required to create item', 400);
+    let karigarPaymentDue = 0;
+    if (karigarId) {
+      const wastageValue = await karigarWastageValue({ metalType, purity, grossWeight, netMetalWeight, costWastagePercent });
+      karigarPaymentDue = Number(costMakingCharge || 0) + wastageValue;
+    }
     const item = await createItemWithRetry({
-      tenantId: req.tenantId, category, subcategory, metalType, purity, karat, itemName, grossWeight, stoneWeight, netMetalWeight, designCode, description, stoneType, carat, stoneCarat, stoneWeightGram, stoneQuantity, stoneRate, stoneAmount, cut, clarity, certificationNumber, costPrice, costMakingCharge: costMakingCharge || 0, costWastagePercent: costWastagePercent || 0, costStonePrice: costStonePrice || 0, sellingPrice, sellingMakingCharge: sellingMakingCharge || 0, sellingWastagePercent: sellingWastagePercent || 0, sellingStonePrice: sellingStonePrice || 0,       makingCharge: makingCharge || 0, wastagePercent: wastagePercent || 0, tags: tags || [], images, status: status || 'In Stock', currentLocation, quantity: quantity || 1, karigarId: karigarId || null, length: length || 0, lengthUnit: lengthUnit || 'mm', diameter: diameter || 0, ringSize: ringSize || 0,
+      tenantId: req.tenantId, category, subcategory, metalType, purity, karat, itemName, grossWeight, stoneWeight, netMetalWeight, designCode, description, stoneType, carat, stoneCarat, stoneWeightGram, stoneQuantity, stoneRate, stoneAmount, cut, clarity, certificationNumber, costPrice, costMakingCharge: costMakingCharge || 0, costWastagePercent: costWastagePercent || 0, costStonePrice: costStonePrice || 0, sellingPrice, sellingMakingCharge: sellingMakingCharge || 0, sellingWastagePercent: sellingWastagePercent || 0, sellingStonePrice: sellingStonePrice || 0,       makingCharge: makingCharge || 0, wastagePercent: wastagePercent || 0, tags: tags || [], images, status: status || 'In Stock', currentLocation, quantity: quantity || 1, karigarId: karigarId || null, paymentDue: karigarPaymentDue, paymentStatus: 'pending', length: length || 0, lengthUnit: lengthUnit || 'mm', diameter: diameter || 0, ringSize: ringSize || 0,
     });
     await StockMovement.create({
       item: item._id,
@@ -203,6 +229,13 @@ exports.updateItem = async (req, res) => {
     }
     if (req.body.images && Array.isArray(req.body.images)) {
       item.images = req.body.images;
+    }
+    // Keep the karigar payment due in sync with the cost making charge + wastage
+    // value whenever the item is karigar-assigned and not already fully paid.
+    if (item.karigarId && item.paymentStatus !== 'paid') {
+      const wastageValue = await karigarWastageValue(item);
+      const due = Number(item.costMakingCharge || 0) + wastageValue;
+      if (Number(due) !== Number(item.paymentDue || 0)) item.paymentDue = due;
     }
     await item.save();
     if (req.body.status && req.body.status !== previousStatus) {

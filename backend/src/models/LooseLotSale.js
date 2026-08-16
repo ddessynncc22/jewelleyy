@@ -48,6 +48,16 @@ const looseLotSaleSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    wastagePercent: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    wastageAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     makingCharge: {
       type: Number,
       default: 0,

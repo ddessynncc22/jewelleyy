@@ -90,7 +90,8 @@ function calcItemTotal(item, makingCharge, wastagePercent, ratePerGram, stonePri
 
 function lotLineTotal(c) {
   const metalValue = Number(c.actualWeight || 0) * Number(c.ratePerGram || 0) * ((c.lot.purity || 0) / 1000)
-  return Number((metalValue + Number(c.makingCharge || 0)).toFixed(2))
+  const wastageAmt = metalValue * ((Number(c.wastagePercent) || 0) / 100)
+  return Number((metalValue + wastageAmt + Number(c.makingCharge || 0)).toFixed(2))
 }
 
 function deviationOf(c) {
@@ -303,6 +304,7 @@ const [actualAmountReceived, setActualAmountReceived] = useState('')
         actualWeight: lot.avgWeightPerPiece || 0,
         weightSource: 'average',
         makingCharge: Number(lot.makingChargeValue) || 0,
+        wastagePercent: 0,
         ratePerGram,
         overrideReason: '',
         managerApproved: false,
@@ -627,6 +629,7 @@ const [actualAmountReceived, setActualAmountReceived] = useState('')
         actualWeightSold: Number(c.actualWeight),
         weightSource: c.weightSource,
         makingCharge: Number(c.makingCharge) || 0,
+        wastagePercent: Number(c.wastagePercent) || 0,
         ratePerGram: Number(c.ratePerGram) || 0,
         overrideReason: c.overrideReason,
         managerApproved: c.managerApproved,
@@ -800,7 +803,7 @@ setCart(heldBill.cart || [])
         grossWeight: fmtWt(weight),
         lessWeight: fmtWt(0),
         netWeight: fmtWt(weight),
-        wastage: '',
+        wastage: Number(c.wastagePercent) > 0 ? `${Number(c.wastagePercent)}%` : '',
         totalWeight: fmtWt(weight),
         rate: ratePerGram > 0 ? `${ratePerGram.toFixed(3)} (${tolaRate})` : '',
         makingCharge: fmtMoney(makingCharge),
@@ -1131,6 +1134,15 @@ setCart(heldBill.cart || [])
                         <label className="text-gray-500">Making Charge</label>
                         <input type="number" value={c.makingCharge} onChange={(e) => updateCartField(c.lot._id, 'makingCharge', Number(e.target.value))} className="w-full rounded border border-gray-200 px-2 py-1" />
                       </div>
+                      <div>
+                        <label className="text-gray-500">Wastage %</label>
+                        <input type="number" step="0.1" min="0" value={c.wastagePercent} onChange={(e) => updateCartField(c.lot._id, 'wastagePercent', Number(e.target.value))} className="w-full rounded border border-gray-200 px-2 py-1" />
+                      </div>
+                    </div>
+                    <div className="text-xs text-gray-500 space-y-0.5 pt-1 border-t border-gray-100">
+                      <div className="flex justify-between"><span>Metal Value</span><span>{formatCurrency(Number(c.actualWeight || 0) * Number(c.ratePerGram || 0) * ((c.lot.purity || 0) / 1000))}</span></div>
+                      {Number(c.wastagePercent) > 0 && <div className="flex justify-between"><span>Wastage ({Number(c.wastagePercent)}%)</span><span>{formatCurrency(Number(c.actualWeight || 0) * Number(c.ratePerGram || 0) * ((c.lot.purity || 0) / 1000) * (Number(c.wastagePercent) / 100))}</span></div>}
+                      <div className="flex justify-between"><span>Making Charge</span><span>{formatCurrency(Number(c.makingCharge) || 0)}</span></div>
                     </div>
                     <div className="flex justify-between text-sm font-bold text-gray-900 pt-1 border-t border-gray-100">
                       <span>Line Total</span>

@@ -92,9 +92,9 @@ export default function InvoiceSummary({
             </tr>
            
             <tr>
-              <td colSpan="2" className="border border-black px-1 py-0.5 text-center">{hasOldGold ? grossWeight.toFixed(3) : ''}</td>
+              <td colSpan="2" className="border border-black px-1 py-0.5 text-center">{hasOldGold && grossWeight > 0 ? grossWeight.toFixed(3) : ''}</td>
             </tr>
-            {karat ? (
+            {karat && grossWeight > 0 ? (
               <tr>
                 <td className="border border-black px-1 py-0.5 text-center" colSpan="2">{karat}K</td>
               </tr>

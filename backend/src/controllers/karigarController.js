@@ -1,14 +1,101 @@
 const Karigar = require('../models/Karigar');
 const Item = require('../models/Item');
+const LooseLot = require('../models/LooseLot');
+const Rate = require('../models/Rate');
 const StockMovement = require('../models/StockMovement');
 const ActivityLog = require('../models/ActivityLog');
 const { successResponse, errorResponse, paginatedResponse } = require('../utils/response');
 const { generateSKU, generateBarcode } = require('../services/barcode');
+const { toPerGramRate } = require('../utils/rates');
 
 const METAL_KEYS = ['gold', 'silver', 'diamond', 'gemstone'];
 const WASSTAGE_ALERT_PERCENT = 10;
 
 const round = (n, d = 3) => Number(Number(n).toFixed(d));
+
+// Live per-gram rate from the (global, un-tenant-scoped) Rate collection.
+// Used only to value percentage-type making charges on loose lots.
+async function getLiveRatePerGram(metalType) {
+  const latest = await Rate.findOne({ metalType }).sort({ date: -1 });
+  return latest ? toPerGramRate(latest) : 0;
+}
+
+// Total karigar labour due for a whole loose lot, derived from its making
+// charge settings (per_piece/per_gram/percentage).
+async function lotMakingChargeDue(lot) {
+  const v = Number(lot.makingChargeValue) || 0;
+  if (!v) return 0;
+  if (lot.makingChargeType === 'per_gram') return round(v * (Number(lot.totalGrossWeight) || 0), 2);
+  if (lot.makingChargeType === 'percentage') {
+    const rate = Number(lot.ratePerGram) || (await getLiveRatePerGram(lot.metalType));
+    const metalValue = (Number(lot.totalGrossWeight) || 0) * rate * ((Number(lot.purity) || 0) / 1000);
+    return round((metalValue * v) / 100, 2);
+  }
+  return round(v * (Number(lot.totalPieces) || 0), 2);
+}
+
+// Cost-side wastage value for a karigar-assigned item: costWastagePercent of
+// the gross weight, valued at the live per-gram rate adjusted for purity. The
+// karigar is paid this gold value in addition to the cost making charge.
+async function itemWastageValue(item) {
+  const pct = Number(item.costWastagePercent) || 0;
+  if (!pct) return 0;
+  const weight = Number(item.grossWeight) || Number(item.netMetalWeight) || 0;
+  if (!weight) return 0;
+  const rate = await getLiveRatePerGram(item.metalType);
+  if (!rate) return 0;
+  const wastageWeight = Number((weight * pct) / 100).toFixed(4);
+  return round(wastageWeight * rate * ((Number(item.purity) || 0) / 1000), 2);
+}
+
+// Shared cash/gold payment entry builder. Throws with a user-facing message.
+function buildPaymentEntry(body) {
+  const { amount, goldWeight, goldKarat, goldPurity, goldValue, note } = body;
+  const paymentEntry = {
+    date: body.date ? new Date(body.date) : Date.now(),
+    type: goldWeight ? 'gold' : 'cash',
+    note: note || '',
+  };
+  let paymentValue = 0;
+  if (goldWeight) {
+    const w = Number(goldWeight);
+    if (!w || w <= 0) throw new Error('Gold weight must be greater than zero');
+    paymentEntry.goldWeight = w;
+    paymentEntry.goldKarat = Number(goldKarat || 24);
+    paymentEntry.goldPurity = Number(goldPurity || 999);
+    if (goldValue !== undefined && goldValue !== null && goldValue !== '') {
+      paymentEntry.goldValue = Number(goldValue) || 0;
+    } else {
+      const ratePerGram = Number(body.ratePerGram);
+      if (!ratePerGram || ratePerGram <= 0) {
+        throw new Error('Either goldValue or ratePerGram is required for gold payment');
+      }
+      paymentEntry.goldValue = Number((w * (paymentEntry.goldKarat / 24) * ratePerGram).toFixed(2));
+    }
+    paymentValue = paymentEntry.goldValue;
+  } else {
+    const cash = Number(amount);
+    if (!cash || cash <= 0) throw new Error('Cash payment amount must be greater than zero');
+    paymentEntry.amount = Number(cash.toFixed(2));
+    paymentValue = paymentEntry.amount;
+  }
+  if (paymentValue <= 0) throw new Error('Payment value must be greater than zero');
+  return { paymentEntry, paymentValue };
+}
+
+// Push a payment onto a material/item/lot record and recompute received + status.
+function applyPaymentTo(record, paymentEntry, due) {
+  record.paymentHistory.push(paymentEntry);
+  const totalReceived = record.paymentHistory.reduce((sum, p) => sum + (p.type === 'gold' ? p.goldValue : p.amount), 0);
+  record.paymentReceived = Number(totalReceived.toFixed(2));
+  if (due > 0 && record.paymentReceived >= due) {
+    record.paymentStatus = 'paid';
+  } else if (record.paymentReceived > 0) {
+    record.paymentStatus = 'partial';
+  } else {
+    record.paymentStatus = 'pending';
+  }
+}
 
 function computeBalances(karigar) {
   const outstandingByMetal = { gold: 0, silver: 0, diamond: 0, gemstone: 0 };
@@ -434,37 +521,97 @@ exports.getKarigarReport = async (req, res) => {
       return errorResponse(res, 'Karigar not found', 404);
     }
     let materials = karigar.materials;
+    const [items, lots] = await Promise.all([
+      Item.find({ karigarId: karigar._id }).select('itemName SKU metalType purity grossWeight netMetalWeight costMakingCharge costWastagePercent paymentDue paymentReceived paymentStatus paymentHistory createdAt'),
+      LooseLot.find({ karigarId: karigar._id }).select('itemName lotBarcode metalType purity totalGrossWeight totalPieces makingChargeType makingChargeValue ratePerGram paymentDue paymentReceived paymentStatus paymentHistory createdAt'),
+    ]);
+    let filteredItems = items;
+    let filteredLots = lots;
+    const start = startDate ? new Date(`${startDate}T00:00:00`) : null;
+    let end = null;
+    if (endDate) {
+      end = new Date(`${endDate}T23:59:59.999`);
+    }
     if (startDate || endDate) {
-      const start = startDate ? new Date(`${startDate}T00:00:00`) : null;
-      let end = null;
-      if (endDate) {
-        end = new Date(`${endDate}T23:59:59.999`);
-      }
       materials = materials.filter((m) => {
         const d = new Date(m.date);
         if (start && d < start) return false;
         if (end && d > end) return false;
         return true;
       });
+      filteredItems = items.filter((i) => {
+        const d = new Date(i.createdAt);
+        if (start && d < start) return false;
+        if (end && d > end) return false;
+        return true;
+      });
+      filteredLots = lots.filter((l) => {
+        const d = new Date(l.createdAt);
+        if (start && d < start) return false;
+        if (end && d > end) return false;
+        return true;
+      });
     }
+    const materialsDue = materials.reduce((sum, m) => sum + (Number(m.paymentDue) || Number(m.payment) || 0), 0);
+    const materialsReceived = materials.reduce((sum, m) => sum + (Number(m.paymentReceived) || 0), 0);
+    const materialsLabour = materials.reduce((sum, m) => sum + (m.labourCharge || 0), 0);
+    const itemsDue = filteredItems.reduce((sum, i) => sum + (Number(i.paymentDue) || 0), 0);
+    const itemsReceived = filteredItems.reduce((sum, i) => sum + (Number(i.paymentReceived) || 0), 0);
+    const itemsLabour = filteredItems.reduce((sum, i) => sum + (Number(i.costMakingCharge) || 0), 0);
+    let lotsDue = 0;
+    let lotsReceived = 0;
+    let lotsLabour = 0;
+    for (const l of filteredLots) {
+      lotsDue += Number(l.paymentDue) || 0;
+      lotsReceived += Number(l.paymentReceived) || 0;
+      lotsLabour += Number(l.paymentDue) || (await lotMakingChargeDue(l));
+    }
+    const totalPayment = round(materialsDue + itemsDue + lotsDue, 2);
+    const totalPayments = round(materialsReceived + itemsReceived + lotsReceived, 2);
+    const pendingPayment = round(Math.max(0, totalPayment - totalPayments), 2);
+    const totalLabour = round(materialsLabour + itemsLabour + lotsLabour, 2);
     const totalIssuedWeight = materials.reduce((sum, m) => sum + m.grossWeight, 0);
     const totalReturnedWeight = materials.filter((m) => m.status === 'Returned').reduce((sum, m) => sum + m.grossWeight, 0);
     const totalWastage = materials.filter((m) => m.status === 'Returned').reduce((sum, m) => sum + (m.wastage || 0), 0);
-    const totalLabour = materials.reduce((sum, m) => sum + (m.labourCharge || 0), 0);
     const totalJarti = materials.reduce((sum, m) => sum + (m.jartiAmount || 0), 0);
-    const totalPayment = materials.reduce((sum, m) => sum + (m.payment || 0), 0);
-    const pendingPayment = materials.reduce((sum, m) => {
-      const due = Number(m.paymentDue) || Number(m.payment) || 0;
-      return sum + Math.max(0, due - (Number(m.paymentReceived) || 0));
-    }, 0);
-    const totalPayments = materials.reduce((sum, m) => sum + (m.paymentHistory || []).reduce((psum, p) => psum + (p.type === 'gold' ? p.goldValue : p.amount), 0), 0);
     const issuedCount = materials.length;
     const returnedCount = materials.filter((m) => m.status === 'Returned').length;
     const pendingCount = materials.filter((m) => m.status !== 'Returned').length;
     const balances = computeBalances(karigar);
+    const paymentEntries = [];
+    const pushPayments = (list, source) => {
+      (list || []).forEach((p) => {
+        const d = new Date(p.date);
+        if (start && d < start) return;
+        if (end && d > end) return;
+        paymentEntries.push({
+          source,
+          date: p.date,
+          amount: p.amount || 0,
+          type: p.type || 'cash',
+          goldWeight: p.goldWeight || 0,
+          goldKarat: p.goldKarat || 24,
+          goldPurity: p.goldPurity || 999,
+          goldValue: p.goldValue || 0,
+          note: p.note || '',
+        });
+      });
+    };
+    materials.forEach((m) => pushPayments(m.paymentHistory, m.itemName));
+    filteredItems.forEach((i) => pushPayments(i.paymentHistory, `${i.itemName} (${i.SKU})`));
+    filteredLots.forEach((l) => pushPayments(l.paymentHistory, `${l.itemName} (${l.lotBarcode})`));
+    paymentEntries.sort((a, b) => new Date(b.date) - new Date(a.date));
+    const cashEntries = paymentEntries.filter((p) => p.type !== 'gold');
+    const goldEntries = paymentEntries.filter((p) => p.type === 'gold');
+    const paymentMethods = [
+      { type: 'cash', label: 'Cash', count: cashEntries.length, total: round(cashEntries.reduce((s, p) => s + (p.amount || 0), 0), 2) },
+      { type: 'gold', label: 'Gold', count: goldEntries.length, total: round(goldEntries.reduce((s, p) => s + (p.goldValue || 0), 0), 2), goldWeight: round(goldEntries.reduce((s, p) => s + (p.goldWeight || 0), 0), 3) },
+    ].filter((m) => m.count > 0);
     return successResponse(res, {
       karigar: { _id: karigar._id, name: karigar.name, phone: karigar.phone, specialization: karigar.specialization },
       summary: { issuedCount, returnedCount, pendingCount, totalIssuedWeight, totalReturnedWeight, totalWastage, totalLabour, totalJarti, totalPayment, pendingPayment, totalPayments, wastagePercentage: totalIssuedWeight > 0 ? ((totalWastage / totalIssuedWeight) * 100).toFixed(2) : 0, outstandingWeight: balances.outstandingWeight, outstandingByMetal: balances.outstandingByMetal },
+      paymentMethods,
+      paymentTimeline: paymentEntries,
       materials,
     });
   } catch (error) {
@@ -474,88 +621,87 @@ exports.getKarigarReport = async (req, res) => {
 
 exports.recordKarigarPayment = async (req, res) => {
   try {
-    const { materialIndex, amount, type, goldWeight, goldKarat, goldPurity, goldValue, note } = req.body;
-    if (materialIndex === undefined) {
-      return errorResponse(res, 'Material index is required', 400);
+    const { materialIndex, itemId, lotId } = req.body;
+    if (materialIndex === undefined && !itemId && !lotId) {
+      return errorResponse(res, 'Material index, item id, or lot id is required', 400);
     }
     const karigar = await Karigar.findById(req.params.id);
     if (!karigar) {
       return errorResponse(res, 'Karigar not found', 404);
     }
-    const material = karigar.materials[materialIndex];
-    if (!material) {
-      return errorResponse(res, 'Material record not found at given index', 404);
-    }
-    const due = Number(material.paymentDue) || Number(material.payment) || 0;
-    if (due <= 0) {
-      return errorResponse(res, 'No payment due for this material yet. Receive the finished item first.', 400);
-    }
-    const alreadyReceived = Number(material.paymentReceived) || 0;
-    const remaining = Number(Math.max(0, due - alreadyReceived).toFixed(2));
-    if (remaining <= 0) {
-      return errorResponse(res, 'This material is already fully paid', 400);
-    }
 
-    const paymentEntry = {
-      date: req.body.date ? new Date(req.body.date) : Date.now(),
-      type: goldWeight ? 'gold' : 'cash',
-      note: note || '',
-    };
-
-    let paymentValue = 0;
-    if (goldWeight) {
-      const w = Number(goldWeight);
-      if (!w || w <= 0) {
-        return errorResponse(res, 'Gold weight must be greater than zero', 400);
+    // Resolve the payment target: a material subdocument (issue->receive flow),
+    // a tagged item, or a loose lot — both of the latter assigned via their
+    // creation forms and tracked with their own payment fields.
+    let target = null;
+    if (itemId) {
+      const item = await Item.findOne({ _id: itemId, karigarId: karigar._id });
+      if (!item) {
+        return errorResponse(res, 'Item not found or not assigned to this karigar', 404);
       }
-      paymentEntry.goldWeight = w;
-      paymentEntry.goldKarat = Number(goldKarat || 24);
-      paymentEntry.goldPurity = Number(goldPurity || 999);
-      if (req.body.goldValue !== undefined && req.body.goldValue !== null && req.body.goldValue !== '') {
-        paymentEntry.goldValue = Number(req.body.goldValue) || 0;
-      } else {
-        const ratePerGram = Number(req.body.ratePerGram);
-        if (!ratePerGram || ratePerGram <= 0) {
-          return errorResponse(res, 'Either goldValue or ratePerGram is required for gold payment', 400);
-        }
-        paymentEntry.goldValue = Number(((w * (paymentEntry.goldKarat / 24) * ratePerGram).toFixed(2)));
+      const due = Number(item.paymentDue) || (Number(item.costMakingCharge || 0) + (await itemWastageValue(item))) || 0;
+      target = { kind: 'item', doc: item, label: item.itemName || item.SKU, due };
+    } else if (lotId) {
+      const lot = await LooseLot.findOne({ _id: lotId, karigarId: karigar._id });
+      if (!lot) {
+        return errorResponse(res, 'Loose lot not found or not assigned to this karigar', 404);
       }
-      paymentValue = paymentEntry.goldValue;
+      const due = Number(lot.paymentDue) || (await lotMakingChargeDue(lot));
+      target = { kind: 'lot', doc: lot, label: lot.itemName || lot.lotBarcode, due };
     } else {
-      const cash = Number(amount);
-      if (!cash || cash <= 0) {
-        return errorResponse(res, 'Cash payment amount must be greater than zero', 400);
+      const material = karigar.materials[Number(materialIndex)];
+      if (!material) {
+        return errorResponse(res, 'Material record not found at given index', 404);
       }
-      paymentEntry.amount = Number(cash.toFixed(2));
-      paymentValue = paymentEntry.amount;
+      target = {
+        kind: 'material',
+        doc: material,
+        label: material.itemName,
+        due: Number(material.paymentDue) || Number(material.payment) || 0,
+      };
     }
-    if (paymentValue <= 0) {
-      return errorResponse(res, 'Payment value must be greater than zero', 400);
+
+    if (target.due <= 0) {
+      const message =
+        target.kind === 'material'
+          ? 'No payment due for this material yet. Receive the finished item first.'
+          : `No payment due for this ${target.kind} yet. Set a making charge and try again.`;
+      return errorResponse(res, message, 400);
+    }
+    const alreadyReceived = Number(target.doc.paymentReceived) || 0;
+    const remaining = Number(Math.max(0, target.due - alreadyReceived).toFixed(2));
+    if (remaining <= 0) {
+      return errorResponse(res, 'This record is already fully paid', 400);
+    }
+
+    let paymentEntry;
+    let paymentValue;
+    try {
+      const built = buildPaymentEntry(req.body);
+      paymentEntry = built.paymentEntry;
+      paymentValue = built.paymentValue;
+    } catch (e) {
+      return errorResponse(res, e.message, 400);
     }
     if (paymentValue > remaining) {
       return errorResponse(res, `Payment exceeds pending balance. Remaining due: Rs. ${remaining.toFixed(2)}`, 400);
     }
 
-    material.paymentHistory.push(paymentEntry);
-    const totalReceived = material.paymentHistory.reduce((sum, p) => sum + (p.type === 'gold' ? p.goldValue : p.amount), 0);
-    material.paymentReceived = Number(totalReceived.toFixed(2));
-    if (material.paymentReceived >= due) {
-      material.paymentStatus = 'paid';
-    } else if (material.paymentReceived > 0) {
-      material.paymentStatus = 'partial';
+    applyPaymentTo(target.doc, paymentEntry, target.due);
+    if (target.kind === 'material') {
+      await karigar.save();
     } else {
-      material.paymentStatus = 'pending';
+      await target.doc.save();
     }
-    await karigar.save();
     await ActivityLog.create({
       action: 'recordPayment',
       module: 'karigar',
-      description: `Payment recorded for ${karigar.name}: ${paymentEntry.type === 'gold' ? `${paymentEntry.goldWeight}g gold (Rs. ${paymentEntry.goldValue})` : `Rs. ${paymentEntry.amount} cash`}${note ? ` - ${note}` : ''}`,
+      description: `Payment recorded for ${karigar.name} (${target.label}): ${paymentEntry.type === 'gold' ? `${paymentEntry.goldWeight}g gold (Rs. ${paymentEntry.goldValue})` : `Rs. ${paymentEntry.amount} cash`}${req.body.note ? ` - ${req.body.note}` : ''}`,
       performedBy: req.user._id,
       referenceId: karigar._id,
       referenceModel: 'Karigar',
     });
-    return successResponse(res, { karigar, material, paymentEntry }, 'Payment recorded successfully', 201);
+    return successResponse(res, { karigar, target: target.doc, paymentEntry }, 'Payment recorded successfully', 201);
   } catch (error) {
     return errorResponse(res, error.message, 500);
   }
@@ -567,27 +713,62 @@ exports.getKarigarPaymentHistory = async (req, res) => {
     if (!karigar) {
       return errorResponse(res, 'Karigar not found', 404);
     }
+
     const history = [];
-    karigar.materials.forEach((m, index) => {
-      if (m.paymentHistory && m.paymentHistory.length > 0) {
-        m.paymentHistory.forEach((p) => {
-          history.push({
-            materialIndex: index,
-            materialName: m.itemName,
-            date: p.date,
-            amount: p.amount,
-            type: p.type,
-            goldWeight: p.goldWeight || 0,
-            goldKarat: p.goldKarat || 24,
-            goldPurity: p.goldPurity || 999,
-            goldValue: p.goldValue || 0,
-            note: p.note || '',
-          });
+    const pushEntries = (list, sourceType, sourceId, name) => {
+      (list || []).forEach((p) => {
+        history.push({
+          sourceType,
+          sourceId,
+          materialName: name,
+          date: p.date,
+          amount: p.amount || 0,
+          type: p.type || 'cash',
+          goldWeight: p.goldWeight || 0,
+          goldKarat: p.goldKarat || 24,
+          goldPurity: p.goldPurity || 999,
+          goldValue: p.goldValue || 0,
+          note: p.note || '',
         });
-      }
+      });
+    };
+
+    let totalDue = 0;
+    let totalPaid = 0;
+    karigar.materials.forEach((m, index) => {
+      totalDue += Number(m.paymentDue) || Number(m.payment) || 0;
+      totalPaid += Number(m.paymentReceived) || 0;
+      pushEntries(m.paymentHistory, 'material', index, m.itemName);
     });
+
+    const [items, lots] = await Promise.all([
+      Item.find({ karigarId: karigar._id }).select('itemName SKU paymentDue paymentReceived paymentHistory'),
+      LooseLot.find({ karigarId: karigar._id }).select('itemName lotBarcode paymentDue paymentReceived paymentHistory'),
+    ]);
+    items.forEach((i) => {
+      totalDue += Number(i.paymentDue) || 0;
+      totalPaid += Number(i.paymentReceived) || 0;
+      pushEntries(i.paymentHistory, 'item', i._id, i.itemName || i.SKU);
+    });
+    lots.forEach((l) => {
+      totalDue += Number(l.paymentDue) || 0;
+      totalPaid += Number(l.paymentReceived) || 0;
+      pushEntries(l.paymentHistory, 'lot', l._id, l.itemName || l.lotBarcode);
+    });
+
     history.sort((a, b) => new Date(b.date) - new Date(a.date));
-    return successResponse(res, history, 'Payment history retrieved');
+    return successResponse(
+      res,
+      {
+        history,
+        summary: {
+          totalDue: round(totalDue, 2),
+          totalPaid: round(totalPaid, 2),
+          pending: round(Math.max(0, totalDue - totalPaid), 2),
+        },
+      },
+      'Payment history retrieved'
+    );
   } catch (error) {
     return errorResponse(res, error.message, 500);
   }

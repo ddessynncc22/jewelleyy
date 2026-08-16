@@ -526,7 +526,7 @@ exports.createCombinedSale = async (req, res) => {
           price: r.price,
           purity: r.purity,
           makingCharge: r.makingCharge,
-          wastagePercent: 0,
+          wastagePercent: r.wastagePercent,
           ratePerGram: r.ratePerGram,
           metalValue: r.metalValue,
           stonePrice: 0,

@@ -14,6 +14,7 @@ router.post('/', protect, authorize('admin', 'manager'), createKarigar);
 router.post('/:id/issue', protect, authorize('admin', 'manager'), issueMaterial);
 router.post('/:id/receive', protect, authorize('admin', 'manager'), receiveFinished);
 router.post('/:id/materials/:materialIndex/payment', protect, authorize('admin', 'manager'), recordKarigarPayment);
+router.post('/:id/payments', protect, authorize('admin', 'manager'), recordKarigarPayment);
 router.patch('/:id/materials/:materialIndex', protect, authorize('admin', 'manager'), updateMaterialStatus);
 router.put('/:id', protect, authorize('admin', 'manager'), updateKarigar);
 router.delete('/:id', protect, authorize('admin'), deleteKarigar);

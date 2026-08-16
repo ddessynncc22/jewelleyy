@@ -162,8 +162,10 @@ async function processLotLine(line, { sale = null, saleNumber = '', performedBy,
     Number(line.ratePerGram) > 0 ? Number(line.ratePerGram) : (liveRates[lot.metalType] ?? await getLiveRatePerGram(lot.metalType));
   const purity = lot.purity || 0;
   const metalValue = metalValueOf(actualWeight, ratePerGram, purity);
+  const wastagePercent = Number(line.wastagePercent) || 0;
+  const wastageAmount = Number((metalValue * wastagePercent / 100).toFixed(2));
   const makingCharge = Number(line.makingCharge) || 0;
-  const price = Number((metalValue + makingCharge).toFixed(2));
+  const price = Number((metalValue + wastageAmount + makingCharge).toFixed(2));
 
   lot.remainingPieces -= pieces;
   lot.remainingWeight = Number((lot.remainingWeight - actualWeight).toFixed(4));
@@ -187,6 +189,8 @@ async function processLotLine(line, { sale = null, saleNumber = '', performedBy,
     deviationPercent: Number(deviationPercent),
     ratePerGram,
     metalValue,
+    wastagePercent,
+    wastageAmount,
     makingCharge,
     price,
     overrideReason: line.overrideReason || '',
@@ -207,7 +211,7 @@ async function processLotLine(line, { sale = null, saleNumber = '', performedBy,
     performedBy,
   });
 
-  return { lotSale, lot, price, metalValue, makingCharge, ratePerGram, purity, deviationPercent: Number(deviationPercent), expectedWeight };
+  return { lotSale, lot, price, metalValue, wastagePercent, wastageAmount, makingCharge, ratePerGram, purity, deviationPercent: Number(deviationPercent), expectedWeight };
 }
 
 exports.listLots = async (req, res) => {
@@ -343,6 +347,23 @@ exports.createLot = async (req, res) => {
       );
     }
 
+    // Karigar labour due for the whole lot, from its making charge settings.
+    let karigarPaymentDue = 0;
+    if (karigarId) {
+      const mcValue = Number(makingChargeValue) || 0;
+      if (mcValue > 0) {
+        if (makingChargeType === 'per_gram') {
+          karigarPaymentDue = Number((mcValue * Number(totalGrossWeight)).toFixed(2));
+        } else if (makingChargeType === 'percentage') {
+          const mcRate = Number(ratePerGram) || (await getLiveRatePerGram(item.metalType));
+          const metalValue = Number(totalGrossWeight) * mcRate * ((Number(item.purity) || 0) / 1000);
+          karigarPaymentDue = Number(((metalValue * mcValue) / 100).toFixed(2));
+        } else {
+          karigarPaymentDue = Number((mcValue * Number(totalPieces)).toFixed(2));
+        }
+      }
+    }
+
     // Try the caller's barcode first, otherwise generate one; retry on the
     // compound unique key (tenantId + lotBarcode).
     let finalBarcode = (lotBarcode || '').trim().toUpperCase();
@@ -362,6 +383,7 @@ exports.createLot = async (req, res) => {
           purity: item.purity,
            karat: item.karat || 0,
            karigarId: karigarId || null,
+           paymentDue: karigarPaymentDue,
            length: Number(length) || 0,
            lengthUnit: lengthUnit || 'mm',
            diameter: Number(diameter) || 0,
@@ -434,6 +456,53 @@ exports.updateLot = async (req, res) => {
     allowed.forEach((field) => {
       if (req.body[field] !== undefined) lot[field] = req.body[field];
     });
+
+    // Weight/pieces corrections. The difference (delta) is applied to the
+    // remaining stock so a correction to the creation totals never alters the
+    // weight/pieces already sold.
+    if (req.body.totalGrossWeight !== undefined || req.body.totalPieces !== undefined) {
+      const prevTotalWeight = lot.totalGrossWeight || 0;
+      const prevTotalPieces = lot.totalPieces || 0;
+      if (req.body.totalGrossWeight !== undefined) {
+        const newWeight = Number(req.body.totalGrossWeight);
+        if (!newWeight || newWeight <= 0) {
+          return errorResponse(res, 'Total gross weight must be greater than 0', 400);
+        }
+        const delta = newWeight - prevTotalWeight;
+        lot.totalGrossWeight = newWeight;
+        lot.remainingWeight = Math.max(0, Number((lot.remainingWeight + delta).toFixed(4)));
+      }
+      if (req.body.totalPieces !== undefined) {
+        const newPieces = Math.floor(Number(req.body.totalPieces));
+        if (!newPieces || newPieces < 1) {
+          return errorResponse(res, 'Total pieces must be at least 1', 400);
+        }
+        const delta = newPieces - prevTotalPieces;
+        lot.totalPieces = newPieces;
+        lot.remainingPieces = Math.max(0, lot.remainingPieces + delta);
+      }
+      if (lot.remainingPieces > 0) {
+        lot.avgWeightPerPiece = Number((lot.remainingWeight / lot.remainingPieces).toFixed(4));
+      }
+    }
+    // Keep the karigar payment due in sync with the making charge settings
+    // whenever the lot is karigar-assigned and not already fully paid.
+    if (lot.karigarId && lot.paymentStatus !== 'paid') {
+      const mcValue = Number(lot.makingChargeValue) || 0;
+      let recomputedDue = 0;
+      if (mcValue > 0) {
+        if (lot.makingChargeType === 'per_gram') {
+          recomputedDue = Number((mcValue * Number(lot.totalGrossWeight)).toFixed(2));
+        } else if (lot.makingChargeType === 'percentage') {
+          const mcRate = Number(lot.ratePerGram) || (await getLiveRatePerGram(lot.metalType));
+          const metalValue = Number(lot.totalGrossWeight) * mcRate * ((Number(lot.purity) || 0) / 1000);
+          recomputedDue = Number(((metalValue * mcValue) / 100).toFixed(2));
+        } else {
+          recomputedDue = Number((mcValue * Number(lot.totalPieces)).toFixed(2));
+        }
+      }
+      lot.paymentDue = recomputedDue;
+    }
     await lot.save();
 
     // Keep the parent loose Item's design fields in sync when they change here.
@@ -475,7 +544,10 @@ exports.deleteLot = async (req, res) => {
 
     // If this was the last lot for its parent item, retire the parent item too
     // so it no longer appears in the Items module. Otherwise just refresh stock.
-    const remainingLots = await LooseLot.countDocuments({ item: lot.item });
+    // Explicit isDeleted: false — countDocuments does not trigger the
+    // pre(/^find/) soft-delete hook, so without it the just-deleted lot is
+    // counted and the parent item is never retired.
+    const remainingLots = await LooseLot.countDocuments({ item: lot.item, isDeleted: false });
     if (remainingLots === 0) {
       const item = await Item.findById(lot.item);
       if (item) await item.softDelete();
@@ -594,7 +666,7 @@ exports.createLooseBill = async (req, res) => {
         price: r.price,
         purity: r.purity,
         makingCharge: r.makingCharge,
-        wastagePercent: 0,
+        wastagePercent: r.wastagePercent,
         ratePerGram: r.ratePerGram,
         metalValue: r.metalValue,
         stonePrice: 0,

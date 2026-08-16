@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 
-import { Gem, Wrench, Package, TrendingUp, Activity, Grid3X3, Layers, Plus, ArrowRightLeft, ExternalLink, Clock, CheckCircle2, Landmark } from 'lucide-react'
+import { Gem, Wrench, Package, TrendingUp, Activity, Grid3X3, Layers, Plus, ArrowRightLeft, ExternalLink, Clock, CheckCircle2 } from 'lucide-react'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell } from 'recharts'
 
 import { getDashboardStats } from '../../services/dashboardService'
@@ -251,7 +251,6 @@ export default function Dashboard() {
         <StatCard title="Inventory Value" value={formatCurrency(stats.totalValue)} icon={Package} color="green" subtitle="At today's rates" onClick={() => navigate('/inventory-value')} />
         <StatCard title="Pending Karigar Jobs" value={stats.pendingKarigarJobs || 0} icon={Wrench} color="orange" subtitle="Work in progress" />
         <StatCard title="Low Stock Alerts" value={stats.lowStockItems || 0} icon={Activity} color="red" subtitle="Below threshold" onClick={() => navigate('/stock')} />
-        <StatCard title="Active Pawn Loans" value={stats.activePawnLoans || 0} icon={Landmark} color="purple" subtitle="Dhito outstanding" onClick={() => navigate('/pawn')} />
       </div>
 
       <Card title="Sales by Hour" subtitle={rangeLabel} icon={Clock}>
