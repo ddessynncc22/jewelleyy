@@ -1,7 +1,7 @@
 const express = require('express');
 const { body } = require('express-validator');
 const router = express.Router();
-const { protect } = require('../middleware/auth');
+const { protect, authorize } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const { sendSuccess, sendError } = require('../utils/response');
 const { CustomerLedger, ActivityLog } = require('../models');
@@ -60,6 +60,7 @@ router.get('/customer/:customerId', protect, async (req, res, next) => {
 router.post(
   '/',
   protect,
+  authorize('admin', 'manager'),
   [
     body('customer').notEmpty().withMessage('Customer is required'),
     body('transactionType').isIn(['credit', 'payment']).withMessage('Transaction type must be credit or payment'),
@@ -80,10 +81,18 @@ router.post(
         return sendError(res, 'Insufficient balance for this payment', 400);
       }
 
+      // Explicit field whitelist — never spread req.body, which would let a
+      // caller smuggle tenantId (or balanceAfter) into the document and write
+      // across tenants or forge a balance.
       const entryData = {
-        ...req.body,
-        balanceAfter,
+        customer: req.body.customer,
+        transactionType: req.body.transactionType,
+        amount: Number(req.body.amount),
         transactionDate: req.body.transactionDate || new Date(),
+        note: req.body.note ? String(req.body.note).slice(0, 500) : '',
+        reference: req.body.reference ? String(req.body.reference).slice(0, 100) : '',
+        referenceModel: req.body.referenceModel ? String(req.body.referenceModel).slice(0, 50) : '',
+        balanceAfter,
       };
 
       const entry = await CustomerLedger.create(entryData);

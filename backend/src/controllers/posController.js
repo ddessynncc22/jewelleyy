@@ -7,7 +7,8 @@ const Customer = require('../models/Customer');
 const CustomerLedger = require('../models/CustomerLedger');
 const Purchase = require('../models/Purchase');
 const { successResponse, errorResponse, paginatedResponse } = require('../utils/response');
-const { getNextPurchaseNumber } = require('../services/sequence');
+const { getNextPurchaseNumber, getNextSaleNumber } = require('../services/sequence');
+const { escapeRegex } = require('../utils/helpers');
 const {
   processLotLine,
   getTolerancePercent,
@@ -26,6 +27,62 @@ const round = (n, decimals = 4) => {
   const f = Math.pow(10, decimals);
   return Math.round((Number(n) || 0) * f) / f;
 };
+
+// POS pricing is server-authoritative. The cashier's screen may compute totals,
+// but the API re-derives the bill from the item's metal weight, today's rate,
+// and the stored stone value, caps discounts, and fixes what "paid" means per
+// payment type — so a crafted request cannot sell metal below cost, grant an
+// unlimited discount, or book a sale as fully paid without the money arriving.
+const { httpError, enforcePayment, validateOldGold } = require('../utils/saleGuard');
+
+// Floor price per tagged item: metal value (weight x live rate x purity) for
+// gold/silver, or the stored stone price for diamond items. The stored selling
+// price is only a fallback when no server-side value exists for the line.
+async function deriveItemPrice(item, si, liveRates) {
+  const requestedPrice = Number(si.price) > 0 ? Number(si.price) : Number(item.sellingPrice) || 0;
+  let floor = 0;
+  if (item.metalType === 'diamond' || item.stoneType === 'diamond') {
+    floor = Number(item.sellingStonePrice) || 0;
+  } else {
+    const weight = Number(si.netMetalWeight) || Number(item.netMetalWeight) || Number(item.grossWeight) || 0;
+    const purity = Number(item.purity) || 0;
+    if (weight > 0 && purity > 0) {
+      const rate = liveRates[item.metalType] || Number(item.ratePerGram) || 0;
+      if (rate > 0) floor = Number((weight * rate * (purity / 1000)).toFixed(2));
+    }
+  }
+  if (floor > 0 && requestedPrice < floor) {
+    throw httpError(`Price for ${item.SKU} cannot be below its metal/stone value (${floor.toFixed(2)})`, 400);
+  }
+  return requestedPrice;
+}
+
+// Atomically deduct stock so two cashiers cannot sell the same piece. Returns
+// null when the item is gone or was sold out from under us.
+async function sellTaggedItem(si, req, saleNumber) {
+  const itemId = si.itemId || si.item;
+  if (!itemId) throw httpError('Item ID is required for each item', 400);
+  const item = await Item.findById(itemId);
+  if (!item) throw httpError(`Item ${itemId} not found`, 404);
+  if (item.status !== 'In Stock') throw httpError(`Item ${item.SKU} is not in stock (status: ${item.status})`, 400);
+  const qty = Math.floor(Number(si.quantity || si.qty || 1));
+  if (!qty || qty < 1) throw httpError(`Invalid quantity for item ${item.SKU}`, 400);
+  const updated = await Item.findOneAndUpdate(
+    {
+      _id: item._id,
+      status: 'In Stock',
+      // Legacy items created before the quantity field are treated as 1 piece.
+      $or: [{ quantity: { $gte: qty } }, { quantity: { $exists: false } }],
+    },
+    { $inc: { quantity: -qty } },
+    { new: true }
+  );
+  if (!updated) throw httpError(`Item ${item.SKU} is no longer available or has insufficient stock`, 409);
+  if (updated.quantity <= 0) {
+    await Item.updateOne({ _id: item._id }, { $set: { status: 'Sold' } });
+  }
+  return { item: updated, qty };
+}
 
 // Keep only well-formed payment-method entries (method in cash|qr|cheque,
 // amount > 0). Falls back to a single cash row for the given cash amount so
@@ -153,37 +210,20 @@ exports.createSale = async (req, res) => {
     if (!items || !Array.isArray(items) || items.length === 0 || !paymentType || !totalAmount) {
       return errorResponse(res, 'Items, payment type, and total amount are required', 400);
     }
-    const saleCount = await Sale.countDocuments({ isDeleted: false });
-    const saleNumber = `SALE-${String(saleCount + 1).padStart(5, '0')}`;
+    const saleNumber = await getNextSaleNumber(req.tenantId);
     const saleItems = [];
-    const updatedItems = [];
     let diamondAmount = 0;
+    let subtotal = 0;
+    const liveRates = {
+      gold: await getLiveRatePerGram('gold'),
+      silver: await getLiveRatePerGram('silver'),
+    };
     for (const si of items) {
-      const itemId = si.itemId || si.item;
-      if (!itemId) {
-        return errorResponse(res, 'Item ID is required for each item', 400);
-      }
-      const item = await Item.findById(itemId);
-      if (!item) {
-        return errorResponse(res, `Item ${itemId} not found`, 404);
-      }
-      if (item.status !== 'In Stock') {
-        return errorResponse(res, `Item ${item.SKU} is not in stock (status: ${item.status})`, 400);
-      }
-      const qty = si.quantity || si.qty || 1;
-      const availableQty = item.quantity || 1;
-      if (qty > availableQty) {
-        return errorResponse(res, `Item ${item.SKU} only has ${availableQty} in stock`, 400);
-      }
-      item.quantity = availableQty - qty;
-      if (item.quantity <= 0) {
-        item.quantity = 0;
-        item.status = 'Sold';
-      }
-      await item.save();
-      updatedItems.push(item);
-      saleItems.push({ item: item._id, quantity: qty, weight: si.weight || item.grossWeight || 0, price: si.price || item.sellingPrice || 0, purity: si.purity || item.purity || 0, makingCharge: si.makingCharge || si.sellingMakingCharge || 0, wastagePercent: si.wastagePercent || si.sellingWastagePercent || 5, ratePerGram: si.ratePerGram || 0, metalValue: si.metalValue || 0, stonePrice: si.stonePrice || 0 });
-      if (item.metalType === 'diamond') diamondAmount += qty * (si.price || item.sellingPrice || 0);
+      const { item, qty } = await sellTaggedItem(si, req, saleNumber);
+      const price = await deriveItemPrice(item, si, liveRates);
+      subtotal += price * qty;
+      saleItems.push({ item: item._id, quantity: qty, weight: si.weight || item.grossWeight || 0, price, purity: si.purity || item.purity || 0, makingCharge: si.makingCharge || si.sellingMakingCharge || 0, wastagePercent: si.wastagePercent || si.sellingWastagePercent || 5, ratePerGram: si.ratePerGram || 0, metalValue: si.metalValue || 0, stonePrice: si.stonePrice || 0 });
+      if (item.metalType === 'diamond') diamondAmount += qty * price;
       await StockMovement.create({
         item: item._id,
         type: 'stockOut',
@@ -196,19 +236,20 @@ exports.createSale = async (req, res) => {
         performedBy: req.user._id,
       });
     }
-    const ogd = oldGoldDetails || paymentBreakdown?.oldGold || null;
+    const ogd = validateOldGold(oldGoldDetails || paymentBreakdown?.oldGold || null, liveRates);
     const diamondRate = await diamondRateFor(diamondAmount);
-    const goldAmount = Number((Number(totalAmount) - diamondAmount).toFixed(2));
+    const goldAmount = Number((subtotal - diamondAmount).toFixed(2));
     const { serviceFee, diamondVat, totalTaxAmount, taxes } = computeTaxes(goldAmount, diamondAmount, diamondRate);
     let discount = Number(discountAmount) || 0;
     if (!discount && actualAmountReceived !== undefined && actualAmountReceived !== null && Number(actualAmountReceived) >= 0) {
       const received = Number(actualAmountReceived);
-      const billTotal = Number(totalAmount) + totalTaxAmount;
+      const billTotal = subtotal + totalTaxAmount;
       if (received < billTotal) {
         discount = Number((billTotal - received).toFixed(2));
       }
     }
-    const adjustedTotal = Number((Number(totalAmount) + totalTaxAmount - discount).toFixed(2));
+    const resolvedCustomer = customerId || customerField || null;
+    const { adjustedTotal, paid } = enforcePayment(paymentType, subtotal + totalTaxAmount, discount, paidAmount, Number(cashAmount || paymentBreakdown?.cash || 0), resolvedCustomer);
     const cash = Number(cashAmount || paymentBreakdown?.cash || 0);
     const khaata = Number(khaataAmount || paymentBreakdown?.khaata || 0);
     const methods = sanitizePaymentMethods(paymentMethods, cash);
@@ -225,19 +266,18 @@ exports.createSale = async (req, res) => {
         discountAmount: discount,
         taxes,
       },
-      totalAmount,
+      totalAmount: subtotal,
       diamondAmount: Number(diamondAmount.toFixed(2)),
-      paidAmount: paidAmount !== undefined ? paidAmount : (paymentType === 'cash' ? adjustedTotal : 0),
+      paidAmount: paid,
       actualAmountReceived: actualAmountReceived !== undefined ? Number(actualAmountReceived) : undefined,
       discountAmount: discount,
-      customer: customerId || customerField || null,
+      customer: resolvedCustomer,
       soldBy: req.user._id,
       cashierName: cashierName ? String(cashierName).trim() : '',
       saleDate: saleDate || new Date(),
     };
     const sale = await Sale.create(saleData);
-    const resolvedCustomer = customerId || customerField;
-    const outstandingBalance = adjustedTotal - (paidAmount !== undefined ? paidAmount : (paymentType === 'cash' ? adjustedTotal : 0));
+    const outstandingBalance = adjustedTotal - paid;
     if ((paymentType === 'khaata' || paymentType === 'partial') && resolvedCustomer) {
       const balance = outstandingBalance;
       if (balance > 0) {
@@ -262,7 +302,7 @@ exports.createSale = async (req, res) => {
     await ActivityLog.create({
       action: 'create',
       module: 'pos',
-      description: `Sale ${saleNumber} created. Amount: ${totalAmount}`,
+      description: `Sale ${saleNumber} created. Amount: ${subtotal}`,
       performedBy: req.user._id,
       referenceId: sale._id,
       referenceModel: 'Sale',
@@ -272,7 +312,7 @@ exports.createSale = async (req, res) => {
     });
     return successResponse(res, sale, 'Sale created successfully', 201);
   } catch (error) {
-    return errorResponse(res, error.message, 500);
+    return errorResponse(res, error.message, error.status || 500);
   }
 };
 
@@ -291,11 +331,12 @@ exports.getSales = async (req, res) => {
     }
     if (search) {
       query.$or = [
-        { saleNumber: { $regex: search, $options: 'i' } },
+        { saleNumber: { $regex: escapeRegex(search), $options: 'i' } },
       ];
     }
+    const SALE_SORTABLE = ['saleNumber', 'saleDate', 'totalAmount', 'paidAmount', 'createdAt'];
     const sortObj = {};
-    if (sortField) {
+    if (sortField && SALE_SORTABLE.includes(sortField)) {
       sortObj[sortField] = sortOrder === 'asc' ? 1 : -1;
     } else {
       sortObj.saleDate = -1;
@@ -411,40 +452,25 @@ exports.createCombinedSale = async (req, res) => {
       return errorResponse(res, 'At least one item or loose lot line is required', 400);
     }
 
-    const saleCount = await Sale.countDocuments({ isDeleted: false });
-    const saleNumber = `SALE-${String(saleCount + 1).padStart(5, '0')}`;
+    const saleNumber = await getNextSaleNumber(req.tenantId);
 
     const saleItems = [];
     let diamondAmount = 0;
+    const liveRates = {
+      gold: await getLiveRatePerGram('gold'),
+      silver: await getLiveRatePerGram('silver'),
+    };
+    let subtotal = 0;
     if (hasItems) {
       for (const si of items) {
-        const itemId = si.itemId || si.item;
-        if (!itemId) {
-          return errorResponse(res, 'Item ID is required for each item', 400);
-        }
-        const item = await Item.findById(itemId);
-        if (!item) {
-          return errorResponse(res, `Item ${itemId} not found`, 404);
-        }
-        if (item.status !== 'In Stock') {
-          return errorResponse(res, `Item ${item.SKU} is not in stock (status: ${item.status})`, 400);
-        }
-        const qty = si.quantity || si.qty || 1;
-        const availableQty = item.quantity || 1;
-        if (qty > availableQty) {
-          return errorResponse(res, `Item ${item.SKU} only has ${availableQty} in stock`, 400);
-        }
-        item.quantity = availableQty - qty;
-        if (item.quantity <= 0) {
-          item.quantity = 0;
-          item.status = 'Sold';
-        }
-        await item.save();
+        const { item, qty } = await sellTaggedItem(si, req, saleNumber);
+        const price = await deriveItemPrice(item, si, liveRates);
+        subtotal += price * qty;
         saleItems.push({
           item: item._id,
           quantity: qty,
           weight: si.weight || item.grossWeight || 0,
-          price: si.price || item.sellingPrice || 0,
+          price,
           purity: si.purity || item.purity || 0,
           makingCharge: si.makingCharge || si.sellingMakingCharge || 0,
           wastagePercent: si.wastagePercent || si.sellingWastagePercent || 5,
@@ -452,7 +478,7 @@ exports.createCombinedSale = async (req, res) => {
           metalValue: si.metalValue || 0,
           stonePrice: si.stonePrice || 0,
         });
-        if (item.metalType === 'diamond') diamondAmount += qty * (si.price || item.sellingPrice || 0);
+        if (item.metalType === 'diamond') diamondAmount += qty * price;
         await StockMovement.create({
           item: item._id,
           type: 'stockOut',
@@ -468,10 +494,6 @@ exports.createCombinedSale = async (req, res) => {
     }
 
     const tolerance = await getTolerancePercent();
-    const liveRates = {
-      gold: await getLiveRatePerGram('gold'),
-      silver: await getLiveRatePerGram('silver'),
-    };
     const processed = [];
     if (hasLines) {
       for (const line of lotLines) {
@@ -493,9 +515,8 @@ exports.createCombinedSale = async (req, res) => {
       await Promise.all(affectedItems.map((id) => syncParentItemStock(id)));
     }
 
-    const itemSubtotal = saleItems.reduce((s, si) => s + (Number(si.price) || 0) * (si.quantity || 1), 0);
     const lotSubtotal = processed.reduce((s, r) => s + r.price, 0);
-    const subtotal = Number((itemSubtotal + lotSubtotal).toFixed(2));
+    subtotal = Number((subtotal + lotSubtotal).toFixed(2));
 
     const diamondRate = await diamondRateFor(diamondAmount);
     const goldAmount = Number((subtotal - diamondAmount).toFixed(2));
@@ -507,13 +528,12 @@ exports.createCombinedSale = async (req, res) => {
       const billTotal = subtotal + totalTaxAmount;
       if (received < billTotal) discount = Number((billTotal - received).toFixed(2));
     }
-    const adjustedTotal = Number((subtotal + totalTaxAmount - discount).toFixed(2));
+    const ogd = validateOldGold(oldGoldDetails || paymentBreakdown?.oldGold || null, liveRates);
+    const resolvedCustomer = customerId || customerField || null;
+    const { adjustedTotal, paid } = enforcePayment(paymentType, subtotal + totalTaxAmount, discount, paidAmount, Number(cashAmount || paymentBreakdown?.cash || 0), resolvedCustomer);
     const cash = Number(cashAmount || paymentBreakdown?.cash || 0);
     const khaata = Number(khaataAmount || paymentBreakdown?.khaata || 0);
     const methods = sanitizePaymentMethods(paymentMethods, cash);
-    const ogd = oldGoldDetails || paymentBreakdown?.oldGold || null;
-    const resolvedCustomer = customerId || customerField || null;
-    const paid = paidAmount !== undefined ? Number(paidAmount) : (paymentType === 'cash' ? adjustedTotal : 0);
 
     const sale = await Sale.create({
       saleNumber,

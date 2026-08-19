@@ -23,7 +23,7 @@ import { login as loginApi } from "../../services/authService";
 import Button from "../../components/ui/Button";
 
 const fieldClass =
-  "peer h-11 w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] py-2.5 pl-10 pr-10 text-sm text-[var(--color-text)] placeholder-[var(--color-ink-400)] transition-all hover:border-[var(--color-ink-300)] focus:border-[var(--color-gold-500)] focus:outline-none focus:ring-4 focus:ring-[var(--color-gold-500)]/15";
+  "peer h-11 w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] py-2.5 pl-10 pr-10 text-sm text-[var(--color-text)] placeholder-[var(--color-ink-400)] shadow-[var(--shadow-sm)] transition-all hover:border-[var(--color-ink-300)] focus:border-[var(--color-gold-500)] focus:outline-none focus:ring-4 focus:ring-[var(--color-gold-500)]/15";
 
 const labelClass =
   "mb-1.5 block text-[13px] font-medium text-[var(--color-text)]";
@@ -183,7 +183,7 @@ export default function Login() {
         <Button
           type="submit"
           loading={loading}
-          className="h-11 w-full bg-gradient-to-r from-[var(--color-gold-600)] to-[var(--color-gold-500)] text-[15px] font-semibold shadow-[var(--shadow-md)] transition-all duration-200 hover:-translate-y-px hover:shadow-[var(--shadow-lg)]"
+          className="h-11 w-full bg-gradient-gold text-[15px] font-semibold shadow-[var(--shadow-gold-lg)] transition-all duration-200 hover:-translate-y-px hover:brightness-105"
           icon={loading ? null : <ArrowRight className="h-4 w-4" />}
         >
           {loading ? "Signing in…" : "Sign in"}

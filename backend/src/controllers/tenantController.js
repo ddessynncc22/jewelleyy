@@ -153,7 +153,7 @@ exports.onboard = async (req, res) => {
       tenantId: tenant.tenantNumber,
     });
 
-    const token = generateToken(user._id, tenant.tenantNumber);
+    const token = generateToken(user._id, tenant.tenantNumber, user.tokenVersion || 0);
     const shopUrl = shopUrlFor(tenant.slug, req);
     return successResponse(res, {
       tenant: { id: tenant._id, name: tenant.name, slug: tenant.slug, shopUrl },

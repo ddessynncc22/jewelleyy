@@ -44,7 +44,7 @@ const SearchInput = ({ value = '', onChange, placeholder = 'Search...', classNam
         value={local}
         onChange={handleChange}
         placeholder={placeholder}
-        className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] py-2.5 pl-10 pr-10 text-sm text-[var(--color-text)] placeholder-[var(--color-ink-400)] hover:border-[var(--color-ink-300)] focus:border-[var(--color-gold-500)] focus:outline-none focus:ring-2 focus:ring-[var(--color-gold-500)]/20 transition-all"
+        className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] py-2.5 pl-10 pr-10 text-sm text-[var(--color-text)] placeholder-[var(--color-ink-400)] shadow-[var(--shadow-sm)] hover:border-[var(--color-ink-300)] focus:border-[var(--color-gold-500)] focus:outline-none focus:ring-4 focus:ring-[var(--color-gold-500)]/15 transition-all"
       />
       {local && (
         <button

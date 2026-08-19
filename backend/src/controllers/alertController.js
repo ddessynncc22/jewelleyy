@@ -1,7 +1,7 @@
 const Item = require('../models/Item');
 const PawnLoan = require('../models/PawnLoan');
-const Settings = require('../models/Settings');
 const { successResponse, errorResponse } = require('../utils/response');
+const { getLowStockList } = require('../utils/lowStock');
 
 exports.getAlerts = async (req, res) => {
   try {
@@ -11,15 +11,13 @@ exports.getAlerts = async (req, res) => {
     const thirtyDaysFromNow = new Date();
     thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
 
-    const settings = await Settings.getSettings();
-    const lowThreshold = settings?.lowStockThreshold || 5;
-    const [lowStock, slowMoving, approachingDue] = await Promise.all([
-      Item.find({ status: 'In Stock', netMetalWeight: { $lte: lowThreshold } }).limit(20).lean(),
+    const [lowStockResult, slowMoving, approachingDue] = await Promise.all([
+      getLowStockList({ limit: 20 }),
       Item.find({ status: 'In Stock', updatedAt: { $lte: sixMonthsAgo } }).limit(20).lean(),
       PawnLoan.find({ status: 'Active', dueDate: { $lte: thirtyDaysFromNow, $gte: new Date() } }).limit(20).lean(),
     ]);
 
-    return successResponse(res, { lowStock, slowMoving, approachingDue });
+    return successResponse(res, { lowStock: lowStockResult.lowStockItemList, slowMoving, approachingDue });
   } catch (error) {
     return errorResponse(res, error.message, 500);
   }

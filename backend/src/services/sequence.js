@@ -4,6 +4,7 @@ const CustomOrder = require('../models/CustomOrder');
 const Voucher = require('../models/Voucher');
 const Purchase = require('../models/Purchase');
 const Refine = require('../models/Refine');
+const Sale = require('../models/Sale');
 
 // Generic counter-backed number generator. Model must expose `find` scoped to
 // the ambient tenant and `_id`, the regex base is `<prefix>-<digits>`.
@@ -65,10 +66,15 @@ function getNextRefineNumber(tenantId) {
   return getNextNumber(tenantId, Refine, 'refineNumber', 'RFL', 'refine');
 }
 
+function getNextSaleNumber(tenantId) {
+  return getNextNumber(tenantId, Sale, 'saleNumber', 'SALE', 'sale');
+}
+
 module.exports = {
   getNextCustomerCode,
   getNextCustomOrderNumber,
   getNextVoucherNumber,
   getNextPurchaseNumber,
   getNextRefineNumber,
+  getNextSaleNumber,
 };

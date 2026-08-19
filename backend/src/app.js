@@ -4,6 +4,8 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
 const config = require('./config');
 const errorHandler = require('./middleware/errorHandler');
 
@@ -72,11 +74,12 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-if (config.nodeEnv === 'development') {
-  app.use(morgan('dev'));
-} else {
-  app.use(morgan('combined'));
-}
+app.use(cookieParser());
+
+// :path instead of :url — the uploads guard below accepts ?token= in the
+// query string, and access logs must never capture those tokens.
+morgan.token('path', (req) => req.path);
+app.use(morgan(':remote-addr - :remote-user [:date[clf]] ":method :path HTTP/:http-version" :status :res[content-length] ":referrer" ":user-agent" :response-time ms'));
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -152,10 +155,29 @@ app.get('/api/health', (req, res) => {
 app.use(require('./middleware/host').resolveHost);
 
 // Uploads are stored as /uploads/<tenantId>/<date>/<file>, so on a shop
-// subdomain only that shop's directory is reachable. These files are still
-// unauthenticated (anyone with the URL can fetch them) — this only stops one
-// shop's addressable from serving another shop's images.
-app.use('/uploads', (req, res, next) => {
+// subdomain only that shop's directory is reachable. Since this tenant scoping
+// is the only barrier, these files are additionally gated behind a valid JWT:
+// the Authorization header, the httpOnly token cookie set at login, or the
+// ?token= query parameter (the SPA and the API live on different origins in
+// production, so the header/cookie alone would not cover cross-origin <img>
+// tags). The tenant-shop check then still applies on top.
+function verifyUploadsToken(req, res, next) {
+  let token = null;
+  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+    token = req.headers.authorization.split(' ')[1];
+  }
+  if (!token && req.cookies && req.cookies.token) token = req.cookies.token;
+  if (!token && req.query.token) token = String(req.query.token);
+  if (!token) return res.status(401).send('Authentication required');
+  try {
+    jwt.verify(token, config.jwtSecret);
+    return next();
+  } catch {
+    return res.status(401).send('Invalid or expired token');
+  }
+}
+
+app.use('/uploads', verifyUploadsToken, (req, res, next) => {
   const context = req.hostContext || { type: 'local' };
   if (context.type !== 'tenant' || !req.hostTenant) return next();
   const segment = req.path.split('/').filter(Boolean)[0];
@@ -170,7 +192,7 @@ app.use('/api', require('./routes/index'));
 app.use((req, res) => {
   res.status(404).json({
     success: false,
-    message: `Route ${req.originalUrl} not found`,
+    message: `Route ${req.path} not found`,
     data: null,
     errors: null,
   });

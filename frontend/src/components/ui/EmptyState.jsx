@@ -20,7 +20,7 @@ const renderIcon = (icon, size) => {
 
 const EmptyState = ({ icon, title = "No data found", description, action }) => (
   <div className="flex flex-col items-center justify-center py-20 px-4 text-center animate-fade-up">
-    <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-[var(--color-gold-200)] bg-[var(--color-primary-bg)]">
+    <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-[var(--color-gold-200)] bg-gradient-to-br from-[var(--color-primary-bg)] to-[var(--color-gold-50)] shadow-[var(--shadow-sm)]">
       {renderIcon(icon, 32)}
     </div>
     <h3 className="text-lg font-semibold tracking-tight text-[var(--color-text)]">{title}</h3>
@@ -33,7 +33,7 @@ const EmptyState = ({ icon, title = "No data found", description, action }) => (
       <button
         type="button"
         onClick={action.onClick}
-        className="mt-5 inline-flex items-center gap-2 rounded-lg bg-[var(--color-gold-600)] px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-[var(--color-gold-700)]"
+        className="mt-5 inline-flex items-center gap-2 rounded-xl bg-gradient-gold px-4 py-2.5 text-sm font-medium text-white shadow-[var(--shadow-gold)] transition-all hover:shadow-[var(--shadow-gold-lg)] hover:-translate-y-px hover:brightness-105"
       >
         {action.label}
       </button>

@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
 import { Gem, Coins, Package, ChevronDown, ChevronRight, Table2, Tag, Scale } from "lucide-react";
@@ -36,7 +37,8 @@ function MetalSection({ metal, expanded, onToggle, forceOpen }) {
         <ExpandButton expanded={isOpen} />
         <Icon className="h-4 w-4 text-[var(--color-text-secondary)]" />
         <span className="text-sm font-semibold text-[var(--color-text)] flex-1">{metal.label}</span>
-        <Badge>{metal.totalQuantity} cats</Badge>
+        <Badge>{metal.categories.length} cats · {metal.totalQuantity} items</Badge>
+        <span className="text-sm text-[var(--color-text-secondary)] min-w-[60px] text-right">{metal.totalPieces} pcs</span>
         <span className="text-sm font-bold text-[var(--color-text)] min-w-[100px] text-right">{formatWeight(metal.totalWeight)}</span>
       </div>
       {isOpen && (
@@ -69,7 +71,8 @@ function CategorySection({ category, depth, expanded, onToggle, forceOpen }) {
         )}
         <Tag className="h-3.5 w-3.5 text-[var(--color-text-secondary)]" />
         <span className="text-sm font-medium text-[var(--color-text)] flex-1">{category.label}</span>
-        <Badge>{category.totalQuantity} subs</Badge>
+        <Badge>{category.subcategories.length} subs · {category.totalQuantity} items</Badge>
+        <span className="text-sm text-[var(--color-text-secondary)] min-w-[60px] text-right">{category.totalPieces} pcs</span>
         <span className="text-sm font-semibold text-[var(--color-text)] min-w-[100px] text-right">{formatWeight(category.totalWeight)}</span>
       </div>
       {isOpen && category.subcategories && (
@@ -102,6 +105,7 @@ function SubcategorySection({ subcategory, depth, expanded, onToggle, forceOpen 
         )}
         <span className="text-sm text-[var(--color-text-secondary)] flex-1">{subcategory.label}</span>
         <Badge>{subcategory.totalQuantity} items</Badge>
+        <span className="text-sm text-[var(--color-text-secondary)] min-w-[60px] text-right">{subcategory.totalPieces} pcs</span>
         <span className="text-sm font-semibold text-[var(--color-text)] min-w-[100px] text-right">{formatWeight(subcategory.totalWeight)}</span>
       </div>
       {isOpen && subcategory.items && (
@@ -135,6 +139,8 @@ function SubcategorySection({ subcategory, depth, expanded, onToggle, forceOpen 
 }
 
 export default function InventoryValue() {
+  const [searchParams] = useSearchParams();
+  const breakdownOnly = searchParams.get("view") === "breakdown";
   const [expanded, setExpanded] = useState(new Set(["metal-gold"]));
   const [search, setSearch] = useState("");
 
@@ -142,6 +148,20 @@ export default function InventoryValue() {
     queryKey: ["inventory-value"],
     queryFn: getInventoryValue,
   });
+
+  const metals = useMemo(() => data?.data?.metals || [], [data]);
+
+  useEffect(() => {
+    if (breakdownOnly && metals.length > 0) {
+      setExpanded((prev) => {
+        const missing = metals.filter((m) => !prev.has(`metal-${m.key}`));
+        if (missing.length === 0) return prev;
+        const next = new Set(prev);
+        for (const m of missing) next.add(`metal-${m.key}`);
+        return next;
+      });
+    }
+  }, [breakdownOnly, metals]);
 
   if (isLoading) {
     return (
@@ -156,7 +176,6 @@ export default function InventoryValue() {
   }
 
   const stats = data?.data || {};
-  const metals = stats.metals || [];
   const totalValue = stats.totalValue || 0;
   const totalQuantity = stats.totalQuantity || 0;
   const totalPieces = stats.totalPieces || 0;
@@ -239,46 +258,50 @@ export default function InventoryValue() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Inventory Value"
-        subtitle="Estimated value at latest per-gram rates (metal weight × rate × purity + diamond / stone value)"
-      >
-        <div className="flex items-center gap-2 text-xs text-[var(--color-text-secondary)]">
-          <span>Gold: Rs {goldRate.toLocaleString()}/g</span>
-          <span>·</span>
-          <span>Silver: Rs {silverRate.toLocaleString()}/g</span>
-        </div>
-      </PageHeader>
+      {!breakdownOnly && (
+        <>
+          <PageHeader
+            title="Inventory Value"
+            subtitle="Estimated value at latest per-gram rates (metal weight × rate × purity + diamond / stone value)"
+          >
+            <div className="flex items-center gap-2 text-xs text-[var(--color-text-secondary)]">
+              <span>Gold: Rs {goldRate.toLocaleString()}/g</span>
+              <span>·</span>
+              <span>Silver: Rs {silverRate.toLocaleString()}/g</span>
+            </div>
+          </PageHeader>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          title="Total Inventory Value"
-          value={formatCurrency(totalValue)}
-          icon={Package}
-          color="green"
-          subtitle={`${totalQuantity} categories · ${totalPieces} items · ${formatWeight(totalWeight)}`}
-        />
-        {metals.map((m) => {
-          const Icon = metalIcons[m.key] || Package;
-          return (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard
-              key={m.key}
-              title={m.label}
-              value={formatCurrency(m.totalValue)}
-              icon={Icon}
-              color={metalColors[m.key] || "gray"}
-              subtitle={`${m.totalQuantity} cats · ${m.totalPieces} items · ${formatWeight(m.totalWeight)}`}
+              title="Total Inventory Value"
+              value={formatCurrency(totalValue)}
+              icon={Package}
+              color="green"
+              subtitle={`${totalQuantity} categories · ${totalPieces} items · ${formatWeight(totalWeight)}`}
             />
-          );
-        })}
-        <StatCard
-          title="Refined / Purchased Gold Stock"
-          value={formatWeight(refinedStock.balanceG)}
-          icon={Scale}
-          color="amber"
-          subtitle={`${formatCurrency(refinedStock.value)} at Rs ${goldRate.toLocaleString()}/g fine gold`}
-        />
-      </div>
+            {metals.map((m) => {
+              const Icon = metalIcons[m.key] || Package;
+              return (
+                <StatCard
+                  key={m.key}
+                  title={m.label}
+                  value={formatCurrency(m.totalValue)}
+                  icon={Icon}
+                  color={metalColors[m.key] || "gray"}
+                  subtitle={`${m.totalQuantity} cats · ${m.totalPieces} items · ${formatWeight(m.totalWeight)}`}
+                />
+              );
+            })}
+            <StatCard
+              title="Refined / Purchased Gold Stock"
+              value={formatWeight(refinedStock.balanceG)}
+              icon={Scale}
+              color="amber"
+              subtitle={`${formatCurrency(refinedStock.value)} at Rs ${goldRate.toLocaleString()}/g fine gold`}
+            />
+          </div>
+        </>
+      )}
 
       <Card>
         <div className="flex flex-wrap items-center gap-2 mb-4">

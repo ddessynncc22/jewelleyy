@@ -24,7 +24,7 @@ return (
           <div className="flex items-center gap-2">
             <label className="text-xs text-[var(--color-text-secondary)]">Show</label>
             <select value={limit} onChange={(e) => onLimitChange(Number(e.target.value))}
-              className="rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] py-1.5 px-2.5 text-xs text-[var(--color-text)] hover:border-[var(--color-ink-300)] focus:border-[var(--color-gold-500)] focus:outline-none focus:ring-2 focus:ring-[var(--color-gold-500)]/20 transition-all">
+              className="rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] py-1.5 px-2.5 text-xs text-[var(--color-text)] shadow-sm hover:border-[var(--color-ink-300)] focus:border-[var(--color-gold-500)] focus:outline-none focus:ring-4 focus:ring-[var(--color-gold-500)]/15 transition-all">
               {[10, 20, 50, 100].map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
@@ -36,9 +36,9 @@ return (
           </button>
           {getPages().map((p) => (
             <button key={p} type="button" onClick={() => onPageChange?.(p)} aria-current={p === page ? 'page' : undefined}
-              className={`inline-flex items-center justify-center min-w-[36px] rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+              className={`inline-flex items-center justify-center min-w-[36px] rounded-lg px-3 py-1.5 text-sm font-medium transition-all ${
                 p === page
-                  ? 'bg-[var(--color-gold-600)] text-white shadow-sm'
+                  ? 'bg-gradient-gold text-white shadow-[var(--shadow-gold)]'
                   : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-elevated)] hover:text-[var(--color-text)]'
               }`}>
               {p}

@@ -43,6 +43,9 @@ const protect = async (req, res, next) => {
     if (!user.isActive) {
       return errorResponse(res, 'Account deactivated', 401);
     }
+    if (decoded.tv !== (user.tokenVersion || 0)) {
+      return errorResponse(res, 'Session expired, please sign in again', 401);
+    }
     const hostError = hostMatchesUser(req, user);
     if (hostError) {
       return errorResponse(res, hostError, 403);

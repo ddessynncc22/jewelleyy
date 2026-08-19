@@ -46,6 +46,12 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    // Bumped whenever the password is changed or reset, invalidating every
+    // previously issued JWT (each token carries the version it was minted with).
+    tokenVersion: {
+      type: Number,
+      default: 0,
+    },
   },
   {
     timestamps: true,

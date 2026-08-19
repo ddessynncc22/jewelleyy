@@ -5,6 +5,16 @@ const { successResponse, errorResponse, paginatedResponse } = require('../utils/
 const { scopeAggregate } = require('../utils/tenant');
 const { escapeRegex } = require('../utils/helpers');
 
+// Citizenship numbers are sensitive personal data; the list endpoint only needs
+// them for identification, so everything but the first/last few characters is
+// redacted. The single-loan detail keeps the full value for verification.
+function maskCitizenship(value) {
+  if (!value) return value;
+  const s = String(value);
+  if (s.length <= 6) return s.replace(/./g, 'X');
+  return `${s.slice(0, 2)}${'X'.repeat(s.length - 6)}${s.slice(-4)}`;
+}
+
 exports.getPawnLoans = async (req, res) => {
   try {
     const { page = 1, limit = 20, status, startDate, endDate, search } = req.query;
@@ -28,7 +38,14 @@ exports.getPawnLoans = async (req, res) => {
       PawnLoan.find(query).sort({ createdAt: -1 }).skip(skip).limit(Number(limit)).populate('customerId', 'name phone'),
       PawnLoan.countDocuments({ ...query, isDeleted: false }),
     ]);
-    return paginatedResponse(res, loans, total, Number(page), Number(limit));
+    const sanitized = loans.map((loan) => {
+      const doc = loan.toObject();
+      if (doc.customer?.citizenshipNumber) {
+        doc.customer.citizenshipNumber = maskCitizenship(doc.customer.citizenshipNumber);
+      }
+      return doc;
+    });
+    return paginatedResponse(res, sanitized, total, Number(page), Number(limit));
   } catch (error) {
     return errorResponse(res, error.message, 500);
   }

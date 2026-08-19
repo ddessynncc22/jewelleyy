@@ -7,7 +7,7 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Toolti
 
 import { getDashboardStats } from '../../services/dashboardService'
 
-import { applyTransportRate, getTransportCharges, formatCurrency, formatDate } from '../../utils/helpers'
+import { applyTransportRate, getTransportCharges, formatCurrency, formatDate, formatWeight } from '../../utils/helpers'
 
 import StatCard from '../../components/ui/StatCard'
 
@@ -189,8 +189,6 @@ export default function Dashboard() {
           </Button>
         </div>
       </PageHeader>
-
-      {/* Market rates */}
       <div className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] shadow-[var(--shadow-sm)]">
         <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div>
@@ -212,9 +210,10 @@ export default function Dashboard() {
         </div>
 
         <div className="grid grid-cols-1 divide-y divide-[var(--color-border)] border-t border-[var(--color-border)] sm:grid-cols-2 sm:divide-x sm:divide-y-0">
-          <div className="flex items-center justify-between gap-3 bg-gradient-to-r from-[var(--color-primary-bg)] to-transparent px-5 py-4 sm:px-6">
-            <div className="flex min-w-0 items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--color-gold-100)] text-[var(--color-gold-700)]">
+          <div className="relative flex items-center justify-between gap-3 overflow-hidden bg-gradient-to-r from-[var(--color-primary-bg)] via-[var(--color-primary-bg)]/60 to-transparent px-5 py-4 sm:px-6">
+            <div className="pointer-events-none absolute -right-6 -top-8 h-28 w-28 rounded-full" style={{ background: "radial-gradient(circle, rgba(217,180,90,0.22), transparent 70%)" }} />
+            <div className="relative flex min-w-0 items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-gold text-white shadow-[var(--shadow-gold)]">
                 <Gem size={18} />
               </div>
               <div className="min-w-0">
@@ -222,15 +221,15 @@ export default function Dashboard() {
                 <p className="text-xs text-[var(--color-text-secondary)]">NPR {goldPerGram.toLocaleString()} / gram</p>
               </div>
             </div>
-            <div className="shrink-0 text-right">
-              <p className="num text-2xl font-bold tracking-tight text-[var(--color-gold-800)]">{goldRate.toLocaleString()}</p>
+            <div className="relative shrink-0 text-right">
+              <p className="num text-2xl font-bold tracking-tight text-gradient-gold">{goldRate.toLocaleString()}</p>
               <p className="text-xs text-[var(--color-text-secondary)]">per {goldUnit}</p>
             </div>
           </div>
 
           <div className="flex items-center justify-between gap-3 px-5 py-4 sm:px-6">
             <div className="flex min-w-0 items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-ink-100 text-ink-500">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-ink-200 to-ink-300 text-ink-600 shadow-sm ring-1 ring-inset ring-black/[0.04]">
                 <Gem size={18} />
               </div>
               <div className="min-w-0">
@@ -247,7 +246,7 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <StatCard title="Total Inventory" value={stats.totalInventory || 0} icon={Gem} color="gold" subtitle="Items in stock" />
+        <StatCard title="Total Inventory" value={stats.totalInventory || 0} icon={Gem} color="gold" subtitle="Items in stock" onClick={() => navigate('/inventory-value?view=breakdown')} />
         <StatCard title="Inventory Value" value={formatCurrency(stats.totalValue)} icon={Package} color="green" subtitle="At today's rates" onClick={() => navigate('/inventory-value')} />
         <StatCard title="Pending Karigar Jobs" value={stats.pendingKarigarJobs || 0} icon={Wrench} color="orange" subtitle="Work in progress" />
         <StatCard title="Low Stock Alerts" value={stats.lowStockItems || 0} icon={Activity} color="red" subtitle="Below threshold" onClick={() => navigate('/stock')} />
@@ -262,10 +261,10 @@ export default function Dashboard() {
               <button
                 key={p.label}
                 onClick={() => setRange({ start: localDateStr(s), end: localDateStr(e) })}
-                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${
                   active
-                    ? 'bg-[var(--color-gold-600)] text-white border-[var(--color-gold-600)]'
-                    : 'bg-[var(--color-card)] border-[var(--color-border)] text-[var(--color-ink-500)] hover:bg-[var(--color-elevated)]'
+                    ? 'bg-gradient-gold text-white border-transparent shadow-[var(--shadow-gold)]'
+                    : 'bg-[var(--color-card)] border-[var(--color-border)] text-[var(--color-ink-500)] hover:bg-[var(--color-elevated)] hover:border-[var(--color-ink-300)]'
                 }`}
               >
                 {p.label}
@@ -303,7 +302,18 @@ export default function Dashboard() {
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
                 <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--color-ink-400)' }} interval={1} />
                 <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: 'var(--color-ink-400)' }} />
-                <Tooltip cursor={{ fill: 'var(--color-ink-50)' }} />
+                <Tooltip
+                  cursor={{ fill: 'var(--color-ink-50)' }}
+                  contentStyle={{
+                    borderRadius: 14,
+                    border: '1px solid var(--color-border)',
+                    boxShadow: 'var(--shadow-md)',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: 'var(--color-text)',
+                    background: 'var(--color-card)',
+                  }}
+                />
                 <Bar dataKey="count" name="Sales" radius={[4, 4, 0, 0]}>
                   {chartData.map((entry) => (
                     <Cell
@@ -369,9 +379,14 @@ export default function Dashboard() {
                     <p className="truncate text-xs font-medium text-[var(--color-text)]">{item.itemName}</p>
                     <p className="truncate text-[11px] text-[var(--color-text-secondary)]">{item.SKU} · {item.metalType}</p>
                   </div>
-                  <span className="shrink-0 rounded-full bg-danger px-2 py-0.5 text-[11px] font-semibold text-white">
-                    {item.quantity} left
-                  </span>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {item.itemType === 'loose' && (
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">Loose</span>
+                    )}
+                    <span className="shrink-0 rounded-full bg-danger px-2 py-0.5 text-[11px] font-semibold text-white">
+                      {item.itemType === 'loose' ? `${item.quantity} pcs · ${formatWeight(item.remainingWeight)}` : `${item.quantity} left`}
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>

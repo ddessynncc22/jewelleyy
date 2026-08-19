@@ -5,6 +5,11 @@ mongoose.connect(config.mongodbUri).then(async () => {
   const User = require('./src/models/User');
   const email = process.env.SUPERADMIN_EMAIL || 'admin@jewellery.com';
   const password = process.env.SUPERADMIN_PASSWORD || 'admin123';
+  const isProduction = String(process.env.NODE_ENV) === 'production';
+  if (isProduction && (!process.env.SUPERADMIN_EMAIL || !process.env.SUPERADMIN_PASSWORD)) {
+    console.error('Refusing to run in production without SUPERADMIN_EMAIL and SUPERADMIN_PASSWORD set.');
+    process.exit(1);
+  }
   const existing = await User.findOne({ email });
   if (existing) {
     console.log('Admin user already exists');

@@ -23,8 +23,8 @@ exports.getItems = async (req, res) => {
         : req.query.itemType;
     }
     if (status) query.status = status;
-    if (category) query.category = { $regex: category, $options: 'i' };
-    if (subcategory) query.subcategory = { $regex: subcategory, $options: 'i' };
+    if (category) query.category = { $regex: escapeRegex(category), $options: 'i' };
+    if (subcategory) query.subcategory = { $regex: escapeRegex(subcategory), $options: 'i' };
     if (metalType) query.metalType = metalType;
     if (purity) query.purity = Number(purity);
     if (karat) query.karat = Number(karat);
@@ -51,7 +51,13 @@ exports.getItems = async (req, res) => {
         query.$or = searchOr;
       }
     }
-    const sortOption = sort ? sort.split(',').join(' ') : '-createdAt';
+    const SORTABLE_ITEM_FIELDS = ['SKU', 'barcode', 'itemName', 'category', 'subcategory', 'metalType', 'purity', 'karat', 'sellingPrice', 'quantity', 'status', 'createdAt'];
+    const sortOption = sort
+      ? sort.split(',').map((f) => f.trim()).filter((f) => {
+          const field = f.startsWith('-') ? f.slice(1) : f;
+          return SORTABLE_ITEM_FIELDS.includes(field);
+        }).join(' ') || '-createdAt'
+      : '-createdAt';
     const skip = (Number(page) - 1) * Number(limit);
     const [items, total] = await Promise.all([
       sort

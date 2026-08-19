@@ -88,7 +88,12 @@ export function getImageSrc(img) {
   const path = img.startsWith("/uploads")
     ? img
     : `/uploads${img.startsWith("/") ? img : `/${img}`}`;
-  return `${API_ORIGIN}${path}`;
+  // Uploads are authenticated since the security pass: the <img> tag cannot
+  // send the Authorization header, so the token travels as ?token= (the same
+  // one the axios instance sends). The backend accepts header, cookie, or
+  // query — this covers the cross-origin VITE_API_URL setup.
+  const token = localStorage.getItem("token");
+  return `${API_ORIGIN}${path}${token ? `?token=${encodeURIComponent(token)}` : ""}`;
 }
 
 export function getNepaliDate(date) {

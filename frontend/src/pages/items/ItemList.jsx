@@ -56,6 +56,7 @@ import {
   getImageSrc,
 } from '../../utils/helpers'
 import { getCategories } from '../../services/categoryService'
+import { getSettings } from '../../services/settingsService'
 import { printBarcodeLabels } from '../../utils/barcodeLabels'
 
 const STATUS_OPTIONS = [
@@ -93,8 +94,6 @@ const bulkActions = [
   { value: 'Damaged', label: 'Mark Damaged' },
   { value: 'Melted', label: 'Mark Melted' },
 ]
-
-const LOW_STOCK_THRESHOLD = 5
 
 const metalChipColors = {
   gold: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -405,6 +404,13 @@ const ItemList = () => {
     staleTime: 60000,
   })
   const stats = statsRes?.data?.data || {}
+
+  const { data: settingsData } = useQuery({
+    queryKey: ['settings'],
+    queryFn: getSettings,
+    staleTime: 60000,
+  })
+  const lowStockThreshold = settingsData?.lowStockThreshold ?? 5
 
   const { data: catRes } = useQuery({
     queryKey: ['categories'],
@@ -728,7 +734,7 @@ const ItemList = () => {
           )
         }
         const qty = row.quantity ?? 0
-        const low = row.status === 'In Stock' && qty <= LOW_STOCK_THRESHOLD
+        const low = row.status === 'In Stock' && qty <= lowStockThreshold
         return (
           <div>
             <p className={`text-sm font-medium text-[var(--color-text)] ${low ? 'text-amber-600' : ''}`}>

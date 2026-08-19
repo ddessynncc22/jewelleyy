@@ -14,18 +14,13 @@ const { toPerGramRate } = require('../utils/rates');
 const { generateSKU } = require('../services/barcode');
 const { escapeRegex } = require('../utils/helpers');
 const { scopeAggregate } = require('../utils/tenant');
+const { getNextSaleNumber } = require('../services/sequence');
+const { httpError, enforcePayment } = require('../utils/saleGuard');
 
 function makeLotBarcode() {
   const timestamp = Date.now().toString(36).toUpperCase().slice(-6);
   const random = crypto.randomBytes(3).toString('hex').toUpperCase();
   return `LOOSE-${timestamp}${random}`;
-}
-
-function buildSaleNumber() {
-  // Same counter style as posController.createSale.
-  return Sale.countDocuments({ isDeleted: false }).then((count) => {
-    return `SALE-${String(count + 1).padStart(5, '0')}`;
-  });
 }
 
 // Live per-gram rate from the (global, un-tenant-scoped) Rate collection.
@@ -160,6 +155,13 @@ async function processLotLine(line, { sale = null, saleNumber = '', performedBy,
   const weightSource = line.weightSource || 'manual_weighed';
   const ratePerGram =
     Number(line.ratePerGram) > 0 ? Number(line.ratePerGram) : (liveRates[lot.metalType] ?? await getLiveRatePerGram(lot.metalType));
+  // The rate is cashier-supplied, so pin it to at least today's official rate.
+  // A sale below that would let staff (or an attacker) liquidate metal at a
+  // self-set price. Skip the check only when no official rate exists.
+  const officialRate = liveRates[lot.metalType] || (await getLiveRatePerGram(lot.metalType));
+  if (officialRate > 0 && ratePerGram < officialRate * 0.99) {
+    throw httpError(`Rate for lot ${lot.lotBarcode} cannot be below today's rate (${officialRate.toFixed(2)})`, 400);
+  }
   const purity = lot.purity || 0;
   const metalValue = metalValueOf(actualWeight, ratePerGram, purity);
   const wastagePercent = Number(line.wastagePercent) || 0;
@@ -576,10 +578,14 @@ exports.sellLots = async (req, res) => {
       return errorResponse(res, 'At least one lot line is required', 400);
     }
     const tolerance = await getTolerancePercent();
+    const liveRates = {
+      gold: await getLiveRatePerGram('gold'),
+      silver: await getLiveRatePerGram('silver'),
+    };
     const results = [];
     for (const line of lines) {
       if (!line.lotId) continue;
-      const result = await processLotLine(line, { performedBy: req.user._id, tolerance });
+      const result = await processLotLine(line, { performedBy: req.user._id, tolerance, liveRates });
       results.push({ lotSale: result.lotSale, lot: result.lot });
     }
 
@@ -630,7 +636,7 @@ exports.createLooseBill = async (req, res) => {
     const affectedItems = [...new Set(processed.map((r) => String(r.lot.item)).filter(Boolean))];
     await Promise.all(affectedItems.map((id) => syncParentItemStock(id)));
 
-    const saleNumber = await buildSaleNumber();
+    const saleNumber = await getNextSaleNumber(req.tenantId);
     const subtotal = Number(processed.reduce((sum, r) => sum + r.price, 0).toFixed(2));
     const diamondAmount = processed.reduce((s, r) => s + (r.lot?.metalType === 'diamond' ? (r.price || 0) : 0), 0);
     const diamondRate = await diamondRateFor(diamondAmount);
@@ -646,16 +652,10 @@ exports.createLooseBill = async (req, res) => {
       const billTotal = subtotal + totalTaxAmount;
       if (received < billTotal) discount = Number((billTotal - received).toFixed(2));
     }
-    const adjustedTotal = Number((subtotal + totalTaxAmount - discount).toFixed(2));
+    const resolvedCustomer = customerId || customerField || null;
+    const { adjustedTotal, paid } = enforcePayment(paymentType, subtotal + totalTaxAmount, discount, paidAmount, Number(cashAmount || 0), resolvedCustomer);
     const cash = Number(cashAmount || 0);
     const khaata = Number(khaataAmount || 0);
-    const resolvedCustomer = customerId || customerField || null;
-    const paid =
-      paidAmount !== undefined
-        ? Number(paidAmount)
-        : paymentType === 'cash'
-          ? adjustedTotal
-          : 0;
 
     const sale = await Sale.create({
       saleNumber,

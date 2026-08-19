@@ -140,7 +140,7 @@ export default function MainLayout() {
         onMobileClose={() => setMobileOpen(false)}
       />
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="sticky top-0 z-30 flex h-14 sm:h-16 items-center gap-2 sm:gap-3 border-b border-[var(--color-border)] bg-[var(--color-card)] px-3 sm:px-4 lg:px-6 shrink-0">
+        <header className="sticky top-0 z-30 flex h-14 sm:h-16 items-center gap-2 sm:gap-3 border-b border-[var(--color-border)] bg-[var(--color-card)]/85 backdrop-blur-md px-3 sm:px-4 lg:px-6 shrink-0">
           <button
             onClick={() => setMobileOpen(true)}
             className="lg:hidden p-2 rounded-xl hover:bg-[var(--color-elevated)] text-[var(--color-text-secondary)] transition-colors"
@@ -160,7 +160,7 @@ export default function MainLayout() {
           <div className="flex-1 min-w-0" />
 
           {user?.role !== 'superadmin' && user?.role !== 'qr_lookup' && (
-            <div className="hidden sm:flex items-center bg-[var(--color-card)] rounded-xl px-3 py-1.5 max-w-xs w-full border border-[var(--color-border)] focus-within:border-[var(--color-gold-500)] focus-within:ring-2 focus-within:ring-[var(--color-gold-500)]/20 transition-all">
+            <div className="hidden sm:flex items-center bg-[var(--color-elevated)]/70 rounded-xl px-3 py-1.5 max-w-xs w-full border border-[var(--color-border)] focus-within:border-[var(--color-gold-500)] focus-within:ring-4 focus-within:ring-[var(--color-gold-500)]/15 focus-within:bg-[var(--color-card)] transition-all">
               <Search size={16} className="text-[var(--color-text-secondary)] mr-2 shrink-0" />
               <input
                 type="text"
@@ -194,7 +194,7 @@ export default function MainLayout() {
               {shortcutsOpen && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShortcutsOpen(false)} />
-                  <div className="absolute right-0 top-full mt-2 z-50 w-72 bg-[var(--color-card)] rounded-2xl shadow-[var(--shadow-lg)] border border-[var(--color-border)] py-3 animate-fade-up">
+                  <div className="absolute right-0 top-full mt-2 z-50 w-72 bg-[var(--color-card)] rounded-2xl shadow-[var(--shadow-lg)] border border-[var(--color-border)] py-3 animate-fade-up ring-1 ring-black/[0.02]">
                     <h3 className="px-4 text-sm font-semibold tracking-tight text-[var(--color-text)]">Shortcut Keys</h3>
                     <p className="px-4 text-xs text-[var(--color-text-secondary)] mt-1 mb-1">
                       Press a key combo anywhere to jump to that screen
@@ -224,7 +224,7 @@ export default function MainLayout() {
               onClick={() => setShowUser((p) => !p)}
               className="flex items-center gap-1.5 sm:gap-2 p-1 rounded-xl hover:bg-[var(--color-elevated)]/70 transition-colors"
             >
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-gold-600)] text-sm font-semibold text-white">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-gold text-sm font-semibold text-white shadow-[var(--shadow-gold)] ring-2 ring-[var(--color-gold-200)]/60">
                 {userInitial(user?.name)}
               </div>
               <span className="hidden sm:block text-sm font-medium text-[var(--color-text)] truncate max-w-[100px]">
@@ -235,7 +235,7 @@ export default function MainLayout() {
             {showUser && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setShowUser(false)} />
-                <div className="absolute right-0 top-full mt-2 z-50 w-56 bg-[var(--color-card)] rounded-2xl shadow-[var(--shadow-lg)] border border-[var(--color-border)] py-2 animate-fade-up">
+                <div className="absolute right-0 top-full mt-2 z-50 w-56 bg-[var(--color-card)] rounded-2xl shadow-[var(--shadow-lg)] border border-[var(--color-border)] py-2 animate-fade-up ring-1 ring-black/[0.02]">
                   <div className="px-4 py-2.5 border-b border-[var(--color-border)]">
                     <p className="text-sm font-semibold text-[var(--color-text)] truncate">{user?.name}</p>
                     <p className="text-xs text-[var(--color-text-secondary)] truncate">{user?.email}</p>

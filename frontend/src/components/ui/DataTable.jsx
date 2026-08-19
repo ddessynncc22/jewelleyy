@@ -51,12 +51,12 @@ const DataTable = ({
         <div className="hidden sm:block overflow-x-auto">
           <table className="min-w-full">
             <thead>
-              <tr className="bg-[var(--color-primary-bg)]/70">
+              <tr className="border-b border-[var(--color-border)] bg-[var(--color-ink-50)]/80">
                 {columns.map((col) => (
                   <th
                     key={col.key}
                     scope="col"
-                    className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--color-text-secondary)] ${col.sortable !== false ? "cursor-pointer select-none hover:text-[var(--color-text)]" : ""}`}
+                    className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--color-text-secondary)] ${col.sortable !== false ? "cursor-pointer select-none hover:text-[var(--color-gold-700)]" : ""}`}
                     onClick={() =>
                       col.sortable !== false && handleSort(col.key)
                     }
@@ -74,7 +74,7 @@ const DataTable = ({
                 <tr>
                   <td colSpan={columns.length} className="px-4 py-16">
                     <div className="flex flex-col items-center justify-center text-center">
-                      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--color-primary-bg)]">
+                      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--color-primary-bg)] ring-1 ring-inset ring-[var(--color-gold-200)]">
                         <Inbox className="h-6 w-6 text-[var(--color-gold-600)]" />
                       </div>
                       <p className="text-sm font-medium text-[var(--color-text-secondary)]">
@@ -87,7 +87,7 @@ const DataTable = ({
                 rows.map((row, rowIndex) => (
                   <tr
                     key={row._id || rowIndex}
-                    className={`transition-colors hover:bg-[var(--color-ink-50)] ${onRowClick ? "cursor-pointer" : ""} ${rowClassName?.(row) || ""}`}
+                    className={`group transition-colors hover:bg-[var(--color-primary-bg)]/40 ${onRowClick ? "cursor-pointer" : ""} ${rowClassName?.(row) || ""}`}
                     onClick={() => onRowClick?.(row)}
                   >
                     {columns.map((col) => (
@@ -110,7 +110,7 @@ const DataTable = ({
         <div className="sm:hidden divide-y divide-[var(--color-border)]">
           {rows.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--color-primary-bg)]">
+              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--color-primary-bg)] ring-1 ring-inset ring-[var(--color-gold-200)]">
                 <Inbox className="h-6 w-6 text-[var(--color-gold-600)]" />
               </div>
               <p className="text-sm font-medium text-[var(--color-text-secondary)]">
@@ -121,7 +121,7 @@ const DataTable = ({
             rows.map((row, rowIndex) => (
               <div
                 key={row._id || rowIndex}
-                className={`p-4 space-y-2 ${onRowClick ? "cursor-pointer" : ""}`}
+                className={`p-4 space-y-2 transition-colors hover:bg-[var(--color-primary-bg)]/40 ${onRowClick ? "cursor-pointer" : ""}`}
                 onClick={() => onRowClick?.(row)}
               >
                 {columns.map((col) => (

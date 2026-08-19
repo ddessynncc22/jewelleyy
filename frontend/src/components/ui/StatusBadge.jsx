@@ -24,12 +24,13 @@ const sizes = {
   lg: "px-3 py-1 text-sm",
 };
 
-const StatusBadge = ({ status, size = "md" }) => {
+const StatusBadge = ({ status, size = "md", dot }) => {
   const color = statusColorMap[status] || defaultStyle;
   return (
     <span
-      className={`inline-flex items-center rounded-full border font-medium ${color} ${sizes[size]}`}
+      className={`inline-flex items-center rounded-full border font-medium shadow-sm ${color} ${sizes[size]}`}
     >
+      {dot && <span className="h-1.5 w-1.5 rounded-full bg-current mr-1.5" />}
       {status}
     </span>
   );

@@ -6,9 +6,20 @@ const Tenant = require('../models/Tenant');
 const { successResponse, errorResponse } = require('../utils/response');
 const { shopUrlFor } = require('../middleware/host');
 
-const generateToken = (id, tenantId) => {
-  return jwt.sign({ id, tenantId }, config.jwtSecret, { expiresIn: config.jwtExpire });
+const generateToken = (id, tenantId, tokenVersion = 0) => {
+  return jwt.sign({ id, tenantId, tv: tokenVersion }, config.jwtSecret, { expiresIn: config.jwtExpire });
 };
+
+const sanitizeUser = (user) => ({
+  _id: user._id,
+  id: user._id,
+  name: user.name,
+  email: user.email,
+  role: user.role,
+  phone: user.phone,
+  tenantId: user.tenantId,
+  isActive: user.isActive,
+});
 
 /**
  * Enforces that the sign-in host matches the account.
@@ -79,16 +90,18 @@ exports.login = async (req, res) => {
     const user = await User.findOne({ email }).select('+password');
     if (!user) {
       await logLogin('login-failed', 'Login failed - no account found for email', null, req, { reason: 'user-not-found' });
-      return errorResponse(res, 'Invalid credentials', 401);
+      return errorResponse(res, 'Invalid email or password', 401);
     }
     const isMatch = await user.matchPassword(password);
     if (!isMatch) {
       await logLogin('login-failed', 'Login failed - incorrect password', user, req, { reason: 'invalid-password' });
-      return errorResponse(res, 'Invalid credentials', 401);
+      return errorResponse(res, 'Invalid email or password', 401);
     }
     if (!user.isActive) {
       await logLogin('login-failed', 'Login failed - account is deactivated', user, req, { reason: 'account-deactivated' });
-      return errorResponse(res, 'Account is deactivated', 401);
+      // Same wording as a bad credential so a scanner cannot tell valid email
+      // addresses from deactivated accounts.
+      return errorResponse(res, 'Invalid email or password', 401);
     }
     const hostRejection = await checkLoginHost(req, user);
     if (hostRejection) {
@@ -100,9 +113,15 @@ exports.login = async (req, res) => {
         errors: null,
       });
     }
-    const token = generateToken(user._id, user.tenantId);
+    const token = generateToken(user._id, user.tenantId, user.tokenVersion || 0);
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: config.nodeEnv === 'production',
+      sameSite: 'lax',
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+    });
     await logLogin('login', 'User logged in successfully', user, req);
-    return successResponse(res, { user: { id: user._id, name: user.name, email: user.email, role: user.role, phone: user.phone, tenantId: user.tenantId }, token }, 'Login successful');
+    return successResponse(res, { user: sanitizeUser(user), token }, 'Login successful');
   } catch (error) {
     return errorResponse(res, error.message, 500);
   }
@@ -110,6 +129,7 @@ exports.login = async (req, res) => {
 
 exports.logout = async (req, res) => {
   try {
+    res.clearCookie('token');
     await logLogin('logout', 'User logged out', req.user, req);
     return successResponse(res, null, 'Logged out successfully');
   } catch (error) {
@@ -123,7 +143,7 @@ exports.getMe = async (req, res) => {
     if (!user) {
       return errorResponse(res, 'User not found', 404);
     }
-    return successResponse(res, user);
+    return successResponse(res, sanitizeUser(user));
   } catch (error) {
     return errorResponse(res, error.message, 500);
   }
@@ -140,7 +160,7 @@ exports.updateProfile = async (req, res) => {
     if (!user) {
       return errorResponse(res, 'User not found', 404);
     }
-    return successResponse(res, user, 'Profile updated successfully');
+    return successResponse(res, sanitizeUser(user), 'Profile updated successfully');
   } catch (error) {
     return errorResponse(res, error.message, 500);
   }
@@ -164,6 +184,7 @@ exports.changePassword = async (req, res) => {
       return errorResponse(res, 'Current password is incorrect', 401);
     }
     user.password = newPassword;
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
     await user.save();
     return successResponse(res, null, 'Password changed successfully');
   } catch (error) {

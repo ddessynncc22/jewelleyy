@@ -13,13 +13,13 @@ const renderIcon = (icon) => {
 
 const variants = {
   primary:
-    "bg-[var(--color-gold-600)] text-white shadow-sm hover:bg-[var(--color-gold-700)]",
+    "bg-gradient-gold text-white shadow-[var(--shadow-gold)] ring-1 ring-inset ring-[var(--color-gold-600)]/40 hover:shadow-[var(--shadow-gold-lg)] hover:-translate-y-px hover:brightness-105",
   secondary:
-    "border border-[var(--color-gold-300)] bg-[var(--color-gold-50)] text-[var(--color-gold-800)] hover:bg-[var(--color-gold-100)]",
-  danger: "bg-red-600 text-white hover:bg-red-700 shadow-sm",
+    "border border-[var(--color-gold-300)] bg-[var(--color-gold-50)] text-[var(--color-gold-800)] shadow-sm hover:bg-[var(--color-gold-100)] hover:border-[var(--color-gold-400)]",
+  danger: "bg-red-600 text-white hover:bg-red-700 shadow-sm hover:-translate-y-px",
   ghost: "text-[var(--color-ink-500)] hover:bg-[var(--color-ink-100)] hover:text-[var(--color-ink-700)]",
   outline:
-    "border border-[var(--color-border)] bg-[var(--color-card)] text-[var(--color-text)] hover:bg-[var(--color-elevated)]",
+    "border border-[var(--color-border)] bg-[var(--color-card)] text-[var(--color-text)] shadow-sm hover:bg-[var(--color-elevated)] hover:border-[var(--color-ink-300)]",
 };
 
 const sizes = {
@@ -47,7 +47,7 @@ const Button = ({
     type={type}
     disabled={disabled || loading}
     aria-busy={loading}
-    className={`inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-gold-500)] focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none ${variants[variant]} ${sizes[size]} ${className}`}
+    className={`inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-gold-500)] focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none disabled:hover:translate-y-0 ${variants[variant]} ${sizes[size]} ${className}`}
     {...rest}
   >
     {loading ? (

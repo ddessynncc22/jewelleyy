@@ -5,11 +5,11 @@ const Karigar = require('../models/Karigar');
 const StockMovement = require('../models/StockMovement');
 const Sale = require('../models/Sale');
 const Rate = require('../models/Rate');
-const Settings = require('../models/Settings');
 const { successResponse, errorResponse } = require('../utils/response');
 const { scopeAggregate } = require('../utils/tenant');
 const { toPerGramRate } = require('../utils/rates');
 const { getRefinedStockBalance } = require('../services/refinedStock');
+const { getLowStockList } = require('../utils/lowStock');
 
 const NEPAL_TIMEZONE = 'Asia/Kathmandu';
 
@@ -40,15 +40,13 @@ function rangeInstants(startStr, endStr) {
 exports.getDashboardStats = async (req, res) => {
   try {
     const { start: rangeStart, end: rangeEnd } = rangeInstants(req.query.startDate, req.query.endDate);
-    const settings = await Settings.getSettings();
-    const lowThreshold = settings?.lowStockThreshold || 5;
-    const [totalInventory, latestGold, latestSilver, activePawnLoans, pendingKarigarJobs, lowStockItems, recentActivities, itemsByStatus, itemsByMetal] = await Promise.all([
+    const [totalInventory, latestGold, latestSilver, activePawnLoans, pendingKarigarJobs, lowStock, recentActivities, itemsByStatus, itemsByMetal] = await Promise.all([
       Item.aggregate(scopeAggregate([{ $match: { status: 'In Stock', isDeleted: false } }, { $group: { _id: null, total: { $sum: '$quantity' } } }])),
       Rate.findOne({ metalType: 'gold' }).sort({ date: -1 }),
       Rate.findOne({ metalType: 'silver' }).sort({ date: -1 }),
       PawnLoan.countDocuments({ status: { $in: ['Active', 'Renewed'] }, isDeleted: false }),
       Karigar.aggregate(scopeAggregate([{ $match: { isDeleted: false } }, { $group: { _id: null, totalPending: { $sum: '$pendingJobs' } } }])),
-      Item.find({ status: 'In Stock', quantity: { $lte: lowThreshold } }).select('itemName SKU quantity metalType').lean(),
+      getLowStockList(),
       StockMovement.find().populate('item', 'SKU itemName category').populate('performedBy', 'name').sort({ movementDate: -1 }).limit(10).lean(),
       Item.aggregate(scopeAggregate([{ $match: { isDeleted: false } }, { $group: { _id: '$status', count: { $sum: 1 } } }])),
       Item.aggregate(scopeAggregate([{ $match: { isDeleted: false } }, { $group: { _id: '$metalType', count: { $sum: 1 } } }])),
@@ -84,8 +82,8 @@ exports.getDashboardStats = async (req, res) => {
       silverRate,
       activePawnLoans,
       pendingKarigarJobs: pendingKarigarJobs[0]?.totalPending || 0,
-      lowStockItems: lowStockItems.length,
-      lowStockItemList: lowStockItems,
+      lowStockItems: lowStock.lowStockItems,
+      lowStockItemList: lowStock.lowStockItemList,
       recentActivities,
       itemsByStatus,
       itemsByMetal,

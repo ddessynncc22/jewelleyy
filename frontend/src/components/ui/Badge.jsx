@@ -2,7 +2,7 @@ import { X } from "lucide-react";
 
 const variants = {
   default: "bg-ink-100 text-ink-600",
-  primary: "bg-[var(--color-primary-bg)] text-[var(--color-gold-700)] border border-[var(--color-gold-200)]",
+  primary: "bg-[var(--color-primary-bg)] text-[var(--color-gold-700)] border border-[var(--color-gold-200)] shadow-sm",
   success: "bg-success/10 text-success",
   warning: "bg-warning/10 text-warning",
   danger: "bg-danger/10 text-danger",

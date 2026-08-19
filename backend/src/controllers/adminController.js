@@ -73,7 +73,10 @@ exports.updateTenantUser = async (req, res) => {
     }
     if (phone !== undefined) user.phone = phone;
     if (isActive !== undefined) user.isActive = isActive;
-    if (password) user.password = password;
+    if (password) {
+      user.password = password;
+      user.tokenVersion = (user.tokenVersion || 0) + 1;
+    }
     await user.save();
     const { password: _, ...userData } = user.toObject();
     const msg = password ? 'User updated and password reset' : 'User updated';

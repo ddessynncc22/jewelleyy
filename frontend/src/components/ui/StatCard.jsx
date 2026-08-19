@@ -53,11 +53,15 @@ const StatCard = ({
             }
           : undefined
       }
-      className={`group rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-5 shadow-sm transition-shadow duration-150 ${
-        onClick ? "cursor-pointer hover:shadow-md" : ""
+      className={`group relative overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-5 shadow-[var(--shadow-sm)] transition-all duration-200 ${
+        onClick ? "cursor-pointer hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)] hover:border-[var(--color-gold-300)]" : ""
       }`}
     >
-      <div className="flex items-start justify-between gap-3">
+      <div
+        className="pointer-events-none absolute -right-8 -top-10 h-24 w-24 rounded-full opacity-60 transition-opacity duration-300 group-hover:opacity-100"
+        style={{ background: "radial-gradient(circle, rgba(217,180,90,0.16), transparent 70%)" }}
+      />
+      <div className="relative flex items-start justify-between gap-3">
         <div className="min-w-0 flex-auto">
           <p className="text-sm font-medium text-[var(--color-text-secondary)] truncate" title={title}>
             {title}
@@ -81,7 +85,7 @@ const StatCard = ({
         </div>
         {icon && (
           <div
-            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${accent}`}
+            className={`relative flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset ring-black/[0.04] shadow-sm ${accent}`}
             style={{ flexShrink: 0 }}
           >
             {isComp(icon) ? createElement(icon, { size: 22 }) : icon}

@@ -31,7 +31,7 @@ const FormInput = ({
       max={max}
       pattern={pattern}
       aria-invalid={!!error}
-      className={`w-full rounded-xl border px-3.5 py-2.5 text-sm bg-[var(--color-card)] text-[var(--color-text)] placeholder-[var(--color-ink-400)] transition-all focus:outline-none focus:ring-2 focus:ring-offset-0 ${error ? "border-danger/50 focus:border-danger focus:ring-danger/20" : "border-[var(--color-border)] hover:border-[var(--color-ink-300)] focus:border-[var(--color-gold-500)] focus:ring-[var(--color-gold-500)]/20"} disabled:opacity-50 disabled:pointer-events-none ${className}`}
+      className={`w-full rounded-xl border px-3.5 py-2.5 text-sm bg-[var(--color-card)] text-[var(--color-text)] placeholder-[var(--color-ink-400)] shadow-[var(--shadow-sm)] transition-all focus:outline-none focus:ring-4 focus:ring-offset-0 ${error ? "border-danger/50 focus:border-danger focus:ring-danger/10" : "border-[var(--color-border)] hover:border-[var(--color-ink-300)] focus:border-[var(--color-gold-500)] focus:ring-[var(--color-gold-500)]/15"} disabled:opacity-50 disabled:pointer-events-none ${className}`}
     />
     {hint && <p className="text-xs text-[var(--color-text-secondary)]">{hint}</p>}
   </FormField>

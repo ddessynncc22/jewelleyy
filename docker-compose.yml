@@ -10,6 +10,11 @@ services:
   api:
     build: ./backend
     env_file: ./backend/.env
+    # The compose file is the production deployment, so NODE_ENV is forced to
+    # production here regardless of what a dev .env says. It changes rate-limit
+    # behaviour, cookie security, and CORS fail-closed posture.
+    environment:
+      - NODE_ENV=production
     # 127.0.0.1 so the API is reachable only from the VPS itself, never directly
     # from the internet. Caddy is the only way in.
     ports:

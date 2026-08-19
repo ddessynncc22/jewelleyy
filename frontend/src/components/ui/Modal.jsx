@@ -42,13 +42,13 @@ const Modal = ({ isOpen, onClose, title, size = "lg", children, footer }) => {
       aria-modal="true"
     >
       <div
-        className="fixed inset-0 bg-ink-900/50 backdrop-blur-sm animate-fade-in"
+        className="fixed inset-0 bg-ink-900/40 backdrop-blur-[6px] animate-fade-in"
         onClick={onClose}
       />
       <div
-        className={`relative w-full ${sizeClasses[size]} bg-[var(--color-card)] rounded-t-2xl sm:rounded-2xl shadow-[var(--shadow-xl)] animate-slide-up max-h-[92vh] flex flex-col`}
+        className={`relative w-full ${sizeClasses[size]} bg-[var(--color-card)] rounded-t-3xl sm:rounded-3xl shadow-[var(--shadow-xl)] animate-slide-up max-h-[92vh] flex flex-col ring-1 ring-inset ring-black/[0.03]`}
       >
-        <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-[var(--color-border)] shrink-0">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-[var(--color-border)] shrink-0 bg-gradient-to-r from-[var(--color-primary-bg)]/70 via-transparent to-transparent rounded-t-3xl">
           {title && (
             <h2 className="text-base sm:text-lg font-semibold tracking-tight text-[var(--color-text)] truncate">
               {title}
@@ -66,7 +66,7 @@ const Modal = ({ isOpen, onClose, title, size = "lg", children, footer }) => {
           {children}
         </div>
         {footer && (
-          <div className="flex items-center justify-end gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t border-[var(--color-border)] bg-[var(--color-elevated)] rounded-b-2xl shrink-0">
+          <div className="flex items-center justify-end gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t border-[var(--color-border)] bg-[var(--color-elevated)] rounded-b-3xl shrink-0">
             {footer}
           </div>
         )}

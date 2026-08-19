@@ -18,21 +18,20 @@ exports.register = async (req, res) => {
       return errorResponse(res, 'Please provide a valid email', 400);
     }
     const existingUser = await User.findOne({ email: normalizedEmail });
-    if (existingUser) {
-      return errorResponse(res, 'An account with this email already exists. Please sign in instead.', 400);
-    }
     const existingPending = await AccessRequest.findOne({ email: normalizedEmail, type: 'registration', status: 'pending' });
-    if (existingPending) {
-      return errorResponse(res, 'A registration request for this email is already pending approval.', 400);
+    // Whether the email exists or a request is already queued, the response is
+    // the same generic success — otherwise this endpoint is an oracle for
+    // which emails have accounts.
+    if (!existingUser && !existingPending) {
+      await AccessRequest.create({
+        type: 'registration',
+        name: String(name).trim(),
+        email: normalizedEmail,
+        phone: phone || '',
+        message: message || '',
+        requestedRole: requestedRole || 'staff',
+      });
     }
-    await AccessRequest.create({
-      type: 'registration',
-      name: String(name).trim(),
-      email: normalizedEmail,
-      phone: phone || '',
-      message: message || '',
-      requestedRole: requestedRole || 'staff',
-    });
     return successResponse(res, null, 'Registration request submitted. The administrator will review and activate your account.');
   } catch (error) {
     return errorResponse(res, error.message, 500);
@@ -50,22 +49,20 @@ exports.forgotPassword = async (req, res) => {
       return errorResponse(res, 'Please provide a valid email', 400);
     }
     const user = await User.findOne({ email: normalizedEmail });
-    if (!user) {
-      return errorResponse(res, 'No account found with this email. Please check or submit a registration request.', 404);
-    }
     const existingPending = await AccessRequest.findOne({ email: normalizedEmail, type: 'password_reset', status: 'pending' });
-    if (existingPending) {
-      return successResponse(res, null, 'A password reset request for this email is already pending approval.');
+    if (user && !existingPending) {
+      await AccessRequest.create({
+        type: 'password_reset',
+        name: name || user.name,
+        email: normalizedEmail,
+        phone: user.phone || '',
+        requestedBy: user._id,
+        tenantId: user.tenantId,
+      });
     }
-    await AccessRequest.create({
-      type: 'password_reset',
-      name: name || user.name,
-      email: normalizedEmail,
-      phone: user.phone || '',
-      requestedBy: user._id,
-      tenantId: user.tenantId,
-    });
-    return successResponse(res, null, 'Password reset request submitted. The administrator will reset your password shortly.');
+    // Same response whether the email exists or not, so this endpoint cannot
+    // be used to enumerate accounts.
+    return successResponse(res, null, 'If an account exists for this email, a password reset request has been submitted.');
   } catch (error) {
     return errorResponse(res, error.message, 500);
   }
@@ -124,6 +121,7 @@ exports.approveRequest = async (req, res) => {
       const user = await User.findOne({ email: request.email });
       if (!user) return errorResponse(res, 'No account found for this email', 400);
       user.password = String(password);
+      user.tokenVersion = (user.tokenVersion || 0) + 1;
       await user.save();
     } else {
       return errorResponse(res, 'Unknown request type', 400);

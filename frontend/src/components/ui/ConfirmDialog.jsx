@@ -16,7 +16,7 @@ const ConfirmDialog = ({
   <Modal isOpen={isOpen} onClose={onClose} size="sm">
     <div className="text-center py-2">
       <div
-        className={`mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl ${variant === "danger" ? "bg-danger/10" : "bg-warning/10"}`}
+        className={`mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl ring-1 ring-inset ${variant === "danger" ? "bg-danger/10 ring-danger/20" : "bg-warning/10 ring-warning/20"}`}
       >
         <AlertTriangle
           className={`h-6 w-6 ${variant === "danger" ? "text-danger" : "text-warning"}`}

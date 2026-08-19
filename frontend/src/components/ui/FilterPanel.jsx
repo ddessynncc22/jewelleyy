@@ -9,7 +9,7 @@ const FilterPanel = ({ filters = {}, onFilterChange, onReset, children }) => {
     (k) => filters[k] && filters[k] !== "",
   ).length;
   return (
-    <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] shadow-[var(--shadow-sm)]">
+    <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] shadow-[var(--shadow-sm)] overflow-hidden">
       <div className="flex items-center justify-between px-5 py-3">
         <button
           type="button"
@@ -18,7 +18,7 @@ const FilterPanel = ({ filters = {}, onFilterChange, onReset, children }) => {
         >
           <Filter className="h-4 w-4 text-[var(--color-gold-600)]" /> Filters
           {active > 0 && (
-            <span className="inline-flex items-center justify-center h-5 min-w-[20px] px-1 rounded-full bg-[var(--color-gold-600)] text-white text-xs font-semibold">
+            <span className="inline-flex items-center justify-center h-5 min-w-[20px] px-1 rounded-full bg-gradient-gold text-white text-xs font-semibold shadow-[var(--shadow-gold)]">
               {active}
             </span>
           )}

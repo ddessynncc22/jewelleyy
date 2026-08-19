@@ -153,7 +153,8 @@ const qrLookupSections = [
   },
 ]
 
-const activeClasses = 'bg-[var(--color-primary-light)] text-[var(--color-gold-800)] font-medium'
+const activeClasses =
+  'bg-gradient-gold text-white shadow-[var(--shadow-gold)] font-semibold'
 
 export default function Sidebar({ collapsed, storeName, onToggle, mobileOpen, onMobileClose }) {
   const location = useLocation()
@@ -173,7 +174,7 @@ export default function Sidebar({ collapsed, storeName, onToggle, mobileOpen, on
 
   const linkClass = ({ isActive }) =>
     [
-      'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150',
+      'flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-all duration-150',
       isActive
         ? activeClasses
         : 'text-[var(--color-sidebar-muted)] hover:bg-[var(--color-sidebar-hover)] hover:text-[var(--color-sidebar-text)]',
@@ -193,7 +194,7 @@ export default function Sidebar({ collapsed, storeName, onToggle, mobileOpen, on
             onClick={() => handleGroupClick(item.label)}
             title={collapsed ? item.label : undefined}
             className={[
-              'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150',
+              'flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-all duration-150',
               isAnyChildActive
                 ? activeClasses
                 : 'text-[var(--color-sidebar-muted)] hover:bg-[var(--color-sidebar-hover)] hover:text-[var(--color-sidebar-text)]',
@@ -220,9 +221,9 @@ export default function Sidebar({ collapsed, storeName, onToggle, mobileOpen, on
                   onClick={onMobileClose}
                   className={({ isActive }) =>
                     [
-                      'block rounded-lg px-3 py-2 text-sm transition-colors',
+                      'block rounded-lg px-3 py-2 text-sm transition-all duration-150',
                       isActive
-                        ? 'bg-[var(--color-primary-light)] font-medium text-[var(--color-gold-800)]'
+                        ? 'bg-[var(--color-primary-light)] font-semibold text-[var(--color-gold-800)] shadow-sm ring-1 ring-inset ring-[var(--color-gold-200)]'
                         : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-elevated)] hover:text-[var(--color-text)]',
                     ].join(' ')
                   }
@@ -258,16 +259,17 @@ export default function Sidebar({ collapsed, storeName, onToggle, mobileOpen, on
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex flex-col bg-[var(--color-card)] border-r border-[var(--color-border)] transition-[width,transform] duration-300 ease-in-out lg:static ${
+        className={`fixed inset-y-0 left-0 z-50 flex flex-col bg-[var(--color-sidebar)] border-r border-[var(--color-border)] transition-[width,transform] duration-300 ease-in-out lg:static ${
           collapsed ? 'w-[72px]' : 'w-64'
         } ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
       >
-        <div className="flex h-16 shrink-0 items-center gap-2.5 border-b border-[var(--color-border)] px-4">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--color-gold-600)] text-white">
+        <div className="flex h-16 shrink-0 items-center gap-2.5 border-b border-[var(--color-border)] px-4 bg-gradient-to-r from-[var(--color-primary-bg)]/60 to-transparent">
+          <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-gold text-white shadow-[var(--shadow-gold)]">
             {isSuperAdmin ? <Globe size={16} /> : <Sparkles size={16} />}
+            <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-[var(--color-gold-300)] ring-2 ring-[var(--color-card)]" />
           </div>
           {!collapsed && (
-            <span className="truncate text-sm font-semibold tracking-tight text-[var(--color-text)]">
+            <span className="truncate text-sm font-bold tracking-tight text-[var(--color-text)]">
               {appName}
             </span>
           )}
@@ -284,7 +286,7 @@ export default function Sidebar({ collapsed, storeName, onToggle, mobileOpen, on
           {sections.map((section) => (
             <div key={section.label} className="mt-4 first:mt-2">
               {!collapsed && (
-                <p className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">
+                <p className="mb-1 px-3 text-[11px] font-bold uppercase tracking-widest text-[var(--color-text-secondary)]">
                   {section.label}
                 </p>
               )}
@@ -297,11 +299,11 @@ export default function Sidebar({ collapsed, storeName, onToggle, mobileOpen, on
           ))}
         </nav>
 
-        <div className="shrink-0 border-t border-[var(--color-border)] p-2.5">
+        <div className="shrink-0 border-t border-[var(--color-border)] p-2.5 bg-gradient-to-b from-transparent to-[var(--color-primary-bg)]/40">
           <button
             onClick={onToggle}
             title={collapsed ? 'Expand' : 'Collapse'}
-            className={`hidden w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-elevated)] hover:text-[var(--color-text)] lg:flex ${
+            className={`hidden w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-elevated)] hover:text-[var(--color-text)] lg:flex ${
               collapsed ? 'justify-center px-0' : ''
             }`}
           >

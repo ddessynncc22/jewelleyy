@@ -8,11 +8,11 @@ const Toast = () => (
     toastOptions={{
       duration: 4000,
       style: {
-        borderRadius: "12px",
+        borderRadius: "14px",
         padding: "14px 18px",
         fontSize: "14px",
         fontWeight: "500",
-        boxShadow: "0 8px 24px rgba(28,25,15,0.12)",
+        boxShadow: "var(--shadow-lg)",
         border: "1px solid var(--color-border)",
         background: "var(--color-card)",
         color: "var(--color-text)",
